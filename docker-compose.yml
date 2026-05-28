@@ -1,0 +1,13 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: project-docs-hub
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8088}:${PORT:-8088}"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env

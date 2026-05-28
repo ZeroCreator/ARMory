@@ -1,0 +1,296 @@
+{% extends "base_project.html" %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
+</div>
+
+<div id="project-header" class="mb-4">
+    <h2 class="text-muted">Загрузка...</h2>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0" id="content-header">Документы</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-brown" data-bs-toggle="modal" data-bs-target="#sectionModal">
+            <i class="bi bi-folder-plus me-1"></i> Раздел
+        </button>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#groupModal">
+            <i class="bi bi-plus-lg me-1"></i> Группа
+        </button>
+    </div>
+</div>
+
+<div id="documents-list">
+    <div class="text-center text-muted py-5">Загрузка...</div>
+</div>
+
+<!-- Create Section Modal -->
+<div class="modal fade" id="sectionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Новый раздел</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="section-form">
+                    <div class="mb-3">
+                        <label class="form-label">Название раздела</label>
+                        <input type="text" class="form-control" name="name" required placeholder="Например: Видео">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" name="description" rows="2" placeholder="Краткое описание раздела..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="createSection()">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Section Modal -->
+<div class="modal fade" id="editSectionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать раздел</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-section-form">
+                    <input type="hidden" name="section_id" id="edit-section-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" name="description" rows="2" placeholder="Краткое описание раздела..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger me-auto" onclick="deleteSectionFromModal()">Удалить раздел</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="updateSection()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Group Modal -->
+<div class="modal fade" id="groupModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Новая группа документов</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="group-form">
+                    <div class="mb-3">
+                        <label class="form-label">Название группы</label>
+                        <input type="text" class="form-control" name="title" required placeholder="Например: Инструкции по настройке">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" name="description" rows="2" placeholder="Краткое описание группы..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Раздел</label>
+                        <select class="form-select" name="section_id" id="group-section-select">
+                            <option value="">Без раздела</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="createGroup()">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Group Modal -->
+<div class="modal fade" id="editGroupModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать группу</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-group-form">
+                    <input type="hidden" name="doc_id" id="edit-group-doc-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название группы</label>
+                        <input type="text" class="form-control" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" name="description" rows="2" placeholder="Краткое описание группы..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Раздел</label>
+                        <select class="form-select" name="section_id" id="edit-group-section-select">
+                            <option value="-1">Без раздела</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger me-auto" onclick="deleteGroup()">Удалить группу</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="updateGroup()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Item Modal -->
+<div class="modal fade" id="itemModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="item-form" enctype="multipart/form-data">
+                    <input type="hidden" name="document_id" id="item-document-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название (необязательно)</label>
+                        <input type="text" class="form-control" name="title" placeholder="Например: Видеоинструкция по установке">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Тип</label>
+                        <select class="form-select" name="item_type" id="item-type-select" onchange="toggleItemType()">
+                            <option value="link">Ссылка</option>
+                            <option value="file">Файл</option>
+                            <option value="note">Заметка</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="item-url-field">
+                        <label class="form-label">Ссылка</label>
+                        <input type="url" class="form-control" name="url" placeholder="https://...">
+                    </div>
+                    <div class="mb-3 d-none" id="item-file-field">
+                        <label class="form-label">Файл</label>
+                        <input type="file" class="form-control" name="file">
+                    </div>
+                    <div class="mb-3 d-none" id="item-content-field">
+                        <label class="form-label">Текст заметки</label>
+                        <textarea class="form-control" name="content" rows="5" placeholder="Введите текст заметки..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="createItem()">Добавить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Item Modal -->
+<div class="modal fade" id="editItemModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать элемент</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-item-form">
+                    <input type="hidden" name="doc_id" id="edit-item-doc-id">
+                    <input type="hidden" name="item_id" id="edit-item-item-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" name="title" id="edit-item-title">
+                    </div>
+                    <div class="mb-3" id="edit-item-url-wrap">
+                        <label class="form-label">Ссылка</label>
+                        <input type="url" class="form-control" name="url" id="edit-item-url">
+                    </div>
+                    <div class="mb-3 d-none" id="edit-item-content-wrap">
+                        <label class="form-label">Текст заметки</label>
+                        <textarea class="form-control" name="content" id="edit-item-content" rows="5"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger me-auto" onclick="deleteItemFromEditModal()">Удалить</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="updateItem()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="preview-title">Просмотр</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0 bg-light">
+                <div id="preview-content" class="preview-container"></div>
+            </div>
+            <div class="modal-footer">
+                <a id="preview-download" href="#" class="btn btn-success">
+                    <i class="bi bi-download me-1"></i> Скачать
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Project Modal -->
+<div class="modal fade" id="editProjectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать проект</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-project-form">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" name="description" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger me-auto" onclick="deleteProject()">Удалить проект</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="updateProject()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+    const PROJECT_ID = {{ project_id }};
+    document.addEventListener('DOMContentLoaded', () => {
+        loadProject(PROJECT_ID);
+        loadSections(PROJECT_ID);
+    });
+</script>
+{% endblock %}

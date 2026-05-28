@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# Database & local data
+*.db
+*.sqlite
+*.sqlite3
+projectdocs.db
+data/uploads/*
+
+# Backups
+backup_*.tar.gz
+
+# Docker files (not needed inside image)
+Dockerfile
+docker-compose.yml
+docker-compose.dev.yml
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
