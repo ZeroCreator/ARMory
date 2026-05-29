@@ -1,20 +1,33 @@
+import json
 import os
 import subprocess
 from datetime import datetime
+from pathlib import Path
 from shlex import quote
+from dotenv import load_dotenv
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+# Загружаем .env из корня проекта
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+load_dotenv(BASE_DIR / ".env")
+
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
 
+SCRIPTS_DIR = BASE_DIR / "scripts"
 
-dogma_cmd = os.getenv("DOGMA_SCRIPT_PATH")
-trendagent_cmd = os.getenv("TRENDAGENT_SCRIPT_PATH")
+# ── Загрузка тасок из .env ──
+def _load_tasks():
+    raw = os.environ.get("SCHEDULER_TASKS", "")
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        return {k: {"name": v.get("name", k), "script": v["script"]} for k, v in data.items()}
+    except Exception:
+        return {}
 
-PROJECT_COMMANDS = {
-    "dogma": dogma_cmd,
-    "trendagent": trendagent_cmd,
-}
+TASKS = _load_tasks()
 
 
 class ScheduleRequest(BaseModel):
@@ -41,19 +54,33 @@ def run_command(command):
         return None, f"Error: {e.stderr}"
 
 
+@router.get("/tasks")
+def list_tasks():
+    if not TASKS:
+        return {"error": "SCHEDULER_TASKS не задан в .env"}
+    return {
+        "tasks": [
+            {"key": k, "name": v["name"]}
+            for k, v in TASKS.items()
+        ]
+    }
+
+
 @router.post("/schedule")
 def schedule_task(data: ScheduleRequest):
-    project_key = data.project.lower()
-    cmd_path = PROJECT_COMMANDS.get(project_key)
-    if not cmd_path:
-        return {"error": f"Команда для проекта '{data.project}' не настроена в .env"}
+    task_key = data.project.lower()
+    task = TASKS.get(task_key)
+    if not task:
+        return {"error": f"Таск '{data.project}' не найден"}
     if not data.datetime:
         return {"error": "Missing datetime"}
     try:
         dt = datetime.fromisoformat(data.datetime)
         at_time = dt.strftime("%H:%M %Y-%m-%d")
-        safe_command = quote(cmd_path)
-        cmd = f"echo {safe_command} | at {at_time}"
+        script_path = SCRIPTS_DIR / task["script"]
+        if not script_path.exists():
+            return {"error": f"Скрипт не найден: {script_path}"}
+        cmd = f"echo {quote(str(script_path))} | at {at_time}"
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
         if result.returncode != 0:
             raise Exception(result.stderr)

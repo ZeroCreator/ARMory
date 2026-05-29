@@ -1347,14 +1347,21 @@ async function saveSidebarNote() {
 // SCHEDULER (from bd-arm)
 // ═══════════════════════════════════════════════════
 
-async function fillSchedulerProjects() {
+async function fillSchedulerTasks() {
     const select = document.getElementById('project-select');
     if (!select) return;
-    // Фиксированные проекты как в bd-arm
-    select.innerHTML =
-        '<option value="" disabled selected>-- Выберите проект --</option>' +
-        '<option value="Dogma">Dogma</option>' +
-        '<option value="TrendAgent">TrendAgent</option>';
+    try {
+        const data = await api(`${API_BASE}/scheduler/tasks`);
+        const tasks = data.tasks || [];
+        if (!tasks.length) {
+            select.innerHTML = '<option value="" disabled selected>-- Нет доступных тасок --</option>';
+            return;
+        }
+        select.innerHTML = '<option value="" disabled selected>-- Выберите таск --</option>' +
+            tasks.map(t => `<option value="${escapeHtml(t.key)}">${escapeHtml(t.name)}</option>`).join('');
+    } catch (e) {
+        select.innerHTML = '<option value="" disabled selected>-- Ошибка загрузки --</option>';
+    }
 }
 
 function initScheduler() {
@@ -1392,12 +1399,16 @@ function initScheduler() {
             return;
         }
         try {
-            await api(`${API_BASE}/scheduler/schedule`, {
+            const data = await api(`${API_BASE}/scheduler/schedule`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({project, datetime})
             });
-            showStatus('Задача успешно добавлена!', false);
+            if (data.error) {
+                showStatus(data.error, true);
+            } else {
+                showStatus(data.message || 'Задача успешно добавлена!', false);
+            }
             refreshAtq();
         } catch (error) {
             showStatus(error.message, true);

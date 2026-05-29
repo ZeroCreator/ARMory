@@ -1082,6 +1082,29 @@ footer {
     transform: translateY(-1px);
 }
 
+/* ── Command block ── */
+.command-block {
+    background: rgba(167, 139, 250, 0.06);
+    border: 1px solid rgba(167, 139, 250, 0.18);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+}
+.command-output {
+    background: var(--purple-darker);
+    color: var(--purple-accent2);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    border-radius: 10px;
+    padding: 0.6rem 0.9rem;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow: auto;
+}
+
 /* ── Main Content ── */
 .main-content {
     flex: 1;
