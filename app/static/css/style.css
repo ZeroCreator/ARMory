@@ -1060,6 +1060,28 @@ footer {
     opacity: 0.85;
 }
 
+/* Note badge (sand theme) */
+.sidebar-note-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, var(--sand-light) 0%, var(--sand-dark) 100%);
+    color: var(--sand-text);
+    font-size: 0.8rem;
+    padding: 0.3rem 0.45rem;
+    border-radius: 8px;
+    border: 1px solid var(--sand-darker);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    margin-right: 0.1rem;
+}
+.sidebar-note-badge:hover {
+    background: linear-gradient(180deg, var(--sand-dark) 0%, var(--sand-darker) 100%);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transform: translateY(-1px);
+}
+
 /* ── Main Content ── */
 .main-content {
     flex: 1;

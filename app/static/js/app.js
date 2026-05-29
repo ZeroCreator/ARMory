@@ -395,10 +395,12 @@ function renderSection(section, idx) {
                     <div class="doc-drag-handle" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
                     <i class="bi ${collapsed ? 'bi-chevron-right' : 'bi-chevron-down'} section-toggle-icon"></i>
                     <div>
-                        <h5 class="mb-0 section-title">${escapeHtml(section.name)}</h5>
+                        <div class="d-flex align-items-center gap-2">
+                            <h5 class="mb-0 section-title">${escapeHtml(section.name)}</h5>
+                            <span class="text-muted small">${section.documents?.length || 0} групп</span>
+                        </div>
                         ${descHtml}
                     </div>
-                    <span class="text-muted small ms-auto">${section.documents?.length || 0} групп</span>
                 </div>
                 <div class="section-actions" onclick="event.stopPropagation()">
                     <button class="btn btn-sm btn-outline-primary" onclick="showAddGroupModal(${section.id})"><i class="bi bi-plus-lg"></i></button>
@@ -990,24 +992,25 @@ function renderSidebarBlocks(position, blocks) {
         return;
     }
     container.innerHTML = blocks.map(block => {
-        const noteIndicator = block.note ? `<i class="bi bi-sticky sidebar-note-indicator" title="Есть заметка"></i>` : '';
+        const blockNote = block.note ? `<span class="sidebar-note-badge" onclick="event.stopPropagation(); openSidebarNoteModal('block', ${block.id})" title="${escapeHtml(block.note)}"><i class="bi bi-sticky"></i></span>` : '';
         return `
         <div class="sidebar-block fade-in" data-id="${block.id}" data-type="block" oncontextmenu="handleSidebarContextMenu(event, 'block', ${block.id}, '${escapeHtml(block.title).replace(/'/g, "\\'")}')">
             <div class="sidebar-block-header">
                 <div class="sidebar-block-title-wrap">
                     <h4 class="sidebar-block-title">${escapeHtml(block.title)}</h4>
-                    ${noteIndicator}
                 </div>
+                ${blockNote}
                 <div class="sidebar-drag-handle" title="Переместить блок" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
             </div>
             <ul class="sidebar-link-list" data-block-id="${block.id}">
                 ${(block.links || []).map(link => {
-                    const linkNote = link.note ? `<i class="bi bi-sticky sidebar-note-indicator" title="Есть заметка"></i>` : '';
+                    const linkNote = link.note ? `<span class="sidebar-note-badge" onclick="event.stopPropagation(); openSidebarNoteModal('link', ${link.id})" title="${escapeHtml(link.note)}"><i class="bi bi-sticky"></i></span>` : '';
                     return `
                     <li class="sidebar-link-item" data-id="${link.id}" data-type="link" oncontextmenu="handleSidebarContextMenu(event, 'link', ${link.id}, '${escapeHtml(link.title).replace(/'/g, "\\'")}')">
                         <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
-                            ${escapeHtml(link.title)}${linkNote}
+                            ${escapeHtml(link.title)}
                         </a>
+                        ${linkNote}
                         <div class="sidebar-link-drag-handle" title="Переместить" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
                     </li>
                 `}).join('')}
