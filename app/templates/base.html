@@ -107,7 +107,97 @@
         </div>
     </div>
 
+    <!-- Sidebar Context Menu -->
+    <div id="sidebar-context-menu" class="sidebar-context-menu" style="display:none;">
+        <div class="sidebar-context-item" data-action="add-link"><i class="bi bi-plus-lg"></i> Добавить ссылку</div>
+        <div class="sidebar-context-divider"></div>
+        <div class="sidebar-context-item" data-action="note"><i class="bi bi-sticky"></i> Заметка</div>
+        <div class="sidebar-context-item" data-action="edit"><i class="bi bi-pencil"></i> Редактировать</div>
+        <div class="sidebar-context-divider"></div>
+        <div class="sidebar-context-item text-danger" data-action="delete"><i class="bi bi-trash"></i> Удалить</div>
+    </div>
+
+    <!-- Edit Sidebar Block Modal -->
+    <div class="modal fade" id="editSidebarBlockModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Редактировать блок</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-sidebar-block-form">
+                        <input type="hidden" name="block_id" id="edit-sidebar-block-id">
+                        <div class="mb-3">
+                            <label class="form-label">Название блока</label>
+                            <input type="text" class="form-control" name="title" id="edit-sidebar-block-title" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" onclick="updateSidebarBlock()">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Sidebar Link Modal -->
+    <div class="modal fade" id="editSidebarLinkModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Редактировать ссылку</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-sidebar-link-form">
+                        <input type="hidden" name="link_id" id="edit-sidebar-link-id">
+                        <div class="mb-3">
+                            <label class="form-label">Название</label>
+                            <input type="text" class="form-control" name="title" id="edit-sidebar-link-title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">URL</label>
+                            <input type="url" class="form-control" name="url" id="edit-sidebar-link-url" required placeholder="https://...">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" onclick="updateSidebarLink()">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar Note Modal -->
+    <div class="modal fade" id="sidebarNoteModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Заметка</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="sidebar-note-form">
+                        <input type="hidden" name="target_id" id="sidebar-note-target-id">
+                        <input type="hidden" name="target_type" id="sidebar-note-target-type">
+                        <div class="mb-3">
+                            <textarea class="form-control" name="note" id="sidebar-note-text" rows="5" placeholder="Введите заметку..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" onclick="saveSidebarNote()">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="/static/js/app.js"></script>
     {% block extra_js %}{% endblock %}
 </body>

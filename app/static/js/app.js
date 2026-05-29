@@ -989,30 +989,35 @@ function renderSidebarBlocks(position, blocks) {
         container.innerHTML = `<div class="text-muted small text-center py-3">Нет блоков</div>`;
         return;
     }
-    container.innerHTML = blocks.map(block => `
-        <div class="sidebar-block fade-in" data-id="${block.id}">
+    container.innerHTML = blocks.map(block => {
+        const noteIndicator = block.note ? `<i class="bi bi-sticky sidebar-note-indicator" title="Есть заметка"></i>` : '';
+        return `
+        <div class="sidebar-block fade-in" data-id="${block.id}" data-type="block" oncontextmenu="handleSidebarContextMenu(event, 'block', ${block.id}, '${escapeHtml(block.title).replace(/'/g, "\\'")}')">
             <div class="sidebar-block-header">
-                <h4 class="sidebar-block-title">${escapeHtml(block.title)}</h4>
-                <div class="sidebar-block-actions">
-                    <button onclick="showAddLinkModal(${block.id})" title="Добавить ссылку"><i class="bi bi-plus-lg"></i></button>
-                    <button onclick="deleteSidebarBlock(${block.id})" title="Удалить блок"><i class="bi bi-trash"></i></button>
+                <div class="sidebar-block-title-wrap">
+                    <h4 class="sidebar-block-title">${escapeHtml(block.title)}</h4>
+                    ${noteIndicator}
                 </div>
+                <div class="sidebar-drag-handle" title="Переместить блок" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
             </div>
-            <ul class="sidebar-link-list">
-                ${(block.links || []).map(link => `
-                    <li class="sidebar-link-item">
-                        <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener">
-                            ${escapeHtml(link.title)}
+            <ul class="sidebar-link-list" data-block-id="${block.id}">
+                ${(block.links || []).map(link => {
+                    const linkNote = link.note ? `<i class="bi bi-sticky sidebar-note-indicator" title="Есть заметка"></i>` : '';
+                    return `
+                    <li class="sidebar-link-item" data-id="${link.id}" data-type="link" oncontextmenu="handleSidebarContextMenu(event, 'link', ${link.id}, '${escapeHtml(link.title).replace(/'/g, "\\'")}')">
+                        <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+                            ${escapeHtml(link.title)}${linkNote}
                         </a>
-                        <div class="sidebar-link-actions">
-                            <button onclick="deleteSidebarLink(${link.id})" title="Удалить"><i class="bi bi-x-lg"></i></button>
-                        </div>
+                        <div class="sidebar-link-drag-handle" title="Переместить" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
                     </li>
-                `).join('')}
+                `}).join('')}
             </ul>
-
         </div>
-    `).join('');
+    `}).join('');
+    initSidebarBlockSortable(position);
+    container.querySelectorAll('.sidebar-link-list').forEach(ul => {
+        initSidebarLinkSortable(ul);
+    });
 }
 
 function showAddBlockModal(position) {
@@ -1080,6 +1085,255 @@ async function deleteSidebarLink(linkId) {
     if (!confirm('Удалить ссылку?')) return;
     try {
         await api(`${API_BASE}/sidebar/links/${linkId}`, { method: 'DELETE' });
+        loadSidebars();
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// SIDEBAR SORTABLE
+// ═══════════════════════════════════════════════════
+
+let sidebarBlockSortables = {};
+let sidebarLinkSortables = {};
+
+function initSidebarBlockSortable(position) {
+    const el = document.getElementById(`sidebar-${position}-blocks`);
+    if (!el) return;
+    if (sidebarBlockSortables[position]) sidebarBlockSortables[position].destroy();
+
+    sidebarBlockSortables[position] = Sortable.create(el, {
+        animation: 150,
+        handle: '.sidebar-drag-handle',
+        draggable: '.sidebar-block',
+        ghostClass: 'sortable-ghost',
+        dragClass: 'sortable-drag',
+        onEnd: function () {
+            const ids = Array.from(el.children)
+                .filter(child => child.classList.contains('sidebar-block'))
+                .map(child => parseInt(child.dataset.id));
+            if (ids.length > 1) {
+                reorderSidebarBlocks(ids);
+            }
+        }
+    });
+}
+
+function initSidebarLinkSortable(ul) {
+    if (!ul) return;
+    const blockId = ul.dataset.blockId;
+    if (!blockId) return;
+    if (sidebarLinkSortables[blockId]) sidebarLinkSortables[blockId].destroy();
+
+    sidebarLinkSortables[blockId] = Sortable.create(ul, {
+        animation: 150,
+        handle: '.sidebar-link-drag-handle',
+        draggable: '.sidebar-link-item',
+        ghostClass: 'sortable-ghost',
+        dragClass: 'sortable-drag',
+        onEnd: function () {
+            const ids = Array.from(ul.children)
+                .filter(child => child.classList.contains('sidebar-link-item'))
+                .map(child => parseInt(child.dataset.id));
+            if (ids.length > 1) {
+                reorderSidebarLinks(blockId, ids);
+            }
+        }
+    });
+}
+
+async function reorderSidebarBlocks(blockIds) {
+    try {
+        await api(`${API_BASE}/sidebar/blocks/reorder`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({block_ids: blockIds})
+        });
+    } catch (e) {
+        console.error('Reorder sidebar blocks failed:', e);
+        loadSidebars();
+    }
+}
+
+async function reorderSidebarLinks(blockId, linkIds) {
+    try {
+        await api(`${API_BASE}/sidebar/blocks/${blockId}/links/reorder`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({link_ids: linkIds})
+        });
+    } catch (e) {
+        console.error('Reorder sidebar links failed:', e);
+        loadSidebars();
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// SIDEBAR CONTEXT MENU
+// ═══════════════════════════════════════════════════
+
+let sidebarContextTarget = null;
+
+function handleSidebarContextMenu(event, type, id, title) {
+    event.preventDefault();
+    event.stopPropagation();
+    sidebarContextTarget = { type, id, title };
+    const menu = document.getElementById('sidebar-context-menu');
+    menu.style.display = 'block';
+    const x = Math.min(event.clientX, window.innerWidth - 180);
+    const y = Math.min(event.clientY, window.innerHeight - 120);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+}
+
+function hideSidebarContextMenu() {
+    const menu = document.getElementById('sidebar-context-menu');
+    if (menu) menu.style.display = 'none';
+    sidebarContextTarget = null;
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#sidebar-context-menu')) hideSidebarContextMenu();
+});
+document.addEventListener('scroll', hideSidebarContextMenu, true);
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideSidebarContextMenu();
+});
+
+document.getElementById('sidebar-context-menu').addEventListener('click', (e) => {
+    const item = e.target.closest('.sidebar-context-item');
+    if (!item || !sidebarContextTarget) return;
+    const action = item.dataset.action;
+    const { type, id } = sidebarContextTarget;
+    hideSidebarContextMenu();
+    if (action === 'add-link') {
+        if (type === 'block') showAddLinkModal(id);
+    } else if (action === 'note') {
+        openSidebarNoteModal(type, id);
+    } else if (action === 'edit') {
+        if (type === 'block') openEditBlockModal(id);
+        else openEditLinkModal(id);
+    } else if (action === 'delete') {
+        if (type === 'block') deleteSidebarBlock(id);
+        else deleteSidebarLink(id);
+    }
+});
+
+// ── Edit Block ──
+
+async function openEditBlockModal(blockId) {
+    try {
+        const blocks = await api(`${API_BASE}/sidebar/blocks`);
+        const block = blocks.find(b => b.id === blockId);
+        if (!block) return alert('Блок не найден');
+        document.getElementById('edit-sidebar-block-id').value = blockId;
+        document.getElementById('edit-sidebar-block-title').value = block.title || '';
+        new bootstrap.Modal(document.getElementById('editSidebarBlockModal')).show();
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function updateSidebarBlock() {
+    const id = document.getElementById('edit-sidebar-block-id').value;
+    const title = document.getElementById('edit-sidebar-block-title').value;
+    if (!title.trim()) return alert('Введите название');
+    try {
+        await api(`${API_BASE}/sidebar/blocks/${id}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({title})
+        });
+        bootstrap.Modal.getInstance(document.getElementById('editSidebarBlockModal')).hide();
+        loadSidebars();
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// ── Edit Link ──
+
+async function openEditLinkModal(linkId) {
+    try {
+        const blocks = await api(`${API_BASE}/sidebar/blocks`);
+        let link = null;
+        for (const block of blocks) {
+            link = (block.links || []).find(l => l.id === linkId);
+            if (link) break;
+        }
+        if (!link) return alert('Ссылка не найдена');
+        document.getElementById('edit-sidebar-link-id').value = linkId;
+        document.getElementById('edit-sidebar-link-title').value = link.title || '';
+        document.getElementById('edit-sidebar-link-url').value = link.url || '';
+        new bootstrap.Modal(document.getElementById('editSidebarLinkModal')).show();
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function updateSidebarLink() {
+    const id = document.getElementById('edit-sidebar-link-id').value;
+    const title = document.getElementById('edit-sidebar-link-title').value;
+    const url = document.getElementById('edit-sidebar-link-url').value;
+    if (!title.trim() || !url.trim()) return alert('Заполните все поля');
+    try {
+        await api(`${API_BASE}/sidebar/links/${id}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({title, url})
+        });
+        bootstrap.Modal.getInstance(document.getElementById('editSidebarLinkModal')).hide();
+        loadSidebars();
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// ── Note ──
+
+async function openSidebarNoteModal(type, id) {
+    try {
+        let note = '';
+        if (type === 'block') {
+            const blocks = await api(`${API_BASE}/sidebar/blocks`);
+            const block = blocks.find(b => b.id === id);
+            note = block?.note || '';
+        } else {
+            const blocks = await api(`${API_BASE}/sidebar/blocks`);
+            for (const block of blocks) {
+                const link = (block.links || []).find(l => l.id === id);
+                if (link) { note = link.note || ''; break; }
+            }
+        }
+        document.getElementById('sidebar-note-target-id').value = id;
+        document.getElementById('sidebar-note-target-type').value = type;
+        document.getElementById('sidebar-note-text').value = note;
+        new bootstrap.Modal(document.getElementById('sidebarNoteModal')).show();
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function saveSidebarNote() {
+    const id = document.getElementById('sidebar-note-target-id').value;
+    const type = document.getElementById('sidebar-note-target-type').value;
+    const note = document.getElementById('sidebar-note-text').value;
+    try {
+        if (type === 'block') {
+            await api(`${API_BASE}/sidebar/blocks/${id}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({note})
+            });
+        } else {
+            await api(`${API_BASE}/sidebar/links/${id}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({note})
+            });
+        }
+        bootstrap.Modal.getInstance(document.getElementById('sidebarNoteModal')).hide();
         loadSidebars();
     } catch (e) {
         alert('Ошибка: ' + e.message);

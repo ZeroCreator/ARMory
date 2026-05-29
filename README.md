@@ -331,7 +331,3 @@ docker compose up -d --build
 ## Лицензия
 
 MIT
-
----
-
-ARMory © 2026 Shkola Olga

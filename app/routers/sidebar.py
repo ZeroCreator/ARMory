@@ -7,8 +7,8 @@ from typing import List
 from app.database import get_db
 from app.models import SidebarBlock, SidebarLink
 from app.schemas import (
-    SidebarBlockOut, SidebarBlockCreate, SidebarBlockUpdate,
-    SidebarLinkOut, SidebarLinkCreate, SidebarLinkUpdate,
+    SidebarBlockOut, SidebarBlockCreate, SidebarBlockUpdate, SidebarBlockReorderRequest,
+    SidebarLinkOut, SidebarLinkCreate, SidebarLinkUpdate, SidebarLinkReorderRequest,
 )
 
 router = APIRouter(prefix="/api/sidebar", tags=["sidebar"])
@@ -37,6 +37,17 @@ async def create_block(data: SidebarBlockCreate, db: AsyncSession = Depends(get_
     return block
 
 
+@router.patch("/blocks/reorder", status_code=204)
+async def reorder_blocks(data: SidebarBlockReorderRequest, db: AsyncSession = Depends(get_db)):
+    for idx, block_id in enumerate(data.block_ids):
+        result = await db.execute(select(SidebarBlock).where(SidebarBlock.id == block_id))
+        block = result.scalar_one_or_none()
+        if block:
+            block.sort_order = idx
+    await db.commit()
+    return None
+
+
 @router.patch("/blocks/{block_id}", response_model=SidebarBlockOut)
 async def update_block(block_id: int, data: SidebarBlockUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(SidebarBlock).where(SidebarBlock.id == block_id))
@@ -62,6 +73,21 @@ async def delete_block(block_id: int, db: AsyncSession = Depends(get_db)):
 
 
 # ── Links ──
+
+@router.patch("/blocks/{block_id}/links/reorder", status_code=204)
+async def reorder_links(block_id: int, data: SidebarLinkReorderRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(SidebarBlock).where(SidebarBlock.id == block_id))
+    block = result.scalar_one_or_none()
+    if not block:
+        raise HTTPException(status_code=404, detail="Block not found")
+    for idx, link_id in enumerate(data.link_ids):
+        result = await db.execute(select(SidebarLink).where(SidebarLink.id == link_id, SidebarLink.block_id == block_id))
+        link = result.scalar_one_or_none()
+        if link:
+            link.sort_order = idx
+    await db.commit()
+    return None
+
 
 @router.post("/blocks/{block_id}/links", response_model=SidebarLinkOut, status_code=201)
 async def create_link(block_id: int, data: SidebarLinkCreate, db: AsyncSession = Depends(get_db)):

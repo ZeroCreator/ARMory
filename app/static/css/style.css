@@ -876,9 +876,17 @@ footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.5rem;
     padding: 0.7rem 0.85rem;
     background: rgba(167, 139, 250, 0.08);
     border-bottom: 1px solid rgba(167, 139, 250, 0.10);
+}
+
+.sidebar-block-title-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
 }
 
 .sidebar-block-title {
@@ -888,24 +896,22 @@ footer {
     margin: 0;
 }
 
-.sidebar-block-actions {
-    display: flex;
-    gap: 0.3rem;
-}
-
-.sidebar-block-actions button {
-    background: rgba(0,0,0,0.15);
-    border: none;
+.sidebar-drag-handle {
     color: var(--text-muted);
-    cursor: pointer;
-    padding: 0.3rem 0.5rem;
+    cursor: grab;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0.25rem 0.2rem;
     border-radius: 6px;
-    font-size: 0.95rem;
     transition: all 0.15s ease;
+    flex-shrink: 0;
 }
-.sidebar-block-actions button:hover {
-    background: rgba(167,139,250,0.25);
+.sidebar-drag-handle:hover {
     color: var(--purple-accent2);
+    background: rgba(167,139,250,0.15);
+}
+.sidebar-drag-handle:active {
+    cursor: grabbing;
 }
 
 .sidebar-link-list {
@@ -942,6 +948,7 @@ footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.3rem;
     padding: 0.35rem 0.5rem;
     border-radius: 8px;
     transition: background 0.15s ease;
@@ -949,23 +956,38 @@ footer {
 .sidebar-link-item:hover {
     background: rgba(167,139,250,0.08);
 }
-.sidebar-link-actions {
+.sidebar-link-item a {
+    flex: 1;
     display: flex;
-    gap: 0.2rem;
-}
-.sidebar-link-actions button {
-    background: rgba(0,0,0,0.1);
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 0.2rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.9rem;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 8px;
+    color: var(--text-light);
+    text-decoration: none;
+    font-size: 1rem;
     transition: all 0.15s ease;
 }
-.sidebar-link-actions button:hover {
+.sidebar-link-item a:hover {
+    background: rgba(167,139,250,0.12);
     color: var(--purple-accent2);
-    background: rgba(167,139,250,0.2);
+}
+.sidebar-link-drag-handle {
+    color: var(--text-muted);
+    cursor: grab;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0.2rem 0.15rem;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+.sidebar-link-drag-handle:hover {
+    color: var(--purple-accent2);
+    background: rgba(167,139,250,0.15);
+}
+.sidebar-link-drag-handle:active {
+    cursor: grabbing;
 }
 
 .sidebar-add-link-btn {
@@ -987,6 +1009,55 @@ footer {
     border-color: var(--purple-accent);
     color: var(--purple-accent2);
     background: rgba(167,139,250,0.08);
+}
+
+/* ── Sidebar Context Menu ── */
+.sidebar-context-menu {
+    position: fixed;
+    z-index: 9999;
+    background: var(--purple-surface);
+    border: 1px solid rgba(167, 139, 250, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(167,139,250,0.10);
+    padding: 0.4rem 0;
+    min-width: 170px;
+    overflow: hidden;
+    animation: fadeIn 0.12s ease forwards;
+}
+.sidebar-context-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 1rem;
+    color: var(--text-light);
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    white-space: nowrap;
+}
+.sidebar-context-item:hover {
+    background: rgba(167, 139, 250, 0.18);
+    color: var(--purple-accent2);
+}
+.sidebar-context-item.text-danger {
+    color: #e08e8e;
+}
+.sidebar-context-item.text-danger:hover {
+    background: rgba(138, 74, 74, 0.25);
+    color: #f5c2c7;
+}
+.sidebar-context-divider {
+    height: 1px;
+    background: rgba(167, 139, 250, 0.18);
+    margin: 0.3rem 0.6rem;
+}
+
+/* Note indicator on sidebar items */
+.sidebar-note-indicator {
+    color: var(--purple-accent);
+    font-size: 0.75rem;
+    margin-left: 0.3rem;
+    opacity: 0.85;
 }
 
 /* ── Main Content ── */

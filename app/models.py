@@ -82,6 +82,7 @@ class SidebarBlock(Base):
     id = Column(Integer, primary_key=True, index=True)
     position = Column(String(10), nullable=False, default="left")  # left | right
     title = Column(String(255), nullable=False)
+    note = Column(Text, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -96,5 +97,6 @@ class SidebarLink(Base):
     block = relationship("SidebarBlock", back_populates="links")
     title = Column(String(255), nullable=False)
     url = Column(Text, nullable=False)
+    note = Column(Text, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

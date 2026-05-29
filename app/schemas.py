@@ -127,6 +127,7 @@ class SidebarLinkOut(BaseModel):
     block_id: int
     title: str
     url: str
+    note: Optional[str] = None
     sort_order: int = 0
     created_at: datetime
 
@@ -134,11 +135,13 @@ class SidebarLinkOut(BaseModel):
 class SidebarLinkCreate(BaseModel):
     title: str
     url: str
+    note: Optional[str] = None
 
 
 class SidebarLinkUpdate(BaseModel):
     title: Optional[str] = None
     url: Optional[str] = None
+    note: Optional[str] = None
 
 
 class SidebarBlockOut(BaseModel):
@@ -146,6 +149,7 @@ class SidebarBlockOut(BaseModel):
     id: int
     position: str
     title: str
+    note: Optional[str] = None
     sort_order: int = 0
     created_at: datetime
     links: List[SidebarLinkOut] = []
@@ -154,9 +158,19 @@ class SidebarBlockOut(BaseModel):
 class SidebarBlockCreate(BaseModel):
     position: str
     title: str
+    note: Optional[str] = None
 
 
 class SidebarBlockUpdate(BaseModel):
     title: Optional[str] = None
     position: Optional[str] = None
+    note: Optional[str] = None
     sort_order: Optional[int] = None
+
+
+class SidebarBlockReorderRequest(BaseModel):
+    block_ids: List[int]
+
+
+class SidebarLinkReorderRequest(BaseModel):
+    link_ids: List[int]
