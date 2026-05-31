@@ -4,7 +4,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from shlex import quote
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -14,18 +14,40 @@ load_dotenv(BASE_DIR / ".env")
 
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
 
-SCRIPTS_DIR = BASE_DIR / "scripts"
 
-# ── Загрузка тасок из .env ──
+# ── Загрузка тасок из .env проектов ──
 def _load_tasks():
-    raw = os.environ.get("SCHEDULER_TASKS", "")
-    if not raw:
+    paths_str = os.environ.get("SCRIPTS_PROJECT_PATHS", "")
+    paths = [p.strip() for p in paths_str.split(",") if p.strip()]
+    if not paths:
         return {}
-    try:
-        data = json.loads(raw)
-        return {k: {"name": v.get("name", k), "script": v["script"]} for k, v in data.items()}
-    except Exception:
-        return {}
+
+    all_tasks = {}
+    for path in paths:
+        path_obj = Path(path)
+        if not path_obj.is_dir():
+            continue
+        project_name = path_obj.name
+        env_file = path_obj / ".env"
+        if not env_file.exists():
+            continue
+        env_data = dotenv_values(env_file)
+        raw = env_data.get("SCHEDULER_TASKS", "")
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+            for k, v in data.items():
+                full_key = f"{project_name}:{k}"
+                all_tasks[full_key] = {
+                    "name": v.get("name", k),
+                    "script": v["script"],
+                    "project_dir": str(path_obj),
+                }
+        except Exception:
+            continue
+    return all_tasks
+
 
 TASKS = _load_tasks()
 
@@ -57,7 +79,7 @@ def run_command(command):
 @router.get("/tasks")
 def list_tasks():
     if not TASKS:
-        return {"error": "SCHEDULER_TASKS не задан в .env"}
+        return {"error": "SCHEDULER_TASKS не задан ни в одном из проектов"}
     return {
         "tasks": [
             {"key": k, "name": v["name"]}
@@ -77,7 +99,7 @@ def schedule_task(data: ScheduleRequest):
     try:
         dt = datetime.fromisoformat(data.datetime)
         at_time = dt.strftime("%H:%M %Y-%m-%d")
-        script_path = SCRIPTS_DIR / task["script"]
+        script_path = Path(task["project_dir"]) / task["script"]
         if not script_path.exists():
             return {"error": f"Скрипт не найден: {script_path}"}
         cmd = f"echo {quote(str(script_path))} | at {at_time}"
