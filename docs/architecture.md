@@ -1,0 +1,59 @@
+# Архитектура
+
+## Структура проекта
+
+```
+app/
+├── main.py           # Точка входа, lifespan, миграции, роутинг страниц
+├── config.py         # Pydantic Settings (env-переменные)
+├── database.py       # SQLAlchemy async engine + session
+├── models.py         # ORM модели
+├── schemas.py        # Pydantic схемы для валидации
+├── storage.py        # Абстракция хранилища: LocalStorage / S3Storage
+├── routers/
+│   ├── projects.py   # CRUD проектов
+│   ├── sections.py   # CRUD разделов
+│   ├── documents.py  # CRUD групп, items, upload, download, preview
+│   ├── sidebar.py    # CRUD блоков и ссылок сайдбара
+│   └── scheduler.py  # Планировщик задач через at
+├── templates/        # Jinja2 шаблоны
+└── static/           # CSS + JS
+```
+
+## Модель данных
+
+### Project
+- `id`, `name`, `description`, `sort_order`
+- `created_at`, `updated_at`
+- связи `sections` и `documents`
+
+### Section (раздел / категория)
+- `id`, `project_id`, `name`, `description`, `sort_order`
+- связь `documents`
+
+### Document (группа)
+- `id`, `project_id`, `section_id` (nullable)
+- `title`, `description`, `category`, `sort_order`
+- связь `items`
+
+### DocumentItem (ссылка, файл или заметка)
+- `id`, `document_id`
+- `item_type` (`link` | `file` | `note`), `title`
+- `url` — для ссылок
+- `file_path`, `file_name`, `file_size`, `mime_type` — для файлов
+- `content` — текст заметки
+
+### SidebarBlock / SidebarLink
+- Динамические блоки ссылок в левой и правой колонке
+- Управляются через API (`/api/sidebar/blocks`)
+
+## Абстракция хранилища
+
+`StorageBackend` — интерфейс с методами `save()`, `delete()`, `get_local_path()`, `get_download_url()`, `get_preview_url()`, `get_public_url()`.
+
+Реализации:
+
+- **LocalStorage** — сохраняет в `./data/uploads/{project_id}_{name}/{doc_id}_{title}/`, отдаёт через `FileResponse`. Папки автоматически переименовываются при смене названия проекта/документа.
+- **S3Storage** — загружает в бакет S3, скачивание через **presigned URL** (даже для приватных бакетов)
+
+Переключение через переменную окружения `STORAGE_TYPE=local` или `s3`.

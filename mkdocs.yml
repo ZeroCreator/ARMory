@@ -1,0 +1,49 @@
+site_name: ARMory
+site_url: ""
+site_author: ""
+docs_dir: docs
+theme:
+  name: material
+  language: ru
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+    - search.share
+    - content.code.copy
+
+nav:
+  - Главная: index.md
+  - Архитектура: architecture.md
+  - API: api.md
+  - Хранилище S3: s3.md
+  - Планировщик: scheduler.md
+  - Бэкапы: backup.md
+  - Деплой: deployment.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - tables
+  - admonition
+  - pymdownx.details
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: <your-repo-url>

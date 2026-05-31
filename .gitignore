@@ -45,9 +45,6 @@ projectdocs.db
 data/uploads/*
 !data/uploads/.gitkeep
 
-# Documentation (generated / local)
-DOCS/
-
 # Backups
 backup_*.tar.gz
 

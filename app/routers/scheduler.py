@@ -24,7 +24,8 @@ def _load_tasks():
 
     all_tasks = {}
     for path in paths:
-        path_obj = Path(path)
+        expanded = os.path.expanduser(path)
+        path_obj = Path(expanded)
         if not path_obj.is_dir():
             continue
         project_name = path_obj.name
