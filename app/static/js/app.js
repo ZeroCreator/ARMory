@@ -874,7 +874,26 @@ function getItemDownloadUrl(item) {
     return `${API_BASE}/projects/${PROJECT_ID}/documents/${item.document_id}/items/${item.id}/download`;
 }
 
+function getItemOpenUrl(item) {
+    return `${API_BASE}/projects/${PROJECT_ID}/documents/${item.document_id}/items/${item.id}/open`;
+}
+
 async function openItemPreview(item) {
+    const cat = item.category || detectCategoryFromItem(item);
+
+    if (item.item_type === 'file' && ['word', 'spreadsheet', 'presentation'].includes(cat)) {
+        try {
+            const resp = await fetch(getItemOpenUrl(item), { method: 'POST', credentials: 'same-origin' });
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.detail || 'HTTP ' + resp.status);
+            }
+        } catch (e) {
+            alert('Не удалось открыть файл: ' + e.message);
+        }
+        return;
+    }
+
     const modalEl = document.getElementById('previewModal');
     const content = document.getElementById('preview-content');
     const title = document.getElementById('preview-title');
@@ -887,8 +906,6 @@ async function openItemPreview(item) {
 
     const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
     modal.show();
-
-    const cat = item.category || detectCategoryFromItem(item);
 
     switch (cat) {
         case 'note': {

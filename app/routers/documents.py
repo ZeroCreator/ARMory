@@ -1,7 +1,9 @@
 import os
+import platform
+import subprocess
 from urllib.parse import urlparse
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -435,6 +437,52 @@ async def download_item(
         return RedirectResponse(url=public_url)
 
     raise HTTPException(status_code=404, detail="File not available")
+
+
+@router.post("/{doc_id}/items/{item_id}/open")
+async def open_item(
+    request: Request,
+    project_id: int,
+    doc_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+):
+    result = await db.execute(
+        select(DocumentItem)
+        .join(Document)
+        .where(DocumentItem.id == item_id, DocumentItem.document_id == doc_id, Document.project_id == project_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    if item.item_type == DocType.link:
+        raise HTTPException(status_code=400, detail="Cannot open a link item")
+
+    if not item.file_path:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    client_host = request.client.host if request.client else None
+    if client_host not in ("127.0.0.1", "::1", "localhost"):
+        raise HTTPException(status_code=403, detail="Remote open not allowed")
+
+    local_path = await storage.get_local_path(item.file_path)
+    if not local_path or not os.path.exists(local_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    system = platform.system()
+    try:
+        if system == "Windows":
+            os.startfile(local_path)
+        elif system == "Darwin":
+            subprocess.Popen(["open", local_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen(["xdg-open", local_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
+
+    return {"status": "opened", "path": local_path}
 
 
 # ═══════════════════════════════════════════════════
