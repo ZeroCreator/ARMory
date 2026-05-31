@@ -1181,8 +1181,23 @@ let sidebarContextTarget = null;
 function handleSidebarContextMenu(event, type, id, title) {
     event.preventDefault();
     event.stopPropagation();
-    sidebarContextTarget = { type, id, title };
+    let url = null;
+    if (type === 'link') {
+        const targetEl = event.target && event.target.nodeType === Node.ELEMENT_NODE ? event.target : event.target.parentElement;
+        const linkEl = targetEl ? targetEl.closest('.sidebar-link-item') : null;
+        const a = linkEl ? linkEl.querySelector('a') : null;
+        url = a ? a.getAttribute('href') : null;
+        if (!url) console.warn('Sidebar context menu: link href not found', event.target, linkEl, a);
+    }
+    sidebarContextTarget = { type, id, title, url };
+    console.log('Sidebar context menu target:', sidebarContextTarget);
     const menu = document.getElementById('sidebar-context-menu');
+    const firstItem = menu.querySelector('[data-action="add-link"]');
+    if (type === 'link') {
+        firstItem.innerHTML = '<i class="bi bi-link-45deg"></i> Скопировать ссылку';
+    } else {
+        firstItem.innerHTML = '<i class="bi bi-plus-lg"></i> Добавить ссылку';
+    }
     menu.style.display = 'block';
     const x = Math.min(event.clientX, window.innerWidth - 180);
     const y = Math.min(event.clientY, window.innerHeight - 120);
@@ -1208,10 +1223,44 @@ document.getElementById('sidebar-context-menu').addEventListener('click', (e) =>
     const item = e.target.closest('.sidebar-context-item');
     if (!item || !sidebarContextTarget) return;
     const action = item.dataset.action;
-    const { type, id } = sidebarContextTarget;
+    const { type, id, url } = sidebarContextTarget;
     hideSidebarContextMenu();
     if (action === 'add-link') {
-        if (type === 'block') showAddLinkModal(id);
+        if (type === 'block') {
+            showAddLinkModal(id);
+        } else if (type === 'link' && url) {
+            const text = url;
+            console.log('Trying to copy link:', text);
+            const fallbackCopy = (txt) => {
+                const ta = document.createElement('textarea');
+                ta.value = txt;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed';
+                ta.style.top = '-9999px';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.setSelectionRange(0, txt.length);
+                try {
+                    const ok = document.execCommand('copy');
+                    console.log('Fallback copy result:', ok);
+                } catch (e) {
+                    console.error('Fallback copy error:', e);
+                }
+                document.body.removeChild(ta);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text)
+                    .then(() => console.log('Clipboard API copy success'))
+                    .catch((err) => {
+                        console.warn('Clipboard API failed, using fallback:', err);
+                        fallbackCopy(text);
+                    });
+            } else {
+                console.log('Clipboard API unavailable, using fallback');
+                fallbackCopy(text);
+            }
+        }
     } else if (action === 'note') {
         openSidebarNoteModal(type, id);
     } else if (action === 'edit') {
