@@ -42,3 +42,6 @@ docker-compose.dev.yml
 .DS_Store
 Thumbs.db
 AGENTS.md
+
+# Директория `site` для GitHub Pages
+site/

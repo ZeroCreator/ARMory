@@ -55,3 +55,6 @@ Thumbs.db
 # Logs
 *.log
 AGENTS.md
+
+# Директория `site` для GitHub Pages
+site/

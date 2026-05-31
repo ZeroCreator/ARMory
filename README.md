@@ -1,8 +1,11 @@
 # ARMory (Арсенал)
 Веб-приложение для сбора и управления документами, файлами, ссылками и заметками проектов.
 
-**[📖 Документация](https://zerocreator.github.io/ARMory/)**
+📖 Документация проекта доступна в формате `mkdocs` на **GitHub**:
 
+https://zerocreator.github.io/ARMory/
+
+___
 ## Быстрый старт
 
 ### Docker (рекомендуется)
@@ -31,6 +34,7 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port <PORT> --reload
 sudo systemctl enable --now <your-service>.service
 ```
 
+___
 ## Разработка документации
 
 Документация построена на [MkDocs](https://www.mkdocs.org/) с темой [Material](https://squidfunk.github.io/mkdocs-material/).
@@ -49,12 +53,14 @@ uv run mkdocs build
 uv run mkdocs gh-deploy
 ```
 
-После запуска `mkdocs serve` документация доступна по адресу: http://127.0.0.1:<PORT>
+После запуска `mkdocs serve` документация доступна по адресу: `http://127.0.0.1:<PORT>`
 
+___
 ## Автор
 
 **Shkola Olga**
 
+___
 ## Лицензия
 
 MIT
