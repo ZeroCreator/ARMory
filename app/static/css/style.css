@@ -1196,7 +1196,7 @@ footer {
 }
 
 .scheduler-card {
-    background: linear-gradient(180deg, var(--sand-light) 0%, var(--sand-base) 100%);
+    background: linear-gradient(180deg, var(--sand-dark) 0%, var(--sand-light) 20%, var(--sand-light) 80%, var(--sand-base) 100%);
     border-radius: 18px;
     padding: 1.8rem 2rem;
     box-shadow: 0 8px 32px rgba(0,0,0,0.18),
