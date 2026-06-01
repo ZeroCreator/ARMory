@@ -130,43 +130,89 @@ function detectCategoryFromItem(item) {
 // PROJECTS
 // ═══════════════════════════════════════════════════
 
+let allProjects = [];
+let currentProjectsPage = 1;
+const PROJECTS_PER_PAGE = 6;
+
 async function loadProjects() {
     const container = document.getElementById('projects-list');
     try {
         const projects = await api(`${API_BASE}/projects`);
-        if (!projects.length) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="bi bi-folder"></i>
-                    <p>Проектов пока нет. Создайте первый проект!</p>
-                </div>`;
-            return;
-        }
-        container.innerHTML = projects.map((p, idx) => `
-            <div class="col-lg-6 col-xl-6 col-xxl-4 project-col fade-in" data-id="${p.id}">
-                <div class="project-card" data-href="/projects/${p.id}">
-                    <div class="project-drag-handle"><i class="bi bi-grip-vertical"></i></div>
-                    <div>
-                        <div class="project-title">${escapeHtml(p.name)}</div>
-                        <div class="project-desc">${escapeHtml(p.description || 'Без описания')}</div>
-                    </div>
-                    <div class="project-meta d-flex justify-content-between">
-                        <span><i class="bi bi-folder me-1"></i>${p.sections?.length ?? 0} разделов, <i class="bi bi-files me-1"></i>${p.documents?.length ?? 0} групп</span>
-                        <span>${formatDate(p.updated_at)}</span>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-        container.querySelectorAll('.project-card').forEach(card => {
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.project-drag-handle')) return;
-                location.href = card.dataset.href;
-            });
-        });
-        initProjectSortable();
+        allProjects = projects;
+        currentProjectsPage = 1;
+        renderProjectsPage();
     } catch (e) {
         container.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${e.message}</div>`;
+        document.getElementById('projects-pagination').innerHTML = '';
     }
+}
+
+function renderProjectsPage() {
+    const container = document.getElementById('projects-list');
+    const paginationContainer = document.getElementById('projects-pagination');
+    const projects = allProjects;
+
+    if (!projects.length) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="bi bi-folder"></i>
+                <p>Проектов пока нет. Создайте первый проект!</p>
+            </div>`;
+        paginationContainer.innerHTML = '';
+        return;
+    }
+
+    const totalPages = Math.ceil(projects.length / PROJECTS_PER_PAGE);
+    const start = (currentProjectsPage - 1) * PROJECTS_PER_PAGE;
+    const end = start + PROJECTS_PER_PAGE;
+    const pageProjects = projects.slice(start, end);
+
+    container.innerHTML = pageProjects.map((p, idx) => `
+        <div class="col-lg-6 col-xl-6 col-xxl-4 project-col fade-in" data-id="${p.id}">
+            <div class="project-card" data-href="/projects/${p.id}">
+                <div class="project-drag-handle"><i class="bi bi-grip-vertical"></i></div>
+                <div>
+                    <div class="project-title">${escapeHtml(p.name)}</div>
+                    <div class="project-desc">${escapeHtml(p.description || 'Без описания')}</div>
+                </div>
+                <div class="project-meta d-flex justify-content-between">
+                    <span><i class="bi bi-folder me-1"></i>${p.sections?.length ?? 0} разделов, <i class="bi bi-files me-1"></i>${p.documents?.length ?? 0} групп</span>
+                    <span>${formatDate(p.updated_at)}</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    container.querySelectorAll('.project-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.project-drag-handle')) return;
+            location.href = card.dataset.href;
+        });
+    });
+
+    if (totalPages > 1) {
+        paginationContainer.innerHTML = renderProjectsPagination(totalPages);
+        paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentProjectsPage = parseInt(btn.dataset.page);
+                renderProjectsPage();
+                container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        });
+    } else {
+        paginationContainer.innerHTML = '';
+    }
+
+    initProjectSortable();
+}
+
+function renderProjectsPagination(totalPages) {
+    let html = '';
+    for (let i = 1; i <= totalPages; i++) {
+        const activeClass = i === currentProjectsPage ? 'active' : '';
+        html += `<button class="pagination-btn ${activeClass}" data-page="${i}">${i}</button>`;
+    }
+    return html;
 }
 
 let projectSortable = null;

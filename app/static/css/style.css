@@ -369,6 +369,46 @@ hr { border-color: rgba(139,124,246,0.15); }
     transform: scale(1.03) rotate(1deg);
 }
 
+/* ── Projects Pagination ── */
+.projects-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+}
+
+.pagination-btn {
+    min-width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(180deg, var(--sand-light) 0%, var(--sand-base) 100%);
+    color: var(--sand-text);
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 0 var(--sand-darker), 0 3px 8px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.pagination-btn:hover {
+    background: linear-gradient(180deg, var(--sand-dark) 0%, var(--sand-darker) 100%);
+    color: var(--sand-text);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 0 var(--sand-darker), 0 5px 12px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.4);
+}
+
+.pagination-btn.active {
+    background: linear-gradient(180deg, var(--btn-purple) 0%, var(--btn-purple-dark) 100%);
+    color: #fff;
+    box-shadow: 0 2px 0 var(--purple-accent), 0 3px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+.pagination-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 var(--sand-darker), 0 2px 4px rgba(0,0,0,0.1);
+}
+
 /* ── Document Cards ── */
 .doc-card {
     background: linear-gradient(180deg, #d4c4b0 0%, #faf3e8 25%, #faf3e8 75%, #d4c4b0 100%);
