@@ -769,6 +769,16 @@ footer {
     letter-spacing: 0.04em;
 }
 
+.footer-github-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    margin-left: 0.15rem;
+    transition: color 0.15s ease;
+}
+.footer-github-link:hover {
+    color: var(--purple-accent2);
+}
+
 /* ── Animations ── */
 @keyframes fadeIn {
     from { opacity: 0; }
