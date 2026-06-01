@@ -1001,6 +1001,29 @@ async function loadSidebars() {
     }
 }
 
+function getSidebarBlockCollapsedState() {
+    return JSON.parse(localStorage.getItem('sidebar_blocks_collapsed') || '{}');
+}
+
+function isSidebarBlockCollapsed(blockId) {
+    return getSidebarBlockCollapsedState()[blockId] === true;
+}
+
+function toggleSidebarBlock(blockId) {
+    const state = getSidebarBlockCollapsedState();
+    state[blockId] = !state[blockId];
+    localStorage.setItem('sidebar_blocks_collapsed', JSON.stringify(state));
+    const block = document.querySelector(`.sidebar-block[data-id="${blockId}"]`);
+    if (!block) return;
+    const list = block.querySelector('.sidebar-link-list');
+    const icon = block.querySelector('.sidebar-block-toggle i');
+    if (list) list.classList.toggle('d-none');
+    if (icon) {
+        icon.classList.toggle('bi-chevron-down');
+        icon.classList.toggle('bi-chevron-right');
+    }
+}
+
 function renderSidebarBlocks(position, blocks) {
     const container = document.getElementById(`sidebar-${position}-blocks`);
     if (!container) return;
@@ -1009,6 +1032,7 @@ function renderSidebarBlocks(position, blocks) {
         return;
     }
     container.innerHTML = blocks.map(block => {
+        const collapsed = isSidebarBlockCollapsed(block.id);
         const blockNote = block.note ? `<span class="sidebar-note-badge" onclick="event.stopPropagation(); openSidebarNoteModal('block', ${block.id})" title="${escapeHtml(block.note)}"><i class="bi bi-sticky"></i></span>` : '';
         return `
         <div class="sidebar-block fade-in" data-id="${block.id}" data-type="block" oncontextmenu="handleSidebarContextMenu(event, 'block', ${block.id}, '${escapeHtml(block.title).replace(/'/g, "\\'")}')">
@@ -1017,9 +1041,10 @@ function renderSidebarBlocks(position, blocks) {
                     <h4 class="sidebar-block-title">${escapeHtml(block.title)}</h4>
                 </div>
                 ${blockNote}
+                <div class="sidebar-block-toggle" onclick="event.stopPropagation(); toggleSidebarBlock(${block.id})" title="Свернуть/развернуть"><i class="bi ${collapsed ? 'bi-chevron-right' : 'bi-chevron-down'}"></i></div>
                 <div class="sidebar-drag-handle" title="Переместить блок" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
             </div>
-            <ul class="sidebar-link-list" data-block-id="${block.id}">
+            <ul class="sidebar-link-list ${collapsed ? 'd-none' : ''}" data-block-id="${block.id}">
                 ${(block.links || []).map(link => {
                     const linkNote = link.note ? `<span class="sidebar-note-badge" onclick="event.stopPropagation(); openSidebarNoteModal('link', ${link.id})" title="${escapeHtml(link.note)}"><i class="bi bi-sticky"></i></span>` : '';
                     return `

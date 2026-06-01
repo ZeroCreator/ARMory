@@ -914,6 +914,21 @@ footer {
     cursor: grabbing;
 }
 
+.sidebar-block-toggle {
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0.25rem 0.2rem;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+.sidebar-block-toggle:hover {
+    color: var(--purple-accent2);
+    background: rgba(167,139,250,0.15);
+}
+
 .sidebar-link-list {
     list-style: none;
     padding: 0.4rem 0.6rem;
