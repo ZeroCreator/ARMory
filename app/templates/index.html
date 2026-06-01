@@ -1,48 +1,126 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- Планировщик задач -->
+<!-- Планировщик / Календарь -->
 <div class="scheduler-section mb-4">
     <div class="scheduler-card">
-        <h3 class="scheduler-title"><i class="bi bi-clock-history me-2"></i>Планировщик задач</h3>
-        <div class="scheduler-body">
-            <div class="scheduler-form-row">
-                <div class="scheduler-form-group scheduler-form-group-half">
-                    <label class="form-label" for="project-select">Выберите таск:</label>
-                    <select id="project-select" class="form-select">
-                        <option value="" disabled selected>-- Загрузка... --</option>
-                    </select>
-                </div>
-                <div class="scheduler-form-group scheduler-form-group-half">
-                    <label class="form-label" for="datetime">Дата и время выполнения:</label>
-                    <input type="datetime-local" id="datetime" class="form-control">
-                </div>
-            </div>
-            <div class="scheduler-btn-row">
-                <button id="schedule-btn" class="scheduler-btn scheduler-btn-green">
-                    <i class="bi bi-calendar-check me-1"></i> Запланировать
+        <ul class="nav nav-tabs scheduler-tabs" id="schedulerTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="calendar-tab" data-bs-toggle="tab" data-bs-target="#calendar-pane" type="button" role="tab">
+                    <i class="bi bi-calendar3 me-1"></i>Календарь
                 </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="planner-tab" data-bs-toggle="tab" data-bs-target="#planner-pane" type="button" role="tab">
+                    <i class="bi bi-clock-history me-1"></i>Планировщик
+                </button>
+            </li>
+        </ul>
+        <div class="tab-content scheduler-tab-content" id="schedulerTabContent">
+            <!-- Календарь -->
+            <div class="tab-pane fade show active" id="calendar-pane" role="tabpanel" aria-labelledby="calendar-tab">
+                <div class="calendar-layout">
+                    <div class="calendar-view" id="calendar"></div>
+                    <div class="calendar-events-list">
+                        <div class="calendar-events-header">
+                            <h5 class="calendar-events-title">События</h5>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showCalendarEventModal()">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <div id="calendar-events-container" class="calendar-events-container">
+                            <div class="text-muted small text-center py-3">Загрузка...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="status-message" class="scheduler-status"></div>
-            <div class="task-queue-group">
-                <label class="form-label"><i class="bi bi-list-task me-1"></i> Очередь запланированных задач:</label>
-                <pre id="atq-output" class="atq-output">Загрузка...</pre>
-                <div class="scheduler-btn-row">
-                    <button id="refresh-atq" class="scheduler-btn scheduler-btn-brown">
-                        <i class="bi bi-arrow-clockwise me-1"></i> Обновить
-                    </button>
-                </div>
-                <div class="scheduler-form-group mt-3">
-                    <label class="form-label" for="task-id">ID задачи для удаления:</label>
-                    <input type="text" id="task-id" class="form-control" placeholder="Введите ID задачи">
-                </div>
-                <div class="scheduler-btn-row">
-                    <button id="remove-btn" class="scheduler-btn scheduler-btn-red">
-                        <i class="bi bi-trash me-1"></i> Удалить задачу
-                    </button>
+            <!-- Планировщик -->
+            <div class="tab-pane fade" id="planner-pane" role="tabpanel" aria-labelledby="planner-tab">
+                <div class="scheduler-body">
+                    <div class="scheduler-form-row">
+                        <div class="scheduler-form-group scheduler-form-group-half">
+                            <label class="form-label" for="project-select">Выберите таск:</label>
+                            <select id="project-select" class="form-select">
+                                <option value="" disabled selected>-- Загрузка... --</option>
+                            </select>
+                        </div>
+                        <div class="scheduler-form-group scheduler-form-group-half">
+                            <label class="form-label" for="datetime">Дата и время выполнения:</label>
+                            <input type="datetime-local" id="datetime" class="form-control">
+                        </div>
+                    </div>
+                    <div class="scheduler-btn-row">
+                        <button id="schedule-btn" class="scheduler-btn scheduler-btn-green">
+                            <i class="bi bi-calendar-check me-1"></i> Запланировать
+                        </button>
+                    </div>
+                    <div id="status-message" class="scheduler-status"></div>
+                    <div class="task-queue-group">
+                        <label class="form-label"><i class="bi bi-list-task me-1"></i> Очередь запланированных задач:</label>
+                        <pre id="atq-output" class="atq-output">Загрузка...</pre>
+                        <div class="scheduler-btn-row">
+                            <button id="refresh-atq" class="scheduler-btn scheduler-btn-brown">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Обновить
+                            </button>
+                        </div>
+                        <div class="scheduler-form-group mt-3">
+                            <label class="form-label" for="task-id">ID задачи для удаления:</label>
+                            <input type="text" id="task-id" class="form-control" placeholder="Введите ID задачи">
+                        </div>
+                        <div class="scheduler-btn-row">
+                            <button id="remove-btn" class="scheduler-btn scheduler-btn-red">
+                                <i class="bi bi-trash me-1"></i> Удалить задачу
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
 
+<!-- Calendar Event Modal -->
+<div class="modal fade" id="calendarEventModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="calendar-event-modal-title">Новое событие</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="calendar-event-form">
+                    <input type="hidden" name="event_id" id="calendar-event-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" name="title" id="calendar-event-title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" name="description" id="calendar-event-description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Начало</label>
+                        <input type="datetime-local" class="form-control" name="start_date" id="calendar-event-start" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Окончание</label>
+                        <input type="datetime-local" class="form-control" name="end_date" id="calendar-event-end">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Цвет</label>
+                        <input type="color" class="form-control form-control-color" name="color" id="calendar-event-color" value="#a78bfa">
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="all_day" id="calendar-event-all-day">
+                        <label class="form-check-label" for="calendar-event-all-day">Весь день</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger me-auto" id="calendar-event-delete-btn" onclick="deleteCalendarEvent()" style="display:none;">Удалить</button>
+                <button type="button" class="btn btn-primary" onclick="saveCalendarEvent()">Сохранить</button>
+            </div>
         </div>
     </div>
 </div>
@@ -97,6 +175,12 @@
             fillSchedulerTasks();
         });
         loadSidebars();
+        initSchedulerTabs();
+        const savedTab = localStorage.getItem('scheduler_active_tab');
+        if (!savedTab || savedTab === '#calendar-pane') {
+            if (!calendarInstance) initCalendar();
+            loadCalendarEvents();
+        }
     });
 </script>
 {% endblock %}

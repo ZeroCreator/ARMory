@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.database import engine, Base
-from app.routers import projects, documents, sidebar, scheduler
+from app.routers import projects, documents, sidebar, scheduler, calendar
 from app.config import get_settings
 
 settings = get_settings()
@@ -181,6 +181,22 @@ async def lifespan(app: FastAPI):
         if "description" not in sec_col_names:
             await conn.execute(text("ALTER TABLE sections ADD COLUMN description TEXT"))
 
+        # Migration: calendar_events table
+        if "calendar_events" not in table_names:
+            await conn.execute(text("""
+                CREATE TABLE calendar_events (
+                    id INTEGER PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    note TEXT,
+                    start_date TIMESTAMP NOT NULL,
+                    end_date TIMESTAMP,
+                    all_day BOOLEAN DEFAULT 0,
+                    color VARCHAR(7) DEFAULT '#a78bfa',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+
     # Seed default sidebar data from bd-arm if tables are empty
     from app.database import AsyncSessionLocal
     from app.models import SidebarBlock, SidebarLink
@@ -289,6 +305,7 @@ app.include_router(documents.router)
 app.include_router(documents.section_router)
 app.include_router(sidebar.router)
 app.include_router(scheduler.router)
+app.include_router(calendar.router)
 
 
 @app.get("/", response_class=HTMLResponse)

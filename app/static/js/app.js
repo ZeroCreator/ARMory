@@ -1531,6 +1531,201 @@ function initScheduler() {
 }
 
 // ═══════════════════════════════════════════════════
+// CALENDAR
+// ═══════════════════════════════════════════════════
+
+let calendarInstance = null;
+let calendarEventsCache = [];
+
+function initSchedulerTabs() {
+    const tabEl = document.querySelectorAll('#schedulerTab button[data-bs-toggle="tab"]');
+    tabEl.forEach(tab => {
+        tab.addEventListener('shown.bs.tab', event => {
+            const target = event.target.getAttribute('data-bs-target');
+            localStorage.setItem('scheduler_active_tab', target);
+            if (target === '#calendar-pane' && !calendarInstance) {
+                initCalendar();
+            }
+            if (target === '#calendar-pane') {
+                loadCalendarEvents();
+            }
+            if (calendarInstance) {
+                requestAnimationFrame(() => {
+                    setTimeout(() => calendarInstance.updateSize(), 150);
+                });
+            }
+        });
+    });
+
+    window.addEventListener('resize', () => {
+        if (calendarInstance) calendarInstance.updateSize();
+    });
+
+    const savedTab = localStorage.getItem('scheduler_active_tab');
+    if (savedTab) {
+        const tabButton = document.querySelector(`#schedulerTab button[data-bs-target="${savedTab}"]`);
+        if (tabButton) {
+            const tab = new bootstrap.Tab(tabButton);
+            tab.show();
+        }
+    }
+}
+
+async function loadCalendarEvents() {
+    try {
+        const events = await api(`${API_BASE}/calendar/events`);
+        calendarEventsCache = events || [];
+        renderCalendarEventsList();
+        if (calendarInstance) {
+            calendarInstance.removeAllEvents();
+            calendarEventsCache.forEach(e => {
+                calendarInstance.addEvent({
+                    id: String(e.id),
+                    title: e.title,
+                    start: e.start_date,
+                    end: e.end_date,
+                    allDay: e.all_day,
+                    color: e.color,
+                    extendedProps: { description: e.description, note: e.note }
+                });
+            });
+        }
+    } catch (e) {
+        console.error('Calendar load error:', e);
+        const container = document.getElementById('calendar-events-container');
+        if (container) container.innerHTML = `<div class="alert alert-danger small">Ошибка загрузки событий</div>`;
+    }
+}
+
+function renderCalendarEventsList() {
+    const container = document.getElementById('calendar-events-container');
+    if (!container) return;
+    const sorted = [...calendarEventsCache].sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+    if (!sorted.length) {
+        container.innerHTML = `<div class="text-muted small text-center py-3">Нет событий</div>`;
+        return;
+    }
+    const now = new Date();
+    container.innerHTML = sorted.map(e => {
+        const start = new Date(e.start_date);
+        const isPast = start < now;
+        const dateStr = start.toLocaleDateString('ru-RU');
+        const timeStr = e.all_day ? 'весь день' : start.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+        return `
+        <div class="calendar-event-item ${isPast ? 'past' : ''}" onclick="editCalendarEvent(${e.id})">
+            <div class="calendar-event-bar" style="background:${escapeHtml(e.color || '#a78bfa')}"></div>
+            <div class="calendar-event-info">
+                <div class="calendar-event-title">${escapeHtml(e.title)}</div>
+                <div class="calendar-event-meta">${dateStr} · ${timeStr}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function initCalendar() {
+    const calendarEl = document.getElementById('calendar');
+    if (!calendarEl || typeof FullCalendar === 'undefined') return;
+    calendarInstance = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'ru',
+        firstDay: 1,
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,listWeek'
+        },
+        height: 520,
+        eventClick: function(info) {
+            editCalendarEvent(parseInt(info.event.id));
+        },
+        dateClick: function(info) {
+            showCalendarEventModal(null, info.dateStr);
+        },
+        events: []
+    });
+    calendarInstance.render();
+}
+
+function showCalendarEventModal(eventId, dateStr) {
+    const form = document.getElementById('calendar-event-form');
+    const titleEl = document.getElementById('calendar-event-modal-title');
+    const deleteBtn = document.getElementById('calendar-event-delete-btn');
+    form.reset();
+    if (eventId) {
+        const event = calendarEventsCache.find(e => e.id === eventId);
+        if (!event) return;
+        titleEl.textContent = 'Редактировать событие';
+        document.getElementById('calendar-event-id').value = event.id;
+        document.getElementById('calendar-event-title').value = event.title || '';
+        document.getElementById('calendar-event-description').value = event.description || '';
+        document.getElementById('calendar-event-start').value = event.start_date ? event.start_date.slice(0, 16) : '';
+        document.getElementById('calendar-event-end').value = event.end_date ? event.end_date.slice(0, 16) : '';
+        document.getElementById('calendar-event-color').value = event.color || '#a78bfa';
+        document.getElementById('calendar-event-all-day').checked = event.all_day || false;
+        deleteBtn.style.display = 'inline-block';
+    } else {
+        titleEl.textContent = 'Новое событие';
+        document.getElementById('calendar-event-id').value = '';
+        document.getElementById('calendar-event-color').value = '#a78bfa';
+        if (dateStr) {
+            document.getElementById('calendar-event-start').value = dateStr + 'T09:00';
+        }
+        deleteBtn.style.display = 'none';
+    }
+    new bootstrap.Modal(document.getElementById('calendarEventModal')).show();
+}
+
+function editCalendarEvent(eventId) {
+    showCalendarEventModal(eventId);
+}
+
+async function saveCalendarEvent() {
+    const id = document.getElementById('calendar-event-id').value;
+    const title = document.getElementById('calendar-event-title').value;
+    const description = document.getElementById('calendar-event-description').value;
+    const start = document.getElementById('calendar-event-start').value;
+    const end = document.getElementById('calendar-event-end').value;
+    const color = document.getElementById('calendar-event-color').value;
+    const allDay = document.getElementById('calendar-event-all-day').checked;
+    if (!title.trim() || !start) {
+        alert('Введите название и дату начала');
+        return;
+    }
+    const payload = { title, description, start_date: start, end_date: end || null, color, all_day: allDay };
+    try {
+        if (id) {
+            await api(`${API_BASE}/calendar/events/${id}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+        } else {
+            await api(`${API_BASE}/calendar/events`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+        }
+        bootstrap.Modal.getInstance(document.getElementById('calendarEventModal')).hide();
+        loadCalendarEvents();
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function deleteCalendarEvent() {
+    const id = document.getElementById('calendar-event-id').value;
+    if (!id || !confirm('Удалить событие?')) return;
+    try {
+        await api(`${API_BASE}/calendar/events/${id}`, { method: 'DELETE' });
+        bootstrap.Modal.getInstance(document.getElementById('calendarEventModal')).hide();
+        loadCalendarEvents();
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════
 // UTILS
 // ═══════════════════════════════════════════════════
 

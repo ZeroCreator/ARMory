@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import relationship
 import enum
 from app.database import Base
@@ -99,4 +99,18 @@ class SidebarLink(Base):
     url = Column(Text, nullable=False)
     note = Column(Text, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class CalendarEvent(Base):
+    __tablename__ = "calendar_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    note = Column(Text, nullable=True)
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=True)
+    all_day = Column(Boolean, default=False)
+    color = Column(String(7), default="#a78bfa")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
