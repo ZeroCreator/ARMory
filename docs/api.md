@@ -47,6 +47,15 @@
 | PATCH | `/api/sidebar/links/{id}` | Обновить ссылку |
 | DELETE | `/api/sidebar/links/{id}` | Удалить ссылку |
 
+## Календарь
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/calendar/events` | Список событий |
+| POST | `/api/calendar/events` | Создать событие |
+| PATCH | `/api/calendar/events/{id}` | Обновить событие |
+| DELETE | `/api/calendar/events/{id}` | Удалить событие |
+
 ## Планировщик
 
 | Метод | Путь | Описание |

@@ -15,7 +15,8 @@ app/
 │   ├── sections.py   # CRUD разделов
 │   ├── documents.py  # CRUD групп, items, upload, download, preview
 │   ├── sidebar.py    # CRUD блоков и ссылок сайдбара
-│   └── scheduler.py  # Планировщик задач через at
+│   ├── scheduler.py  # Планировщик задач через at
+│   └── calendar.py   # CRUD событий календаря
 ├── templates/        # Jinja2 шаблоны
 └── static/           # CSS + JS
 ```
@@ -46,6 +47,12 @@ app/
 ### SidebarBlock / SidebarLink
 - Динамические блоки ссылок в левой и правой колонке
 - Управляются через API (`/api/sidebar/blocks`)
+
+### CalendarEvent
+- `id`, `title`, `description`, `note`
+- `start_date`, `end_date`, `all_day`, `color`
+- `created_at`
+- Таблица создаётся автоматически при старте (миграция в `lifespan`)
 
 ## Абстракция хранилища
 

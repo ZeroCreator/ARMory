@@ -30,6 +30,7 @@ nav:
   - Архитектура: architecture.md
   - API: api.md
   - Хранилище S3: s3.md
+  - Календарь: calendar.md
   - Планировщик: scheduler.md
   - Бэкапы: backup.md
   - Деплой: deployment.md
