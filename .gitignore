@@ -44,9 +44,9 @@ ENV/
 projectdocs.db
 data/uploads/*
 !data/uploads/.gitkeep
-data/backups/
 
 # Backups
+backups/
 backup_*.tar.gz
 
 # OS

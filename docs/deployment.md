@@ -18,6 +18,12 @@ APP_NAME="Your App Name"
 DATABASE_URL="sqlite+aiosqlite:///./data/projectdocs.db"
 LOCAL_STORAGE_PATH=./data/uploads
 STORAGE_TYPE=local
+
+# Yandex Disk (опционально)
+YANDEX_DISK_TOKEN=your_oauth_token
+YANDEX_DISK_PATH=ARMory/data
+YANDEX_DISK_BACKUPS_PATH=ARMory/backups
+TIMEZONE=Europe/Moscow
 ```
 
 ```bash

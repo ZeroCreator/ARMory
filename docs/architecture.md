@@ -10,13 +10,15 @@ app/
 ├── models.py         # ORM модели
 ├── schemas.py        # Pydantic схемы для валидации
 ├── storage.py        # Абстракция хранилища: LocalStorage / S3Storage
+├── yandex_disk.py    # Клиент для Яндекс.Диск REST API (sync, backups)
 ├── routers/
 │   ├── projects.py   # CRUD проектов
 │   ├── sections.py   # CRUD разделов
 │   ├── documents.py  # CRUD групп, items, upload, download, preview
 │   ├── sidebar.py    # CRUD блоков и ссылок сайдбара
 │   ├── scheduler.py  # Планировщик задач через at
-│   └── calendar.py   # CRUD событий календаря
+│   ├── calendar.py   # CRUD событий календаря
+│   └── backup.py     # Синхронизация и архивные бэкапы на Яндекс.Диск
 ├── templates/        # Jinja2 шаблоны
 └── static/           # CSS + JS
 ```
@@ -64,3 +66,15 @@ app/
 - **S3Storage** — загружает в бакет S3, скачивание через **presigned URL** (даже для приватных бакетов)
 
 Переключение через переменную окружения `STORAGE_TYPE=local` или `s3`.
+
+## Синхронизация с Яндекс.Диском
+
+Отдельный модуль `yandex_disk.py` реализует клиент для REST API Яндекс.Диска:
+- `upload_file()` / `download_file()` — прямая синхронизация
+- `list_files()` / `list_all_files()` — рекурсивный листинг
+- `create_folder()` / `ensure_folders()` — создание папок
+- `delete()` — удаление файлов и папок
+
+Роутер `backup.py` предоставляет два функционала:
+1. **Sync** — прямая синхронизация `projectdocs.db` + `uploads/` ↔ Яндекс.Диск
+2. **Archive backups** — создание / восстановление / удаление `.tar.gz` архивов на диске

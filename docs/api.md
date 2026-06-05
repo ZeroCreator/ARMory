@@ -64,3 +64,15 @@
 | POST | `/api/scheduler/schedule` | Запланировать задачу |
 | GET | `/api/scheduler/atq` | Список запланированных задач |
 | POST | `/api/scheduler/remove-task` | Удалить задачу из очереди |
+
+## Бэкапы и синхронизация (Яндекс.Диск)
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/backup/stats` | Статистика локальных данных и статус Яндекс.Диска |
+| POST | `/api/backup/sync-export` | Синхронизация на Яндекс.Диск (DB + uploads) |
+| POST | `/api/backup/sync-import` | Синхронизация с Яндекс.Диска (DB + uploads) |
+| GET | `/api/backup/archives` | Список архивных бэкапов на Яндекс.Диске |
+| POST | `/api/backup/create` | Создать архив `.tar.gz` и загрузить на Яндекс.Диск |
+| POST | `/api/backup/restore` | Восстановить данные из архива на Яндекс.Диске |
+| POST | `/api/backup/delete` | Удалить архив с Яндекс.Диска |
