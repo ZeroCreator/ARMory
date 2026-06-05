@@ -15,6 +15,11 @@
                     <i class="bi bi-clock-history me-1"></i>Планировщик
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup-pane" type="button" role="tab">
+                    <i class="bi bi-arrow-repeat me-1"></i>Синхронизация
+                </button>
+            </li>
         </ul>
         <div class="tab-content scheduler-tab-content" id="schedulerTabContent">
             <!-- Календарь -->
@@ -73,6 +78,71 @@
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
+            <!-- Синхронизация / Backup -->
+            <div class="tab-pane fade" id="backup-pane" role="tabpanel" aria-labelledby="backup-tab">
+                <div class="backup-body">
+                    <!-- Статистика -->
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="backup-card">
+                                <h5 class="backup-card-title"><i class="bi bi-hdd me-2"></i>Локальные данные</h5>
+                                <div id="backup-local-stats" class="backup-stats">
+                                    <div class="text-muted small">Загрузка...</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="backup-card">
+                                <h5 class="backup-card-title"><i class="bi bi-cloud me-2"></i>Яндекс.Диск</h5>
+                                <div id="backup-yandex-stats" class="backup-stats">
+                                    <div class="text-muted small">Загрузка...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Синхронизация -->
+                    <div class="backup-sync-section mt-4">
+                        <h5 class="backup-section-title"><i class="bi bi-arrow-repeat me-2"></i>Синхронизация с Яндекс.Диском</h5>
+
+                        <div class="backup-actions">
+                            <button id="sync-export-btn" class="scheduler-btn scheduler-btn-green" onclick="syncExport()">
+                                <i class="bi bi-cloud-upload me-1"></i> Сохранить на Яндекс.Диск
+                            </button>
+                            <button id="sync-import-btn" class="scheduler-btn scheduler-btn-brown" onclick="syncImport()">
+                                <i class="bi bi-cloud-download me-1"></i> Загрузить с Яндекс.Диска
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Архивные бэкапы -->
+                    <div class="backup-sync-section mt-4">
+                        <h5 class="backup-section-title"><i class="bi bi-archive me-2"></i>Архивные бэкапы</h5>
+                        <div class="backup-actions mb-3">
+                            <button id="backup-create-btn" class="scheduler-btn scheduler-btn-purple" onclick="createArchive()">
+                                <i class="bi bi-plus-circle me-1"></i> Создать архив
+                            </button>
+                        </div>
+                        <div class="backup-table-wrapper">
+                            <table class="table table-sm backup-table" id="backup-archives-table">
+                                <thead>
+                                    <tr>
+                                        <th>Имя файла</th>
+                                        <th>Размер</th>
+                                        <th>Дата</th>
+                                        <th class="text-end">Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="4" class="text-muted small">Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="backup-status" class="backup-status mt-3"></div>
                 </div>
             </div>
         </div>
@@ -177,6 +247,8 @@
         });
         loadSidebars();
         initSchedulerTabs();
+        loadBackupStats();
+        loadBackupArchives();
         const savedTab = localStorage.getItem('scheduler_active_tab');
         if (!savedTab || savedTab === '#calendar-pane') {
             if (!calendarInstance) initCalendar();

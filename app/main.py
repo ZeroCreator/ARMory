@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.database import engine, Base
-from app.routers import projects, documents, sidebar, scheduler, calendar
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup
 from app.config import get_settings
 
 settings = get_settings()
@@ -306,6 +306,7 @@ app.include_router(documents.section_router)
 app.include_router(sidebar.router)
 app.include_router(scheduler.router)
 app.include_router(calendar.router)
+app.include_router(backup.router)
 
 
 @app.get("/", response_class=HTMLResponse)

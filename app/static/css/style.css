@@ -1339,6 +1339,21 @@ footer {
     box-shadow: 0 1px 0 #e08e8e, 0 2px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
+.scheduler-btn-purple {
+    background: linear-gradient(180deg, #6a4c9c 0%, #5a3d8a 100%);
+    color: white;
+    box-shadow: 0 3px 0 #a78bda, 0 4px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.scheduler-btn-purple:hover {
+    background: linear-gradient(180deg, #7d5eb0 0%, #6a4c9c 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 0 #b99ce8, 0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.scheduler-btn-purple:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #a78bda, 0 2px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
 .task-queue-group {
     margin-top: 0.75rem;
     padding-top: 0.25rem;
@@ -1639,5 +1654,180 @@ footer {
     .sidebar-right {
         border-top: 1px solid rgba(167, 139, 250, 0.15);
         border-bottom: none;
+    }
+}
+
+/* ── Backup / Archive ── */
+.backup-body {
+    padding: 1.25rem;
+}
+.backup-card {
+    background: #fff;
+    border: 1px solid var(--sand-darker);
+    border-radius: 14px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.backup-card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--sand-text);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+}
+.backup-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.backup-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    color: var(--sand-text);
+    padding: 0.25rem 0;
+    border-bottom: 1px dashed rgba(0,0,0,0.06);
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.backup-stat-row:last-child {
+    border-bottom: none;
+}
+.backup-stat-value {
+    word-break: break-word;
+    text-align: right;
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+.backup-stat-row .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2em;
+    height: 1.6em;
+    padding: 0 0.5em;
+    vertical-align: middle;
+}
+.bg-purple {
+    background-color: #7e57c2;
+    color: #fff;
+}
+.bg-brown {
+    background-color: #8D6E63;
+    color: #fff;
+}
+.backup-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.backup-status {
+    font-size: 0.9rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 10px;
+    min-height: 2.5rem;
+}
+.backup-status.success {
+    background: rgba(25, 135, 84, 0.08);
+    color: #146c43;
+    border: 1px solid rgba(25, 135, 84, 0.2);
+}
+.backup-status.error {
+    background: rgba(220, 53, 69, 0.08);
+    color: #a71d2a;
+    border: 1px solid rgba(220, 53, 69, 0.2);
+}
+.backup-section-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--sand-text);
+    display: flex;
+    align-items: center;
+}
+.backup-section-desc {
+    font-size: 0.9rem;
+    color: var(--sand-muted);
+    margin-bottom: 0.75rem;
+}
+.backup-table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--sand-text);
+    background: var(--sand-light);
+}
+.backup-table td {
+    font-size: 0.9rem;
+    vertical-align: middle;
+    color: var(--sand-text);
+}
+.backup-table td:first-child {
+    word-break: break-all;
+    min-width: 100px;
+}
+.backup-table td:last-child {
+    white-space: nowrap;
+}
+.backup-table-wrapper {
+    max-height: 220px;
+    overflow-y: auto;
+    container-type: inline-size;
+}
+.backup-table-wrapper thead th {
+    position: sticky;
+    top: 0;
+    background: var(--sand-light);
+    z-index: 1;
+}
+.backup-table .scheduler-btn {
+    min-width: auto;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.backup-status-badge {
+    padding: 0.4em 0.8em;
+    font-size: 0.9rem;
+}
+.scheduler-btn-outline {
+    background: transparent;
+    border: 1px solid var(--sand-darker);
+    color: var(--sand-text);
+}
+.scheduler-btn-outline:hover {
+    background: var(--sand-light);
+    border-color: var(--sand-dark);
+}
+
+@container (max-width: 520px) {
+    .backup-table .btn-text {
+        display: none;
+    }
+}
+
+@media (max-width: 576px) {
+    .backup-stat-row {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.2rem;
+        text-align: center;
+    }
+    .backup-stat-value {
+        text-align: left;
+        width: 100%;
+    }
+    .backup-size-value {
+        text-align: right;
+    }
+    .backup-table .scheduler-btn {
+        min-width: auto;
+        width: auto;
+        padding: 3px 8px;
+        font-size: 0.75rem;
+    }
+    .backup-table .btn-text {
+        display: none;
     }
 }

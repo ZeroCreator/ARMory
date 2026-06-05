@@ -20,7 +20,13 @@ class Settings(BaseSettings):
     # S3 advanced
     s3_force_path_style: bool = False  # True for MinIO / some self-hosted S3
     s3_presigned_expires: int = 3600   # presigned URL lifetime in seconds
-    
+
+    # Yandex Disk sync
+    yandex_disk_token: str | None = None
+    yandex_disk_path: str = "ARMory/data"
+    yandex_disk_backups_path: str = "ARMory/backups"
+    timezone: str = "Europe/Moscow"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

@@ -23,6 +23,7 @@ function formatSize(bytes) {
     return (bytes/1024/1024).toFixed(1) + ' MB';
 }
 
+
 // ═══════════════════════════════════════════════════
 // Category helpers
 // ═══════════════════════════════════════════════════
@@ -1768,6 +1769,184 @@ async function deleteCalendarEvent() {
         loadCalendarEvents();
     } catch (e) {
         alert('Ошибка: ' + e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// BACKUP / SYNC
+// ═══════════════════════════════════════════════════
+
+async function loadBackupStats() {
+    const localEl = document.getElementById('backup-local-stats');
+    const yandexEl = document.getElementById('backup-yandex-stats');
+    try {
+        const data = await api(`${API_BASE}/backup/stats`);
+        const ls = data.local;
+        localEl.innerHTML = `
+            <div class="backup-stat-row"><span>Проекты</span><span class="badge bg-purple">${ls.projects}</span></div>
+            <div class="backup-stat-row"><span>Разделы</span><span class="badge bg-purple">${ls.sections}</span></div>
+            <div class="backup-stat-row"><span>Группы</span><span class="badge bg-purple">${ls.documents}</span></div>
+            <div class="backup-stat-row"><span>Ссылки</span><span class="badge bg-info">${ls.links}</span></div>
+            <div class="backup-stat-row"><span>Файлы</span><span class="badge bg-primary">${ls.files}</span></div>
+            <div class="backup-stat-row"><span>Заметки</span><span class="badge bg-warning text-dark">${ls.notes}</span></div>
+            <div class="backup-stat-row"><span>Заметки к ссылкам</span><span class="badge bg-warning text-dark">${ls.sidebar_link_notes}</span></div>
+            <div class="backup-stat-row"><span>Боковые блоки</span><span class="badge bg-brown">${ls.sidebar_blocks}</span></div>
+            <div class="backup-stat-row"><span>Боковые ссылки</span><span class="badge bg-brown">${ls.sidebar_links}</span></div>
+            <div class="backup-stat-row"><span>События календаря</span><span class="badge bg-success">${ls.calendar_events}</span></div>
+            <div class="backup-stat-row"><span>Общий размер файлов</span><span class="backup-stat-value backup-size-value">${formatSize(ls.total_files_size)}</span></div>
+        `;
+
+        const ys = data.yandex;
+        if (ys.connected) {
+            yandexEl.innerHTML = `
+                <div class="backup-stat-row"><span>Статус</span><span class="badge bg-success backup-status-badge">Подключен</span></div>
+                <div class="backup-stat-row"><span>Пользователь</span><span class="backup-stat-value">${escapeHtml(ys.info)}</span></div>
+                <div class="backup-stat-row"><span>Использовано</span><span class="backup-stat-value">${escapeHtml(ys.used)} / ${escapeHtml(ys.total)}</span></div>
+            `;
+        } else {
+            yandexEl.innerHTML = `
+                <div class="backup-stat-row"><span>Статус</span><span class="badge bg-danger">Не подключен</span></div>
+                <div class="backup-stat-row"><span class="backup-stat-value">${escapeHtml(ys.info)}</span></div>
+            `;
+        }
+    } catch (e) {
+        localEl.innerHTML = `<div class="alert alert-danger small">Ошибка загрузки статистики</div>`;
+        yandexEl.innerHTML = `<div class="alert alert-danger small">Ошибка загрузки статистики</div>`;
+    }
+}
+
+let _backupStatusTimer = null;
+function setBackupStatus(text, isError) {
+    const el = document.getElementById('backup-status');
+    if (!el) return;
+    if (_backupStatusTimer) {
+        clearTimeout(_backupStatusTimer);
+        _backupStatusTimer = null;
+    }
+    el.textContent = text;
+    el.className = 'backup-status mt-3 ' + (isError ? 'error' : 'success');
+    if (!isError) {
+        _backupStatusTimer = setTimeout(() => { el.textContent = ''; el.className = 'backup-status mt-3'; }, 8000);
+    }
+}
+
+async function syncExport() {
+    const btn = document.getElementById('sync-export-btn');
+    btn.disabled = true;
+    setBackupStatus('Сохранение базы данных и файлов на Яндекс.Диск...', false);
+    try {
+        const res = await api(`${API_BASE}/backup/sync-export`, { method: 'POST' });
+        const s = res.stats;
+        setBackupStatus(
+            `Сохранено на Яндекс.Диск. БД: ${s.db_uploaded ? 'да' : 'нет'}, файлов загружено: ${s.files_uploaded}, пропущено: ${s.files_skipped}.`,
+            false
+        );
+    } catch (e) {
+        setBackupStatus('Ошибка синхронизации: ' + e.message, true);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function syncImport() {
+    if (!confirm('Загрузить данные с Яндекс.Диска?\nТекущие локальные данные будут заменены!')) return;
+    const btn = document.getElementById('sync-import-btn');
+    btn.disabled = true;
+    setBackupStatus('Загрузка базы данных и файлов с Яндекс.Диска...', false);
+    try {
+        const res = await api(`${API_BASE}/backup/sync-import`, { method: 'POST' });
+        const s = res.stats;
+        setBackupStatus(
+            `Загружено с Яндекс.Диска. Проектов: ${s.projects_restored}, групп: ${s.documents_restored}, элементов: ${s.document_items_restored}, ` +
+            `файлов скачано: ${s.files_downloaded}, пропущено: ${s.files_skipped}.`,
+            false
+        );
+        loadBackupStats();
+        loadBackupArchives();
+    } catch (e) {
+        setBackupStatus('Ошибка загрузки: ' + e.message, true);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function loadBackupArchives() {
+    const tbody = document.querySelector('#backup-archives-table tbody');
+    if (!tbody) return;
+    try {
+        const data = await api(`${API_BASE}/backup/archives`);
+        const archives = data.archives || [];
+        if (archives.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-muted small">Архивы не найдены</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = archives.map(a => `
+            <tr>
+                <td>${escapeHtml(a.name)}</td>
+                <td>${formatSize(a.size)}</td>
+                <td>${escapeHtml(a.modified || '-')}</td>
+                <td class="text-end">
+                    <button class="scheduler-btn scheduler-btn-green btn-sm" onclick="restoreArchive('${escapeHtml(a.name)}')">
+                        <i class="bi bi-cloud-download"></i><span class="btn-text ms-1">Восстановить</span>
+                    </button>
+                    <button class="scheduler-btn scheduler-btn-red btn-sm ms-1" onclick="deleteArchive('${escapeHtml(a.name)}')">
+                        <i class="bi bi-trash"></i><span class="btn-text ms-1">Удалить</span>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-danger small">Ошибка загрузки архивов</td></tr>`;
+    }
+}
+
+async function createArchive() {
+    const btn = document.getElementById('backup-create-btn');
+    btn.disabled = true;
+    setBackupStatus('Создание архива и загрузка на Яндекс.Диск...', false);
+    try {
+        const res = await api(`${API_BASE}/backup/create`, { method: 'POST' });
+        setBackupStatus(`Архив ${res.archive} создан и загружен на Яндекс.Диск.`, false);
+        loadBackupArchives();
+    } catch (e) {
+        setBackupStatus('Ошибка создания архива: ' + e.message, true);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function restoreArchive(name) {
+    if (!confirm(`Восстановить данные из архива ${name}?\nТекущие локальные данные будут заменены!`)) return;
+    setBackupStatus('Восстановление из архива...', false);
+    try {
+        const res = await api(`${API_BASE}/backup/restore`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name}),
+        });
+        setBackupStatus(
+            `Восстановлено из архива. Проектов: ${res.stats.projects_restored}, групп: ${res.stats.documents_restored}, элементов: ${res.stats.document_items_restored}.`,
+            false
+        );
+        loadBackupStats();
+        loadBackupArchives();
+    } catch (e) {
+        setBackupStatus('Ошибка восстановления: ' + e.message, true);
+    }
+}
+
+async function deleteArchive(name) {
+    if (!confirm(`Удалить архив ${name} с Яндекс.Диска?`)) return;
+    try {
+        await api(`${API_BASE}/backup/delete`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name}),
+        });
+        setBackupStatus(`Архив ${name} удалён.`, false);
+        loadBackupArchives();
+    } catch (e) {
+        setBackupStatus('Ошибка удаления: ' + e.message, true);
     }
 }
 
