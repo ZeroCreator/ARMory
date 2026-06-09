@@ -128,6 +128,22 @@ async def create_document(
     return doc
 
 
+@router.patch("/reorder", status_code=204)
+async def reorder_documents(
+    project_id: int,
+    data: ReorderRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    for idx, doc_id in enumerate(data.document_ids):
+        await db.execute(
+            update(Document)
+            .where(Document.id == doc_id, Document.project_id == project_id)
+            .values(sort_order=idx)
+        )
+    await db.commit()
+    return None
+
+
 @router.patch("/{doc_id}", response_model=DocumentOut)
 async def update_document(
     project_id: int,
@@ -204,22 +220,6 @@ async def delete_document(
             await storage.delete(item.file_path)
 
     await db.delete(doc)
-    await db.commit()
-    return None
-
-
-@router.patch("/reorder", status_code=204)
-async def reorder_documents(
-    project_id: int,
-    data: ReorderRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    for idx, doc_id in enumerate(data.document_ids):
-        await db.execute(
-            update(Document)
-            .where(Document.id == doc_id, Document.project_id == project_id)
-            .values(sort_order=idx)
-        )
     await db.commit()
     return None
 

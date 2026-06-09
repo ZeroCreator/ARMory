@@ -566,15 +566,12 @@ function renderItem(doc, item, idx) {
 
 async function createSection() {
     const form = document.getElementById('section-form');
-    const data = Object.fromEntries(new FormData(form));
-    if (!data.name.trim()) return alert('Введите название раздела');
-    const params = new URLSearchParams({name: data.name});
-    if (data.description) params.append('description', data.description);
+    const data = new FormData(form);
+    if (!data.get('name').trim()) return alert('Введите название раздела');
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/sections`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: params
+            body: data
         });
         form.reset();
         bootstrap.Modal.getInstance(document.getElementById('sectionModal')).hide();
@@ -598,13 +595,13 @@ async function updateSection() {
     const name = f.name.value;
     const description = f.description.value;
     if (!name.trim()) return alert('Введите название');
-    const params = new URLSearchParams({name});
-    if (description) params.append('description', description);
+    const fd = new FormData();
+    fd.append('name', name);
+    if (description) fd.append('description', description);
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/sections/${sectionId}`, {
             method: 'PATCH',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: params
+            body: fd
         });
         bootstrap.Modal.getInstance(document.getElementById('editSectionModal')).hide();
         loadSections(PROJECT_ID);
@@ -639,6 +636,8 @@ function initSectionSortable(projectId) {
         animation: 150,
         handle: '.doc-drag-handle',
         draggable: '.section-card',
+        forceFallback: true,
+        fallbackClass: 'sortable-drag',
         ghostClass: 'sortable-ghost',
         dragClass: 'sortable-drag',
         onEnd: function (evt) {
@@ -661,6 +660,8 @@ function initGroupSortable(projectId, el) {
         animation: 150,
         handle: '.doc-drag-handle',
         draggable: '.doc-group',
+        forceFallback: true,
+        fallbackClass: 'sortable-drag',
         ghostClass: 'sortable-ghost',
         dragClass: 'sortable-drag',
         onEnd: function () {
@@ -723,16 +724,12 @@ function showAddGroupModal(sectionId) {
 
 async function createGroup() {
     const form = document.getElementById('group-form');
-    const data = Object.fromEntries(new FormData(form));
-    if (!data.title.trim()) return alert('Введите название группы');
-    const params = new URLSearchParams({title: data.title});
-    if (data.description) params.append('description', data.description);
-    if (data.section_id) params.append('section_id', data.section_id);
+    const data = new FormData(form);
+    if (!data.get('title').trim()) return alert('Введите название группы');
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/documents`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: params
+            body: data
         });
         form.reset();
         bootstrap.Modal.getInstance(document.getElementById('groupModal')).hide();
@@ -759,14 +756,14 @@ async function updateGroup() {
     const description = f.querySelector('[name="description"]').value;
     const sectionId = f.querySelector('[name="section_id"]').value;
     if (!title.trim()) return alert('Введите название');
-    const params = new URLSearchParams({title});
-    if (description) params.append('description', description);
-    params.append('section_id', sectionId);
+    const fd = new FormData();
+    fd.append('title', title);
+    if (description) fd.append('description', description);
+    fd.append('section_id', sectionId);
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/documents/${docId}`, {
             method: 'PATCH',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: params
+            body: fd
         });
         bootstrap.Modal.getInstance(document.getElementById('editGroupModal')).hide();
         loadSections(PROJECT_ID);
@@ -863,19 +860,18 @@ async function updateItem() {
     const f = document.getElementById('edit-item-form');
     const docId = f.doc_id.value;
     const itemId = f.item_id.value;
-    const data = new URLSearchParams();
-    data.append('title', f.title.value);
+    const fd = new FormData();
+    fd.append('title', f.title.value);
     if (!f.url.parentElement.classList.contains('d-none')) {
-        data.append('url', f.url.value);
+        fd.append('url', f.url.value);
     }
     if (!f.content.parentElement.classList.contains('d-none')) {
-        data.append('content', f.content.value);
+        fd.append('content', f.content.value);
     }
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/documents/${docId}/items/${itemId}`, {
             method: 'PATCH',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: data
+            body: fd
         });
         bootstrap.Modal.getInstance(document.getElementById('editItemModal')).hide();
         loadSections(PROJECT_ID);
