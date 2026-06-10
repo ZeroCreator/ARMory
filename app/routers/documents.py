@@ -471,6 +471,74 @@ async def open_item(
     if not local_path or not os.path.exists(local_path):
         raise HTTPException(status_code=404, detail="File not found")
 
+    def _get_gui_env():
+        """Get GUI session environment variables for xdg-open."""
+        env = os.environ.copy()
+        uid = str(os.getuid())
+        runtime_dir = f"/run/user/{uid}"
+        env["XDG_RUNTIME_DIR"] = runtime_dir
+        env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={runtime_dir}/bus"
+        display = None
+        try:
+            result = subprocess.run(
+                ["pgrep", "-a", "-u", uid, "-f", "Xwayland|Xorg"],
+                capture_output=True, text=True, timeout=5
+            )
+            for line in result.stdout.strip().split("\n"):
+                if not line:
+                    continue
+                parts = line.split()
+                for i, part in enumerate(parts):
+                    if part in ("Xwayland", "Xorg") and i + 1 < len(parts):
+                        candidate = parts[i + 1]
+                        if candidate.startswith(":"):
+                            display = candidate
+                            break
+                if display:
+                    break
+        except Exception:
+            pass
+        if not display:
+            try:
+                result = subprocess.run(
+                    ["ps", "e", "-u", uid],
+                    capture_output=True, text=True, timeout=5
+                )
+                for line in result.stdout.split("\n"):
+                    if "DISPLAY=:" in line:
+                        for part in line.split():
+                            if part.startswith("DISPLAY=:"):
+                                display = part.split("=", 1)[1]
+                                break
+                    if display:
+                        break
+            except Exception:
+                pass
+        if display:
+            env["DISPLAY"] = display
+
+        # Find XAUTHORITY for XWayland/Xorg access
+        xauthority = None
+        try:
+            result = subprocess.run(
+                ["ps", "e", "-u", uid],
+                capture_output=True, text=True, timeout=5
+            )
+            for line in result.stdout.split("\n"):
+                if "XAUTHORITY=" in line:
+                    for part in line.split():
+                        if part.startswith("XAUTHORITY="):
+                            xauthority = part.split("=", 1)[1]
+                            break
+                if xauthority:
+                    break
+        except Exception:
+            pass
+        if xauthority:
+            env["XAUTHORITY"] = xauthority
+
+        return env
+
     system = platform.system()
     try:
         if system == "Windows":
@@ -478,7 +546,13 @@ async def open_item(
         elif system == "Darwin":
             subprocess.Popen(["open", local_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
-            subprocess.Popen(["xdg-open", local_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            gui_env = _get_gui_env()
+            subprocess.Popen(
+                ["xdg-open", local_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=gui_env,
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
 
