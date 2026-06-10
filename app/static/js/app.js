@@ -249,6 +249,12 @@ async function reorderProjects(projectIds) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({project_ids: projectIds})
         });
+        // Обновить локальный порядок для текущей страницы
+        const start = (currentProjectsPage - 1) * PROJECTS_PER_PAGE;
+        const end = Math.min(start + PROJECTS_PER_PAGE, allProjects.length);
+        const projectMap = new Map(allProjects.map(p => [p.id, p]));
+        const reordered = projectIds.map(id => projectMap.get(id)).filter(Boolean);
+        allProjects = allProjects.slice(0, start).concat(reordered).concat(allProjects.slice(end));
     } catch (e) {
         console.error('Reorder projects failed:', e);
         loadProjects();
