@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   Purple & Sand Theme
+   Фиолетовая и песочная тема
    ═══════════════════════════════════════════════════ */
 
 :root {
@@ -35,7 +35,7 @@
     --text-link:      #c4b5fd;
 }
 
-/* ── Base ── */
+/* ── Базовые стили ── */
 html {
     scroll-behavior: smooth;
     background-color: var(--purple-deep);
@@ -62,7 +62,7 @@ body::before {
     z-index: -1;
 }
 
-/* Bold icons */
+/* Жирные иконки */
 .bi { font-weight: 700 !important; }
 
 a {
@@ -74,13 +74,13 @@ a:hover { color: #d4c8ff; }
 .text-muted { color: var(--text-muted) !important; }
 hr { border-color: rgba(139,124,246,0.15); }
 
-/* ── Scrollbar ── */
+/* ── Скроллбар ── */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--purple-deep); }
 ::-webkit-scrollbar-thumb { background: var(--btn-purple); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--btn-purple-dark); }
 
-/* ── Navbar ── */
+/* ── Навбар ── */
 .custom-navbar {
     background: linear-gradient(180deg, #4a466e 0%, var(--purple-surface) 100%) !important;
     border-bottom: 1px solid rgba(167, 139, 250, 0.28);
@@ -104,7 +104,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     margin-left: auto;
 }
 
-/* ── Buttons (3D embossed) ── */
+/* ── Кнопки (3D рельеф) ── */
 .btn {
     border: none !important;
     font-weight: 600;
@@ -114,7 +114,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     border-radius: 10px;
 }
 
-/* Primary (purple) */
+/* Основная (фиолетовая) */
 .btn-primary {
     background: linear-gradient(180deg, #5a4d8a 0%, var(--btn-purple) 100%);
     color: #fff;
@@ -137,7 +137,7 @@ hr { border-color: rgba(139,124,246,0.15); }
                 inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
-/* Success (green) */
+/* Успех (зелёная) */
 .btn-success {
     background: linear-gradient(180deg, #4a7a5a 0%, var(--btn-green) 100%);
     color: #fff;
@@ -160,7 +160,7 @@ hr { border-color: rgba(139,124,246,0.15); }
                 inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
-/* Secondary (gray) */
+/* Вторичная (серая) */
 .btn-secondary {
     background: linear-gradient(180deg, #4a465a 0%, var(--btn-gray) 100%);
     color: #fff;
@@ -183,7 +183,7 @@ hr { border-color: rgba(139,124,246,0.15); }
                 inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
-/* Danger (red) */
+/* Опасность (красная) */
 .btn-danger {
     background: linear-gradient(180deg, #8a4a4a 0%, var(--btn-red) 100%);
     color: #fff;
@@ -206,7 +206,7 @@ hr { border-color: rgba(139,124,246,0.15); }
                 inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
-/* ═══ Outline buttons — dark with light-purple emboss glow ═══ */
+/* ═══ Контурные кнопки — тёмные с фиолетовым свечением ═══ */
 .btn-outline-primary {
     background: linear-gradient(180deg, #6657a0 0%, #574a8f 100%);
     color: #fff;
@@ -224,7 +224,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     box-shadow: 0 1px 0 #a78bfa, 0 2px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
-/* Brown outline variant */
+/* Коричневый контурный вариант */
 .btn-outline-brown {
     background: linear-gradient(180deg, #6b4e3d 0%, #5a4030 100%);
     color: #fff;
@@ -293,7 +293,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     box-shadow: 0 1px 0 #a0e8b0, 0 2px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
-/* ── Project Cards ── */
+/* ── Карточки проектов ── */
 .project-card {
     background: linear-gradient(180deg, #e8d5c4 0%, #fdf8f0 25%, #fdf8f0 75%, #f5e6d3 100%);
     border-radius: 18px;
@@ -337,7 +337,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     color: #7a6048;
 }
 
-/* Drag handle on project cards */
+/* Ручка перетаскивания на карточках проектов */
 .project-drag-handle {
     position: absolute;
     top: 0.6rem;
@@ -369,7 +369,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     transform: scale(1.03) rotate(1deg);
 }
 
-/* ── Projects Pagination ── */
+/* ── Пагинация проектов ── */
 .projects-pagination {
     display: flex;
     justify-content: center;
@@ -409,7 +409,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     box-shadow: 0 1px 0 var(--sand-darker), 0 2px 4px rgba(0,0,0,0.1);
 }
 
-/* ── Document Cards ── */
+/* ── Карточки документов ── */
 .doc-card {
     background: linear-gradient(180deg, #d4c4b0 0%, #faf3e8 25%, #faf3e8 75%, #d4c4b0 100%);
     border-radius: 12px;
@@ -441,7 +441,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     transform: scale(1.02);
 }
 
-/* ── Document Groups ── */
+/* ── Группы документов ── */
 .doc-group {
     background: linear-gradient(180deg, #e8d5c4 0%, #fdf8f0 25%, #fdf8f0 75%, #f5e6d3 100%);
     border-radius: 16px;
@@ -500,7 +500,7 @@ hr { border-color: rgba(139,124,246,0.15); }
 
 .doc-group-body { padding: 0.6rem 1.25rem 1rem; }
 
-/* Muted text inside light cards should be brown, not gray */
+/* Приглушённый текст в светлых карточках должен быть коричневым, не серым */
 .project-card .text-muted,
 .section-card .text-muted,
 .doc-group .text-muted,
@@ -508,7 +508,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     color: #7a6048 !important;
 }
 
-/* ── Document Items ── */
+/* ── Элементы документов ── */
 .doc-item {
     transition: background 0.15s ease;
     border-radius: 10px;
@@ -567,7 +567,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     font-size: 0.82rem;
 }
 
-/* ── Document Icons (colored badges inside sand cards) ── */
+/* ── Иконки документов (цветные бейджи в песочных карточках) ── */
 .doc-icon, .doc-item-icon {
     width: 44px;
     height: 44px;
@@ -602,7 +602,7 @@ hr { border-color: rgba(139,124,246,0.15); }
 .doc-icon.file,         .doc-item-icon.file         { background: #f1f5f9; color: #64748b; }
 .doc-icon.note,          .doc-item-icon.note          { background: #fef3c7; color: #92400e; }
 
-/* ── Document Categories (small pills) ── */
+/* ── Категории документов (маленькие пилюли) ── */
 .doc-category {
     font-size: 0.68rem;
     font-weight: 600;
@@ -638,7 +638,7 @@ hr { border-color: rgba(139,124,246,0.15); }
 .doc-category.file         { background: #f1f5f9; color: #475569; }
 .doc-category.note          { background: #fef3c7; color: #92400e; }
 
-/* ── Sections ── */
+/* ── Разделы ── */
 .section-card {
     background: linear-gradient(180deg, #e8d5c4 0%, #fdf8f0 25%, #fdf8f0 75%, #f5e6d3 100%);
     border-radius: 18px;
@@ -710,7 +710,7 @@ hr { border-color: rgba(139,124,246,0.15); }
 
 .ungrouped-block { margin-top: 1.2rem; }
 
-/* ── Empty State ── */
+/* ── Пустое состояние ── */
 .empty-state {
     text-align: center;
     padding: 3.5rem 1rem;
@@ -725,7 +725,7 @@ hr { border-color: rgba(139,124,246,0.15); }
 }
 .empty-state p { font-size: 1.05rem; }
 
-/* ── Preview ── */
+/* ── Предпросмотр ── */
 .preview-container {
     min-height: 300px;
     max-height: 80vh;
@@ -750,7 +750,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     color: inherit;
 }
 
-/* ── Modals ── */
+/* ── Модальные окна ── */
 .modal-content {
     background: var(--purple-surface);
     color: var(--text-light);
@@ -773,10 +773,10 @@ hr { border-color: rgba(139,124,246,0.15); }
 }
 .btn-close:hover { opacity: 1; }
 
-/* Override bg-light inside modals */
+/* Переопределить bg-light внутри модалок */
 .modal-body.bg-light { background: var(--purple-deep) !important; }
 
-/* ── Forms ── */
+/* ── Формы ── */
 .form-control, .form-select {
     background: var(--purple-surface2);
     color: var(--sand-base);
@@ -799,7 +799,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     margin-bottom: 0.4rem;
 }
 
-/* ── Alerts ── */
+/* ── Алерты ── */
 .alert-danger {
     background: rgba(122,63,63,0.25);
     color: #f5c2c7;
@@ -807,10 +807,10 @@ hr { border-color: rgba(139,124,246,0.15); }
     border-radius: 12px;
 }
 
-/* ── Spinner ── */
+/* ── Спиннер ── */
 .spinner-border { color: var(--purple-accent) !important; }
 
-/* ── Footer ── */
+/* ── Подвал ── */
 footer {
     color: var(--text-muted) !important;
     padding-top: 2rem !important;
@@ -830,7 +830,7 @@ footer {
     color: var(--purple-accent2);
 }
 
-/* ── Animations ── */
+/* ── Анимации ── */
 @keyframes fadeIn {
     from { opacity: 0; }
     to   { opacity: 1; }
@@ -839,7 +839,7 @@ footer {
     animation: fadeIn 0.25s ease forwards;
 }
 
-/* ── Responsive tweaks ── */
+/* ── Адаптивные правки ── */
 @media (max-width: 768px) {
     .project-card { padding: 1.2rem; }
     .section-actions { opacity: 1; }
@@ -865,7 +865,7 @@ footer {
     min-height: 0;
 }
 
-/* ── Sidebars ── */
+/* ── Боковые панели ── */
 .sidebar {
     width: 300px;
     flex-shrink: 0;
@@ -924,7 +924,7 @@ footer {
     box-shadow: 0 1px 0 var(--purple-accent), 0 2px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
-/* Sidebar blocks */
+/* Блоки боковой панели */
 .sidebar-block {
     background: rgba(255,255,255,0.04);
     border-radius: 14px;
@@ -1087,7 +1087,7 @@ footer {
     background: rgba(167,139,250,0.08);
 }
 
-/* ── Sidebar Context Menu ── */
+/* ── Контекстное меню боковой панели ── */
 .sidebar-context-menu {
     position: fixed;
     z-index: 9999;
@@ -1128,7 +1128,7 @@ footer {
     margin: 0.3rem 0.6rem;
 }
 
-/* Note indicator on sidebar items */
+/* Индикатор заметки на элементах боковой панели */
 .sidebar-note-indicator {
     color: var(--purple-accent);
     font-size: 0.75rem;
@@ -1136,7 +1136,7 @@ footer {
     opacity: 0.85;
 }
 
-/* Note badge (sand theme) */
+/* Бейдж заметки (песочная тема) */
 .sidebar-note-badge {
     display: inline-flex;
     align-items: center;
@@ -1158,7 +1158,7 @@ footer {
     transform: translateY(-1px);
 }
 
-/* ── Command block ── */
+/* ── Командный блок ── */
 .command-block {
     background: rgba(167, 139, 250, 0.06);
     border: 1px solid rgba(167, 139, 250, 0.18);
@@ -1181,7 +1181,7 @@ footer {
     overflow: auto;
 }
 
-/* ── Main Content ── */
+/* ── Основной контент ── */
 .main-content {
     flex: 1;
     padding: 1.5rem 2rem;
@@ -1189,7 +1189,7 @@ footer {
     min-width: 0;
 }
 
-/* ── Scheduler ── */
+/* ── Планировщик ── */
 .scheduler-section {
     max-width: 900px;
     margin: 0 auto;
@@ -1360,7 +1360,7 @@ footer {
     border-top: 1px solid var(--sand-darker);
 }
 
-/* ── Scheduler Tabs ── */
+/* ── Вкладки планировщика ── */
 .scheduler-tabs {
     border-bottom: 1px solid var(--sand-darker);
     margin: -1.8rem -2rem 1.5rem;
@@ -1396,7 +1396,7 @@ footer {
 
 #calendar-pane .tab-pane { height: 100%; }
 
-/* ── Calendar ── */
+/* ── Календарь ── */
 .calendar-layout {
     display: flex;
     flex-wrap: wrap;
@@ -1489,7 +1489,7 @@ footer {
     color: var(--sand-muted);
 }
 
-/* FullCalendar overrides for sand theme */
+/* Переопределения FullCalendar для песочной темы */
 .fc {
     --fc-border-color: var(--sand-darker);
     --fc-button-text-color: var(--sand-text);
@@ -1537,7 +1537,7 @@ footer {
     font-size: 1.15rem;
 }
 
-/* FullCalendar responsive toolbar */
+/* Адаптивная панель инструментов FullCalendar */
 .fc .fc-header-toolbar {
     flex-wrap: wrap;
     gap: 0.5rem;
@@ -1556,7 +1556,7 @@ footer {
     }
 }
 
-/* ── Note Preview ── */
+/* ── Предпросмотр заметки ── */
 .note-preview {
     background: linear-gradient(180deg, var(--sand-light) 0%, var(--sand-base) 100%);
     border-radius: 14px;
@@ -1593,7 +1593,7 @@ footer {
     overflow: auto;
 }
 
-/* ── Wide screens: larger sidebars ── */
+/* ── Широкие экраны: широкие боковые панели ── */
 @media (min-width: 1400px) {
     .sidebar {
         width: 360px;
@@ -1611,7 +1611,7 @@ footer {
     }
 }
 
-/* ── Responsive layout ── */
+/* ── Адаптивная вёрстка ── */
 @container scheduler (max-width: 700px) {
     .calendar-layout {
         flex-direction: column;
@@ -1657,7 +1657,7 @@ footer {
     }
 }
 
-/* ── Backup / Archive ── */
+/* ── Бэкап / Архив ── */
 .backup-body {
     padding: 1.25rem;
 }

@@ -13,11 +13,11 @@ def slugify(name: str) -> str:
     """Make a filesystem-safe slug from a name."""
     if not name:
         return "untitled"
-    # Replace spaces and dashes with underscores
+    # Заменить пробелы и дефисы на подчёркивания
     slug = re.sub(r"[-\s]+", "_", name.strip())
-    # Remove dangerous filesystem characters
+    # Удалить опасные символы файловой системы
     slug = re.sub(r'[\\/:*?"<>|]', "", slug)
-    # Limit length to avoid too-long paths
+    # Ограничить длину, чтобы избежать слишком длинных путей
     slug = slug[:80]
     return slug or "untitled"
 
@@ -66,14 +66,14 @@ class LocalStorage(StorageBackend):
         if not identifier:
             return self.base_path
         path = Path(identifier)
-        # If absolute and exists, use as-is
+        # Если абсолютный и существует, использовать как есть
         if path.is_absolute() and path.exists():
             return path
-        # Try relative to base_path
+        # Попробовать относительно base_path
         rel = self.base_path / identifier
         if rel.exists():
             return rel
-        # Try basename only (fallback for migrated databases with old absolute paths)
+        # Попробовать только имя файла (fallback для мигрированных БД со старыми абсолютными путями)
         basename = path.name
         if basename:
             fallback = self.base_path / basename
@@ -174,8 +174,8 @@ class S3Storage(StorageBackend):
             return False
 
     async def rename_subfolder(self, old_subfolder: str, new_subfolder: str) -> bool:
-        # S3 does not have real folders; renaming keys would require copy+delete.
-        # Not implemented for now.
+        # У S3 нет настоящих папок; переименование ключей потребует copy+delete.
+        # Пока не реализовано.
         return False
 
     async def get_local_path(self, identifier: str) -> str | None:
@@ -185,7 +185,7 @@ class S3Storage(StorageBackend):
         """Direct/public URL if bucket is public. For private buckets use get_download_url."""
         if self.settings.s3_endpoint_url:
             return f"{self.settings.s3_endpoint_url}/{self.bucket}/{identifier}"
-        # AWS S3 standard URL
+        # Стандартный URL AWS S3
         return f"https://{self.bucket}.s3.{self.settings.s3_region}.amazonaws.com/{identifier}"
 
     def get_download_url(self, identifier: str, filename: str | None = None) -> str | None:

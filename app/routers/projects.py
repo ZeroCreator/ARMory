@@ -72,13 +72,13 @@ async def update_project(
     await db.commit()
     await db.refresh(project)
 
-    # Rename project folder if name changed
+    # Переименовать папку проекта, если изменилось название
     if old_name != project.name:
         old_subfolder = f"{project.id}_{slugify(old_name)}"
         new_subfolder = f"{project.id}_{slugify(project.name)}"
         await storage.rename_subfolder(old_subfolder, new_subfolder)
 
-        # Update stored file paths for all items in this project
+        # Обновить сохранённые пути файлов для всех элементов проекта
         old_prefix = f"{old_subfolder}/"
         new_prefix = f"{new_subfolder}/"
         items_result = await db.execute(
@@ -104,7 +104,7 @@ async def delete_project(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ):
-    # Delete files from storage first
+    # Сначала удалить файлы из хранилища
     result = await db.execute(
         select(DocumentItem)
         .join(Document)

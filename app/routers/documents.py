@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/projects/{project_id}/documents", tags=["documen
 
 
 # ═══════════════════════════════════════════════════
-# Category detection
+# Определение категории
 # ═══════════════════════════════════════════════════
 
 FILE_CATEGORIES = {
@@ -63,7 +63,7 @@ def detect_category(item_type: DocType, url: Optional[str], file_name: Optional[
                     return cat
         return "link"
 
-    # File
+    # Файл
     if mime_type:
         main = mime_type.split("/")[0]
         mapping = {"image": "image", "video": "video", "audio": "audio"}
@@ -82,7 +82,7 @@ def detect_category(item_type: DocType, url: Optional[str], file_name: Optional[
 
 
 # ═══════════════════════════════════════════════════
-# Documents (groups)
+# Документы (группы)
 # ═══════════════════════════════════════════════════
 
 @router.get("", response_model=list[DocumentOut])
@@ -175,7 +175,7 @@ async def update_document(
     await db.commit()
     await db.refresh(doc)
 
-    # Rename folder if document title changed
+    # Переименовать папку, если изменилось название документа
     if title is not None and old_title != doc.title:
         proj_result = await db.execute(select(Project).where(Project.id == project_id))
         project = proj_result.scalar_one_or_none()
@@ -184,7 +184,7 @@ async def update_document(
             new_subfolder = f"{project.id}_{slugify(project.name)}/{doc.id}_{slugify(doc.title)}"
             await storage.rename_subfolder(old_subfolder, new_subfolder)
 
-            # Update stored file paths
+            # Обновить сохранённые пути файлов
             old_prefix = f"{old_subfolder}/"
             new_prefix = f"{new_subfolder}/"
             items_result = await db.execute(
@@ -214,7 +214,7 @@ async def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Delete associated files from storage
+    # Удалить связанные файлы из хранилища
     for item in doc.items:
         if item.item_type == DocType.file and item.file_path:
             await storage.delete(item.file_path)
@@ -225,7 +225,7 @@ async def delete_document(
 
 
 # ═══════════════════════════════════════════════════
-# Document Items (links / files inside a group)
+# Элементы документа (ссылки / файлы внутри группы)
 # ═══════════════════════════════════════════════════
 
 @router.post("/{doc_id}/items", response_model=DocumentItemOut, status_code=201)
@@ -304,7 +304,7 @@ async def create_item(
     await db.commit()
     await db.refresh(item)
 
-    # Update document category if empty or auto
+    # Обновить категорию документа, если пустая или авто
     if not doc.category:
         doc.category = category
         await db.commit()
@@ -345,7 +345,7 @@ async def update_item(
             item.content = content
     else:
         if file:
-            # Replace file: delete old, save new
+            # Заменить файл: удалить старый, сохранить новый
             if item.file_path:
                 await storage.delete(item.file_path)
             file_name = file.filename
@@ -517,7 +517,7 @@ async def open_item(
         if display:
             env["DISPLAY"] = display
 
-        # Find XAUTHORITY for XWayland/Xorg access
+        # Найти XAUTHORITY для доступа к XWayland/Xorg
         xauthority = None
         try:
             result = subprocess.run(
@@ -560,10 +560,10 @@ async def open_item(
 
 
 # ═══════════════════════════════════════════════════
-# Sections
+# Разделы
 # ═══════════════════════════════════════════════════
 
-# Separate router for sections
+# Отдельный роутер для разделов
 section_router = APIRouter(prefix="/api/projects/{project_id}/sections", tags=["sections"])
 
 @section_router.get("", response_model=list[SectionOut])
@@ -648,7 +648,7 @@ async def delete_section(
     if not section:
         raise HTTPException(status_code=404, detail="Section not found")
 
-    # Clear section_id from documents in this section
+    # Очистить section_id у документов в этом разделе
     for doc in section.documents:
         doc.section_id = None
     await db.commit()

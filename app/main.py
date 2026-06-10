@@ -22,12 +22,12 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-        # Migration: split Document (old flat model) into Document (group) + DocumentItem
+        # Миграция: разделить Document (старая плоская модель) на Document (группа) + DocumentItem
         tables = await conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
         table_names = [r[0] for r in tables.fetchall()]
 
         if "document_items" not in table_names:
-            # Create items table manually if SQLAlchemy hasn't yet
+            # Создать таблицу элементов вручную, если SQLAlchemy ещё не создал
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS document_items (
                     id INTEGER PRIMARY KEY,
@@ -44,18 +44,18 @@ async def lifespan(app: FastAPI):
                 )
             """))
 
-        # Check if old flat schema still exists (has doc_type column in documents)
+        # Проверить, существует ли старая плоская схема (есть колонка doc_type в documents)
         doc_cols = await conn.execute(text("PRAGMA table_info(documents)"))
         doc_column_names = [r[1] for r in doc_cols.fetchall()]
 
         if "doc_type" in doc_column_names:
-            # Migrate old flat documents into group + items
+            # Мигрировать старые плоские документы в группу + элементы
             await conn.execute(text("""
                 INSERT INTO document_items (document_id, item_type, url, file_path, file_name, file_size, mime_type, sort_order, created_at)
                 SELECT id, doc_type, url, file_path, file_name, file_size, mime_type, sort_order, created_at FROM documents
             """))
 
-            # Rebuild documents table without old flat columns
+            # Пересобрать таблицу documents без старых плоских колонок
             await conn.execute(text("ALTER TABLE documents RENAME TO documents_old"))
             await conn.execute(text("""
                 CREATE TABLE documents (
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
             """))
             await conn.execute(text("DROP TABLE documents_old"))
 
-            # Fix sequence only if sqlite_sequence table exists (AUTOINCREMENT tables)
+            # Исправить sequence только если таблица sqlite_sequence существует (AUTOINCREMENT таблицы)
             seq_tables = await conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'"))
             if seq_tables.fetchone():
                 await conn.execute(text("""
@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
                     SELECT 'documents', COALESCE(MAX(id), 0) FROM documents
                 """))
 
-        # Fix broken FK: if document_items still references documents_old, rebuild it
+        # Исправить сломанный FK: если document_items всё ещё ссылается на documents_old, пересобрать
         fk_info = await conn.execute(text("PRAGMA foreign_key_list(document_items)"))
         for row in fk_info.fetchall():
             if row[2] == "documents_old":
@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("ALTER TABLE document_items_new RENAME TO document_items"))
                 break
 
-        # Add missing columns to document_items
+        # Добавить недостающие колонки в document_items
         item_cols = await conn.execute(text("PRAGMA table_info(document_items)"))
         item_column_names = [r[1] for r in item_cols.fetchall()]
         if "category" not in item_column_names:
@@ -119,18 +119,18 @@ async def lifespan(app: FastAPI):
         if "content" not in item_column_names:
             await conn.execute(text("ALTER TABLE document_items ADD COLUMN content TEXT"))
 
-        # Cleanup old backup table if still exists
+        # Удалить старую таблицу бэкапа, если ещё существует
         old_tables = await conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='documents_old'"))
         if old_tables.fetchone():
             await conn.execute(text("DROP TABLE documents_old"))
 
-        # Migration: add sort_order to projects
+        # Миграция: добавить sort_order в projects
         project_cols = await conn.execute(text("PRAGMA table_info(projects)"))
         project_col_names = [r[1] for r in project_cols.fetchall()]
         if "sort_order" not in project_col_names:
             await conn.execute(text("ALTER TABLE projects ADD COLUMN sort_order INTEGER DEFAULT 0"))
 
-        # Migration: sidebar blocks & links
+        # Миграция: боковые блоки и ссылки
         if "sidebar_blocks" not in table_names:
             await conn.execute(text("""
                 CREATE TABLE sidebar_blocks (
@@ -154,7 +154,7 @@ async def lifespan(app: FastAPI):
                 )
             """))
 
-        # Migration: add sections support
+        # Миграция: добавить поддержку разделов
         if "sections" not in table_names:
             await conn.execute(text("""
                 CREATE TABLE sections (
@@ -175,13 +175,13 @@ async def lifespan(app: FastAPI):
         if "description" not in doc_col_names2:
             await conn.execute(text("ALTER TABLE documents ADD COLUMN description TEXT"))
 
-        # Add description to sections if missing
+        # Добавить description в sections, если отсутствует
         sec_cols = await conn.execute(text("PRAGMA table_info(sections)"))
         sec_col_names = [r[1] for r in sec_cols.fetchall()]
         if "description" not in sec_col_names:
             await conn.execute(text("ALTER TABLE sections ADD COLUMN description TEXT"))
 
-        # Migration: calendar_events table
+        # Миграция: таблица calendar_events
         if "calendar_events" not in table_names:
             await conn.execute(text("""
                 CREATE TABLE calendar_events (
@@ -197,7 +197,7 @@ async def lifespan(app: FastAPI):
                 )
             """))
 
-    # Seed default sidebar data from bd-arm if tables are empty
+    # Заполнить sidebar данными по умолчанию из bd-arm, если таблицы пустые
     from app.database import AsyncSessionLocal
     from app.models import SidebarBlock, SidebarLink
     from sqlalchemy import select, func
@@ -295,11 +295,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
-# Static & templates
+# Статика и шаблоны
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-# Routers
+# Роутеры
 app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(documents.section_router)

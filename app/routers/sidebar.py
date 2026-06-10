@@ -14,7 +14,7 @@ from app.schemas import (
 router = APIRouter(prefix="/api/sidebar", tags=["sidebar"])
 
 
-# ── Blocks ──
+# ── Блоки ──
 
 @router.get("/blocks", response_model=List[SidebarBlockOut])
 async def list_blocks(position: str = None, db: AsyncSession = Depends(get_db)):
@@ -72,7 +72,7 @@ async def delete_block(block_id: int, db: AsyncSession = Depends(get_db)):
     return None
 
 
-# ── Links ──
+# ── Ссылки ──
 
 @router.patch("/blocks/{block_id}/links/reorder", status_code=204)
 async def reorder_links(block_id: int, data: SidebarLinkReorderRequest, db: AsyncSession = Depends(get_db)):

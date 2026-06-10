@@ -25,7 +25,7 @@ function formatSize(bytes) {
 
 
 // ═══════════════════════════════════════════════════
-// Category helpers
+// Категории
 // ═══════════════════════════════════════════════════
 
 const CATEGORY_ICONS = {
@@ -128,7 +128,7 @@ function detectCategoryFromItem(item) {
 }
 
 // ═══════════════════════════════════════════════════
-// PROJECTS
+// ПРОЕКТЫ
 // ═══════════════════════════════════════════════════
 
 let allProjects = [];
@@ -274,7 +274,7 @@ async function createProject() {
 }
 
 // ═══════════════════════════════════════════════════
-// PROJECT DETAIL
+// ДЕТАЛИ ПРОЕКТА
 // ═══════════════════════════════════════════════════
 
 async function loadProject(id) {
@@ -334,7 +334,7 @@ async function deleteProject() {
 }
 
 // ═══════════════════════════════════════════════════
-// SECTIONS
+// РАЗДЕЛЫ
 // ═══════════════════════════════════════════════════
 
 let sectionsCache = [];
@@ -561,7 +561,7 @@ function renderItem(doc, item, idx) {
 }
 
 // ═══════════════════════════════════════════════════
-// SECTION CRUD
+// CRUD РАЗДЕЛОВ
 // ═══════════════════════════════════════════════════
 
 async function createSection() {
@@ -702,7 +702,7 @@ async function reorderSections(projectId, sectionIds) {
 }
 
 // ═══════════════════════════════════════════════════
-// GROUP CRUD
+// CRUD ГРУПП
 // ═══════════════════════════════════════════════════
 
 function fillSectionSelects() {
@@ -790,7 +790,7 @@ function deleteGroupFromModal() {
 }
 
 // ═══════════════════════════════════════════════════
-// ITEM CRUD
+// CRUD ЭЛЕМЕНТОВ
 // ═══════════════════════════════════════════════════
 
 function showAddItemModal(docId) {
@@ -899,7 +899,7 @@ async function deleteItem(docId, itemId) {
 }
 
 // ═══════════════════════════════════════════════════
-// PREVIEW
+// ПРЕДПРОСМОТР
 // ═══════════════════════════════════════════════════
 
 function getYoutubeEmbedUrl(url) {
@@ -1028,7 +1028,7 @@ function previewError() {
 }
 
 // ═══════════════════════════════════════════════════
-// SIDEBARS
+// БОКОВЫЕ ПАНЕЛИ
 // ═══════════════════════════════════════════════════
 
 async function loadSidebars() {
@@ -1180,7 +1180,7 @@ async function deleteSidebarLink(linkId) {
 }
 
 // ═══════════════════════════════════════════════════
-// SIDEBAR SORTABLE
+// СОРТИРОВКА БОКОВОЙ ПАНЕЛИ
 // ═══════════════════════════════════════════════════
 
 let sidebarBlockSortables = {};
@@ -1258,7 +1258,7 @@ async function reorderSidebarLinks(blockId, linkIds) {
 }
 
 // ═══════════════════════════════════════════════════
-// SIDEBAR CONTEXT MENU
+// КОНТЕКСТНОЕ МЕНЮ БОКОВОЙ ПАНЕЛИ
 // ═══════════════════════════════════════════════════
 
 let sidebarContextTarget = null;
@@ -1357,7 +1357,7 @@ document.getElementById('sidebar-context-menu').addEventListener('click', (e) =>
     }
 });
 
-// ── Edit Block ──
+// ── Редактирование блока ──
 
 async function openEditBlockModal(blockId) {
     try {
@@ -1389,7 +1389,7 @@ async function updateSidebarBlock() {
     }
 }
 
-// ── Edit Link ──
+// ── Редактирование ссылки ──
 
 async function openEditLinkModal(linkId) {
     try {
@@ -1427,7 +1427,7 @@ async function updateSidebarLink() {
     }
 }
 
-// ── Note ──
+// ── Заметка ──
 
 async function openSidebarNoteModal(type, id) {
     try {
@@ -1478,7 +1478,7 @@ async function saveSidebarNote() {
 }
 
 // ═══════════════════════════════════════════════════
-// SCHEDULER (from bd-arm)
+// ПЛАНИРОВЩИК (из bd-arm)
 // ═══════════════════════════════════════════════════
 
 async function fillSchedulerTasks() {
@@ -1574,7 +1574,7 @@ function initScheduler() {
 }
 
 // ═══════════════════════════════════════════════════
-// CALENDAR
+// КАЛЕНДАРЬ
 // ═══════════════════════════════════════════════════
 
 let calendarInstance = null;
@@ -1769,7 +1769,7 @@ async function deleteCalendarEvent() {
 }
 
 // ═══════════════════════════════════════════════════
-// BACKUP / SYNC
+// БЭКАП / СИНХРОНИЗАЦИЯ
 // ═══════════════════════════════════════════════════
 
 async function loadBackupStats() {
@@ -1947,7 +1947,7 @@ async function deleteArchive(name) {
 }
 
 // ═══════════════════════════════════════════════════
-// UTILS
+// УТИЛИТЫ
 // ═══════════════════════════════════════════════════
 
 function escapeHtml(text) {

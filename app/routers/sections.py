@@ -74,7 +74,7 @@ async def delete_section(
     if not section:
         raise HTTPException(status_code=404, detail="Section not found")
 
-    # Move documents out of this section before deleting
+    # Переместить документы из этого раздела перед удалением
     await db.execute(
         update(Document)
         .where(Document.section_id == section_id, Document.project_id == project_id)

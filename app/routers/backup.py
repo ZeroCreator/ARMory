@@ -86,7 +86,7 @@ async def _gather_stats(session: AsyncSession) -> dict:
     }
 
 
-# ── helpers for Yandex Disk uploads/downloads ────────────────────────
+# ── хелперы для загрузки/скачивания с Яндекс.Диска ────────────────────────
 
 def _upload_uploads(yandex: YandexDiskStorage, uploads_src: Path, remote_uploads: str) -> dict:
     """Синхронная загрузка всех файлов из uploads. Возвращает {uploaded, skipped}."""
@@ -142,7 +142,7 @@ def _download_uploads(yandex: YandexDiskStorage, remote_uploads: str, uploads_ds
     return {"downloaded": downloaded, "skipped": skipped}
 
 
-# ── restore helpers ──────────────────────────────────────────────────
+# ── хелперы восстановления ──────────────────────────────────────────────────
 
 def _read_sqlite_dump(db_path: Path) -> Dict[str, Any]:
     """Читает sqlite файл и возвращает dump всех таблиц."""
@@ -246,7 +246,7 @@ def _format_dt(iso_string: str) -> str:
         return iso_string
 
 
-# ── archive helpers ──────────────────────────────────────────────────
+# ── хелперы архивов ──────────────────────────────────────────────────
 
 def _local_auto_backup(db_path: Path, uploads_src: Path) -> Path:
     """Создаёт локальную резервную копию перед destructive операциями."""
@@ -303,7 +303,7 @@ def _list_backups(yandex: YandexDiskStorage) -> list:
     return sorted(backups, key=lambda x: x.get("modified", ""), reverse=True)
 
 
-# ── endpoints ────────────────────────────────────────────────────────
+# ── эндпоинты ────────────────────────────────────────────────────────
 
 
 @router.get("/stats")
@@ -411,7 +411,7 @@ async def sync_import():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-# ── archive endpoints ────────────────────────────────────────────────
+# ── эндпоинты архивов ────────────────────────────────────────────────
 
 @router.get("/archives")
 async def list_archives():
