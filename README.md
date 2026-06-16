@@ -23,7 +23,7 @@ docker compose -f compose.yml -f compose.dev.yml up -d
 
 Приложение доступно по адресу: http://localhost:<PORT> (порт по умолчанию смотрите в `compose.yml`).
 
-When the auth gateway is enabled, the public port is configured by `GATEWAY_PORT` in `.env` and ARMory itself is no longer exposed directly.
+When the auth gateway (oauth2-proxy) is enabled, the public port is configured by `GATEWAY_PORT` in `.env`, ARMory itself is not exposed directly, and the OIDC callback path is `/oauth2/callback`.
 
 ### Локальный запуск (без Docker)
 

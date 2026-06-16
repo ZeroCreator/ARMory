@@ -41,6 +41,24 @@ docker compose up -d --build
 
 Приложение доступно на `http://server-ip:<PORT>` (порт по умолчанию смотрите в `compose.yml`).
 
+## Запуск с auth gateway (oauth2-proxy)
+
+Если нужно закрыть ARMory авторизацией через Stalwart (mail.team-73.ru):
+
+```bash
+docker compose -f compose.yml -f compose.gateway.yml up -d
+```
+
+В `.env` заполни:
+```env
+GATEWAY_PORT=5005
+OAUTH2_PROXY_CLIENT_ID=armory
+OAUTH2_PROXY_CLIENT_SECRET=<secret от админа Stalwart>
+OAUTH2_PROXY_COOKIE_SECRET=<openssl rand -base64 32>
+```
+
+Callback URL для Stalwart: `https://armory.team-73.ru/oauth2/callback`.
+
 ## HTTPS + домен (Nginx + Certbot)
 
 ```bash

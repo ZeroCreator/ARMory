@@ -1,16 +1,27 @@
 services:
   gateway:
-    build:
-      context: ../rusty-auth-gateway
-      dockerfile: Dockerfile
-    image: rusty-auth-gateway:latest
-    container_name: rusty-auth-gateway
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.8.2
+    container_name: oauth2-proxy
     restart: unless-stopped
     ports:
-      - "${GATEWAY_PORT:-5005}:3000"
+      - "${GATEWAY_PORT:-5005}:4180"
     environment:
-      - GATEWAY_BIND_ADDR=0.0.0.0:3000
-      - GATEWAY_UPSTREAM_BASE_URL=http://app:${PORT:-8088}
+      - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
+      - OAUTH2_PROXY_UPSTREAMS=http://app:${PORT:-8088}
+      - OAUTH2_PROXY_PROVIDER=oidc
+      - OAUTH2_PROXY_SKIP_OIDC_DISCOVERY=true
+      - OAUTH2_PROXY_OIDC_ISSUER_URL=https://mail.team-73.ru
+      - OAUTH2_PROXY_LOGIN_URL=https://mail.team-73.ru/authorize/code
+      - OAUTH2_PROXY_REDEEM_URL=https://mail.team-73.ru/auth/token
+      - OAUTH2_PROXY_OIDC_JWKS_URL=https://mail.team-73.ru/auth/jwks.json
+      - OAUTH2_PROXY_VALIDATE_URL=https://mail.team-73.ru/auth/userinfo
+      - OAUTH2_PROXY_REDIRECT_URL=https://armory.team-73.ru/oauth2/callback
+      - OAUTH2_PROXY_EMAIL_DOMAINS=*
+      - OAUTH2_PROXY_SCOPE=openid
+      - OAUTH2_PROXY_COOKIE_SECURE=true
+      - OAUTH2_PROXY_COOKIE_HTTPONLY=true
+      - OAUTH2_PROXY_REVERSE_PROXY=true
+      - OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY=false
     env_file:
       - .env
     depends_on:
