@@ -92,6 +92,11 @@ class YandexDiskStorage:
             self._log(f"❌ Локальный файл не найден: {local_path}")
             return False
 
+        # Создаём все промежуточные папки перед загрузкой файла
+        if not self.ensure_folders(remote_path):
+            self._log(f"❌ Не удалось создать папки для {remote_path}")
+            return False
+
         try:
             resp = requests.get(
                 f"{self.base_url}/resources/upload",
@@ -100,7 +105,7 @@ class YandexDiskStorage:
                 timeout=10,
             )
             if resp.status_code != 200:
-                self._log(f"❌ Ошибка получения upload_url: {resp.status_code}")
+                self._log(f"❌ Ошибка получения upload_url: {resp.status_code} - {resp.text}")
                 return False
 
             upload_url = resp.json().get("href")
