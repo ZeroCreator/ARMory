@@ -39,7 +39,7 @@ mkdir -p data/uploads
 docker compose up -d --build
 ```
 
-Приложение доступно на `http://server-ip:<PORT>` (порт по умолчанию смотрите в `docker-compose.yml`).
+Приложение доступно на `http://server-ip:<PORT>` (порт по умолчанию смотрите в `compose.yml`).
 
 ## HTTPS + домен (Nginx + Certbot)
 

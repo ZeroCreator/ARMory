@@ -3,7 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: project-docs-hub
+    image: armory:latest
+    container_name: armory
     restart: unless-stopped
     ports:
       - "${PORT:-8088}:${PORT:-8088}"

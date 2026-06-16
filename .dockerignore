@@ -32,8 +32,8 @@ backup_*.tar.gz
 
 # Docker files (not needed inside image)
 Dockerfile
-docker-compose.yml
-docker-compose.dev.yml
+compose.yml
+compose.dev.yml
 
 # Logs
 *.log

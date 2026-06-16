@@ -15,10 +15,10 @@ ___
 docker compose up -d
 
 # Development (с hot-reload)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+docker compose -f compose.yml -f compose.dev.yml up -d
 ```
 
-Приложение доступно по адресу: http://localhost:<PORT> (порт по умолчанию смотрите в `docker-compose.yml`).
+Приложение доступно по адресу: http://localhost:<PORT> (порт по умолчанию смотрите в `compose.yml`).
 
 ### Локальный запуск (без Docker)
 
