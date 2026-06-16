@@ -14,11 +14,16 @@ ___
 # Production
 docker compose up -d
 
+# Production with auth gateway
+docker compose -f compose.yml -f compose.gateway.yml up -d --build
+
 # Development (с hot-reload)
 docker compose -f compose.yml -f compose.dev.yml up -d
 ```
 
 Приложение доступно по адресу: http://localhost:<PORT> (порт по умолчанию смотрите в `compose.yml`).
+
+When the auth gateway is enabled, the public port is configured by `GATEWAY_PORT` in `.env` and ARMory itself is no longer exposed directly.
 
 ### Локальный запуск (без Docker)
 

@@ -1,0 +1,22 @@
+services:
+  gateway:
+    build:
+      context: ../rusty-auth-gateway
+      dockerfile: Dockerfile
+    image: rusty-auth-gateway:latest
+    container_name: rusty-auth-gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_PORT:-5005}:3000"
+    environment:
+      - GATEWAY_BIND_ADDR=0.0.0.0:3000
+      - GATEWAY_UPSTREAM_BASE_URL=http://app:${PORT:-8088}
+    env_file:
+      - .env
+    depends_on:
+      - app
+    networks:
+      - armory-net
+
+networks:
+  armory-net:

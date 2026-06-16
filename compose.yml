@@ -6,10 +6,15 @@ services:
     image: armory:latest
     container_name: armory
     restart: unless-stopped
-    ports:
-      - "${PORT:-8088}:${PORT:-8088}"
+    expose:
+      - "${PORT:-8088}"
     volumes:
       - ./data:/app/data
       - ./projectdocs.db:/app/projectdocs.db
     env_file:
       - .env
+    networks:
+      - armory-net
+
+networks:
+  armory-net:

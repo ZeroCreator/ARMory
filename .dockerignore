@@ -34,6 +34,7 @@ backup_*.tar.gz
 Dockerfile
 compose.yml
 compose.dev.yml
+compose.gateway.yml
 
 # Logs
 *.log

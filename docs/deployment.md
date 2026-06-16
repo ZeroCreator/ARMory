@@ -75,7 +75,7 @@ cd /opt/<your-project>
 git pull
 
 # Бэкап перед обновлением
-tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/
+tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/ projectdocs.db
 
 # Пересобрать и перезапустить
 docker compose up -d --build
