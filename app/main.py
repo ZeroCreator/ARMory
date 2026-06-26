@@ -261,5 +261,6 @@ async def glossary_page(request: Request):
 
 
 # Документация ARMory (MkDocs site)
-if os.path.isdir("site"):
-    app.mount("/docs", StaticFiles(directory="site", html=True), name="docs")
+site_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "site"))
+if os.path.isdir(site_dir):
+    app.mount("/docs", StaticFiles(directory=site_dir, html=True), name="docs")
