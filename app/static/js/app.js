@@ -191,18 +191,10 @@ function renderProjectsPage() {
         });
     });
 
-    if (totalPages > 1) {
-        paginationContainer.innerHTML = renderProjectsPagination(totalPages);
-        paginationContainer.querySelectorAll('.pagination-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                currentProjectsPage = parseInt(btn.dataset.page);
-                renderProjectsPage();
-                container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
-        });
-    } else {
-        paginationContainer.innerHTML = '';
-    }
+    renderPagination('projects-pagination', currentProjectsPage, totalPages, (page) => {
+        currentProjectsPage = page;
+        renderProjectsPage();
+    }, container);
 
     initProjectSortable();
 }
@@ -214,6 +206,38 @@ function renderProjectsPagination(totalPages) {
         html += `<button class="pagination-btn ${activeClass}" data-page="${i}">${i}</button>`;
     }
     return html;
+}
+
+/**
+ * Рендерит числовую пагинацию в указанный контейнер.
+ * @param {string} containerId - id DOM-элемента для пагинации
+ * @param {number} currentPage - текущая страница (1-based)
+ * @param {number} totalPages - общее число страниц
+ * @param {function(number):void} onPageChange - колбэк, вызываемый с новой страницей (1-based)
+ * @param {HTMLElement|null} scrollTarget - элемент, к которому прокрутить после смены страницы
+ */
+function renderPagination(containerId, currentPage, totalPages, onPageChange, scrollTarget) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    for (let i = 1; i <= totalPages; i++) {
+        const activeClass = i === currentPage ? 'active' : '';
+        html += `<button class="pagination-btn ${activeClass}" data-page="${i}">${i}</button>`;
+    }
+    container.innerHTML = html;
+
+    container.querySelectorAll('.pagination-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const page = parseInt(btn.dataset.page, 10);
+            onPageChange(page);
+            if (scrollTarget) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+    });
 }
 
 let projectSortable = null;
@@ -442,7 +466,7 @@ function renderSection(section, idx) {
     const docsHtml = (section.documents || []).map((d, iidx) => renderGroup(d, iidx)).join('');
     const descHtml = section.description ? `<div class="section-desc small">${escapeHtml(section.description)}</div>` : '';
     return `
-        <div class="section-card mb-4 fade-in" data-id="${section.id}">
+        <div class="section-card mb-3 fade-in" data-id="${section.id}">
             <div class="section-header" onclick="toggleSection(${section.id})">
                 <div class="d-flex align-items-center gap-2 flex-fill">
                     <div class="doc-drag-handle" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
@@ -484,7 +508,7 @@ function renderGroup(doc, idx) {
 
     const groupCollapsed = isGroupCollapsed(PROJECT_ID, doc.id);
     return `
-        <div class="doc-group mb-3 fade-in" data-id="${doc.id}">
+        <div class="doc-group fade-in" data-id="${doc.id}">
             <div class="doc-group-header" onclick="toggleGroup(${doc.id})">
                 <div class="d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center gap-2">
@@ -992,6 +1016,18 @@ async function openItemPreview(item) {
         case 'code': {
             if (item.item_type === 'link') {
                 content.innerHTML = `<iframe src="${escapeHtml(item.url)}" class="w-100 border-0" style="height:75vh;"></iframe>`;
+            } else if (isMarkdownFile(item.file_name)) {
+                try {
+                    const resp = await fetch(getItemPreviewUrl(item));
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const text = await resp.text();
+                    const html = typeof marked !== 'undefined'
+                        ? marked.parse(text)
+                        : escapeHtml(text).replace(/\n/g, '<br>');
+                    content.innerHTML = `<div class="markdown-preview">${html}</div>`;
+                } catch (e) {
+                    previewError();
+                }
             } else {
                 try {
                     const resp = await fetch(getItemPreviewUrl(item));
@@ -1022,6 +1058,12 @@ async function openItemPreview(item) {
             }
         }
     }
+}
+
+function isMarkdownFile(fileName) {
+    if (!fileName) return false;
+    const ext = fileName.split('.').pop().toLowerCase();
+    return ext === 'md' || ext === 'markdown';
 }
 
 function previewError() {

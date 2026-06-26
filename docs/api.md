@@ -65,6 +65,40 @@
 | GET | `/api/scheduler/atq` | Список запланированных задач |
 | POST | `/api/scheduler/remove-task` | Удалить задачу из очереди |
 
+## Глоссарий
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/glossary` | Список терминов (пагинация, поиск, фильтр по теме/подтеме) |
+| GET | `/api/glossary/count` | Количество терминов с учётом фильтров |
+| POST | `/api/glossary` | Создать термин |
+| GET | `/api/glossary/{id}` | Получить термин |
+| PATCH | `/api/glossary/{id}` | Обновить термин |
+| DELETE | `/api/glossary/{id}` | Удалить термин |
+| GET | `/api/glossary/topics` | Список тем с подтемами |
+| POST | `/api/glossary/topics` | Создать тему |
+| PATCH | `/api/glossary/topics/{id}` | Обновить тему |
+| DELETE | `/api/glossary/topics/{id}` | Удалить тему |
+| GET | `/api/glossary/subtopics` | Список подтем |
+| POST | `/api/glossary/subtopics` | Создать подтему |
+| PATCH | `/api/glossary/subtopics/{id}` | Обновить подтему |
+| DELETE | `/api/glossary/subtopics/{id}` | Удалить подтему |
+
+## Alexandrite
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/alexandrite/roots` | Настроенные корневые папки |
+| GET | `/api/alexandrite/tree?root=<path>` | Дерево файлов и папок |
+| GET | `/api/alexandrite/file?root=<path>&path=<relative>` | Содержимое файла |
+| POST | `/api/alexandrite/file?root=<path>` | Создать файл `.md`/`.txt` |
+| PUT | `/api/alexandrite/file?root=<path>` | Обновить содержимое файла |
+| PATCH | `/api/alexandrite/file?root=<path>` | Переименовать файл |
+| DELETE | `/api/alexandrite/file?root=<path>&path=<relative>` | Удалить файл |
+| POST | `/api/alexandrite/directory?root=<path>` | Создать папку |
+| PATCH | `/api/alexandrite/directory?root=<path>` | Переименовать папку |
+| DELETE | `/api/alexandrite/directory?root=<path>&path=<relative>` | Удалить папку рекурсивно |
+
 ## Бэкапы и синхронизация (Яндекс.Диск)
 
 | Метод | Путь | Описание |

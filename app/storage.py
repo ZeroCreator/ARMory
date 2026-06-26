@@ -57,9 +57,14 @@ class LocalStorage(StorageBackend):
         self.base_path = Path(base_path).resolve()
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-    def _unique_filename(self, original: str) -> str:
+    def _readable_filename(self, original: str) -> str:
+        """Человекочитаемое имя файла: оригинальное название + короткий уникальный суффикс."""
+        if not original:
+            original = "file"
         ext = Path(original).suffix
-        return f"{uuid.uuid4().hex}{ext}"
+        stem = Path(original).stem
+        safe_stem = slugify(stem)[:50] or "file"
+        return f"{safe_stem}_{uuid.uuid4().hex[:8]}{ext}"
 
     def _resolve_path(self, identifier: str) -> Path:
         """Resolve identifier to actual filesystem path with fallback."""
@@ -82,11 +87,20 @@ class LocalStorage(StorageBackend):
         return rel
 
     async def save(self, file_obj: BinaryIO, filename: str, content_type: str | None = None, subfolder: str | None = None) -> dict:
-        unique_name = self._unique_filename(filename)
         dest_dir = self.base_path
         if subfolder:
             dest_dir = self.base_path / subfolder
             dest_dir.mkdir(parents=True, exist_ok=True)
+
+        base_name = self._readable_filename(filename)
+        ext = Path(base_name).suffix
+        stem = Path(base_name).stem
+        unique_name = base_name
+        counter = 1
+        while (dest_dir / unique_name).exists():
+            unique_name = f"{stem}_{counter:02d}{ext}"
+            counter += 1
+
         dest = dest_dir / unique_name
         with open(dest, "wb") as f:
             shutil.copyfileobj(file_obj, f)
@@ -150,9 +164,12 @@ class S3Storage(StorageBackend):
         )
 
     def _key(self, filename: str, subfolder: str | None = None) -> str:
+        if not filename:
+            filename = "file"
         ext = Path(filename).suffix
+        safe_stem = slugify(Path(filename).stem)[:50] or "file"
         prefix = f"uploads/{subfolder}/" if subfolder else "uploads/"
-        return f"{prefix}{uuid.uuid4().hex}{ext}"
+        return f"{prefix}{safe_stem}_{uuid.uuid4().hex[:8]}{ext}"
 
     async def save(self, file_obj: BinaryIO, filename: str, content_type: str | None = None, subfolder: str | None = None) -> dict:
         key = self._key(filename, subfolder)

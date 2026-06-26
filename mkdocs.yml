@@ -29,6 +29,8 @@ nav:
   - Главная: index.md
   - Архитектура: architecture.md
   - API: api.md
+  - Alexandrite: alexandrite.md
+  - Глоссарий: glossary.md
   - Хранилище S3: s3.md
   - Календарь: calendar.md
   - Планировщик: scheduler.md

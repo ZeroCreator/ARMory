@@ -114,3 +114,46 @@ class CalendarEvent(Base):
     all_day = Column(Boolean, default=False)
     color = Column(String(7), default="#a78bfa")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class GlossaryTopic(Base):
+    __tablename__ = "glossary_topics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, unique=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    terms = relationship("GlossaryTerm", back_populates="topic")
+    subtopics = relationship("GlossarySubtopic", back_populates="topic", cascade="all, delete-orphan")
+
+
+class GlossarySubtopic(Base):
+    __tablename__ = "glossary_subtopics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    topic_id = Column(Integer, ForeignKey("glossary_topics.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    topic = relationship("GlossaryTopic", back_populates="subtopics")
+    terms = relationship("GlossaryTerm", back_populates="subtopic")
+
+
+class GlossaryTerm(Base):
+    __tablename__ = "glossary_terms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    term = Column(String(255), nullable=False)
+    short_definition = Column(Text, nullable=True)
+    definition = Column(Text, nullable=True)
+    letter = Column(String(10), nullable=True)
+    topic_id = Column(Integer, ForeignKey("glossary_topics.id", ondelete="SET NULL"), nullable=True)
+    subtopic_id = Column(Integer, ForeignKey("glossary_subtopics.id", ondelete="SET NULL"), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    topic = relationship("GlossaryTopic", back_populates="terms")
+    subtopic = relationship("GlossarySubtopic", back_populates="terms")

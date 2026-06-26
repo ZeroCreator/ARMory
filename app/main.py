@@ -3,6 +3,7 @@ ProJectDocsHub — веб-приложение для сбора и управл
 
 Author: Shkola Olga
 """
+import os
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -11,7 +12,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.database import engine, Base
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary
 from app.config import get_settings
 
 settings = get_settings()
@@ -197,11 +198,31 @@ async def lifespan(app: FastAPI):
                 )
             """))
 
+        # Миграция: таблица glossary_terms
+        if "glossary_terms" not in table_names:
+            await conn.execute(text("""
+                CREATE TABLE glossary_terms (
+                    id INTEGER PRIMARY KEY,
+                    term VARCHAR(255) NOT NULL,
+                    short_definition TEXT,
+                    definition TEXT,
+                    letter VARCHAR(10),
+                    sort_order INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+
     yield
     await engine.dispose()
 
 
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_name,
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+)
 
 # Статика и шаблоны
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -215,6 +236,8 @@ app.include_router(sidebar.router)
 app.include_router(scheduler.router)
 app.include_router(calendar.router)
 app.include_router(backup.router)
+app.include_router(alexandrite.router)
+app.include_router(glossary.router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -225,3 +248,18 @@ async def index(request: Request):
 @app.get("/projects/{project_id}", response_class=HTMLResponse)
 async def project_page(request: Request, project_id: int):
     return templates.TemplateResponse("project.html", {"request": request, "project_id": project_id, "title": settings.app_name})
+
+
+@app.get("/alexandrite", response_class=HTMLResponse)
+async def alexandrite_page(request: Request):
+    return templates.TemplateResponse("alexandrite.html", {"request": request, "title": settings.app_name})
+
+
+@app.get("/glossary", response_class=HTMLResponse)
+async def glossary_page(request: Request):
+    return templates.TemplateResponse("glossary.html", {"request": request, "title": settings.app_name})
+
+
+# Документация ARMory (MkDocs site)
+if os.path.isdir("site"):
+    app.mount("/docs", StaticFiles(directory="site", html=True), name="docs")

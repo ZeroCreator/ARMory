@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     yandex_disk_backups_path: str = "ARMory/backups"
     timezone: str = "Europe/Moscow"
 
+    # alexandrite — папка для файлового хранилища заметок
+    alexandrite_vault_path: str = "./data/uploads"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

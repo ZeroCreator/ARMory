@@ -18,7 +18,9 @@ app/
 │   ├── sidebar.py    # CRUD блоков и ссылок сайдбара
 │   ├── scheduler.py  # Планировщик задач через at
 │   ├── calendar.py   # CRUD событий календаря
-│   └── backup.py     # Синхронизация и архивные бэкапы на Яндекс.Диск
+│   ├── backup.py     # Синхронизация и архивные бэкапы на Яндекс.Диск
+│   ├── glossary.py   # CRUD терминов, тем и подтем глоссария
+│   └── alexandrite.py # Файловое хранилище заметок
 ├── templates/        # Jinja2 шаблоны
 └── static/           # CSS + JS
 ```
@@ -55,6 +57,14 @@ app/
 - `start_date`, `end_date`, `all_day`, `color`
 - `created_at`
 - Таблица создаётся автоматически при старте (миграция в `lifespan`)
+
+### GlossaryTopic / GlossarySubtopic / GlossaryTerm
+- Темы и подтемы для группировки терминов.
+- Термин содержит `term`, `short_definition`, `definition`, `letter`, связи с темой и подтемой.
+
+### Alexandrite
+- Не использует таблицы БД: работает напрямую с файловой системой через `app/routers/alexandrite.py`.
+- Корневая папка задаётся через `ALEXANDRITE_VAULT_PATH` (по умолчанию `./data/uploads`).
 
 ## Абстракция хранилища
 

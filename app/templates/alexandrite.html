@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block left_sidebar %}{% endblock %}
+{% block right_sidebar %}{% endblock %}
+
+{% block content %}
+<div class="alexandrite-layout">
+    <aside class="alexandrite-sidebar">
+        <div class="alexandrite-sidebar-header">
+            <h5 class="mb-0"><i class="bi bi-gem me-2"></i>Alexandrite</h5>
+            <div class="alexandrite-header-actions">
+                <button class="btn btn-sm btn-outline-success" onclick="showCreateFileModal()" title="Создать файл">
+                    <i class="bi bi-file-earmark-plus"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-brown" onclick="showCreateFolderModal()" title="Создать папку">
+                    <i class="bi bi-folder-plus"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-primary" onclick="showAlexandriteRootModal()" title="Выбрать папку">
+                    <i class="bi bi-folder-symlink"></i>
+                </button>
+            </div>
+        </div>
+        <div class="alexandrite-current-root" id="alexandrite-current-root" title="Текущая папка">
+            —
+        </div>
+        <div id="alexandrite-tree" class="alexandrite-tree">
+            <div class="text-muted small text-center py-3">Выберите папку</div>
+        </div>
+    </aside>
+
+    <!-- Контекстное меню папки в дереве alexandrite -->
+    <div id="alexandrite-folder-context-menu" class="sidebar-context-menu" style="display:none;">
+        <div class="sidebar-context-item" data-action="add-file"><i class="bi bi-file-earmark-plus me-2"></i>Добавить файл</div>
+        <div class="sidebar-context-item" data-action="add-folder"><i class="bi bi-folder-plus me-2"></i>Добавить папку</div>
+        <div class="sidebar-context-divider"></div>
+        <div class="sidebar-context-item" data-action="rename"><i class="bi bi-pencil me-2"></i>Редактировать</div>
+        <div class="sidebar-context-item text-danger" data-action="delete"><i class="bi bi-trash me-2"></i>Удалить</div>
+    </div>
+
+    <!-- Контекстное меню файла в дереве alexandrite -->
+    <div id="alexandrite-file-context-menu" class="sidebar-context-menu" style="display:none;">
+        <div class="sidebar-context-item" data-action="rename"><i class="bi bi-pencil me-2"></i>Редактировать</div>
+        <div class="sidebar-context-item text-danger" data-action="delete"><i class="bi bi-trash me-2"></i>Удалить</div>
+    </div>
+
+    <main class="alexandrite-preview-pane">
+        <div id="alexandrite-empty" class="empty-state">
+            <i class="bi bi-gem"></i>
+            <p>Наведите на файл в дереве, чтобы увидеть его содержимое</p>
+        </div>
+        <div id="alexandrite-preview" class="alexandrite-preview" style="display:none;">
+            <div class="alexandrite-preview-header mb-3">
+                <div>
+                    <h5 id="alexandrite-preview-title" class="mb-0"></h5>
+                    <span id="alexandrite-preview-meta" class="text-muted small"></span>
+                </div>
+                <div class="alexandrite-preview-toolbar" id="alexandrite-preview-toolbar">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-primary active" id="alexandrite-mode-view" onclick="setAlexandriteViewMode()">
+                            <i class="bi bi-eye me-1"></i>Просмотр
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="alexandrite-mode-edit" onclick="setAlexandriteEditMode()">
+                            <i class="bi bi-pencil me-1"></i>Редактирование
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success" id="alexandrite-save-btn" onclick="saveAlexandriteFile()" style="display:none;">
+                        <i class="bi bi-check-lg me-1"></i>Сохранить
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger" id="alexandrite-delete-btn" onclick="deleteAlexandriteFile()">
+                        <i class="bi bi-trash me-1"></i>Удалить
+                    </button>
+                </div>
+            </div>
+            <div id="alexandrite-preview-body" class="alexandrite-preview-body"></div>
+        </div>
+    </main>
+</div>
+
+<!-- Модал выбора корневой папки -->
+<div class="modal fade" id="alexandriteRootModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-folder me-2"></i>Выбрать папку</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alexandrite-browser-path mb-2">
+                    <button type="button" class="btn btn-sm btn-secondary me-2" id="alexandrite-browser-up" onclick="goAlexandriteBrowseUp()" title="Вверх">
+                        <i class="bi bi-arrow-up"></i>
+                    </button>
+                    <input type="text" class="form-control form-control-sm" id="alexandrite-browser-current" readonly>
+                </div>
+                <div class="alexandrite-browser-list" id="alexandrite-browser-list">
+                    <div class="text-muted small text-center py-3">Загрузка...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="selectAlexandriteBrowseCurrent()">Выбрать текущую</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модал создания папки -->
+<div class="modal fade" id="alexandriteCreateFolderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-folder-plus me-2"></i>Новая папка</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="alexandrite-create-folder-form">
+                    <div class="mb-3">
+                        <label class="form-label">Имя папки</label>
+                        <input type="text" class="form-control" id="alexandrite-create-folder-name" placeholder="notes" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="createAlexandriteFolder()">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модал создания файла -->
+<div class="modal fade" id="alexandriteCreateFileModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-file-earmark-plus me-2"></i>Новый файл</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="alexandrite-create-file-form">
+                    <div class="mb-3">
+                        <label class="form-label">Имя файла</label>
+                        <input type="text" class="form-control" id="alexandrite-create-file-name" placeholder="notes" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Тип</label>
+                        <select class="form-select" id="alexandrite-create-file-type">
+                            <option value=".md" selected>Markdown (.md)</option>
+                            <option value=".txt">Текст (.txt)</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="createAlexandriteFile()">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/static/js/alexandrite.js?v=2"></script>
+{% endblock %}

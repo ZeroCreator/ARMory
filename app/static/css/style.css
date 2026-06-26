@@ -86,11 +86,41 @@ hr { border-color: rgba(139,124,246,0.15); }
     border-bottom: 1px solid rgba(167, 139, 250, 0.28);
     box-shadow: 0 4px 24px rgba(0,0,0,0.20) !important;
 }
+.custom-navbar > .container-fluid {
+    position: relative;
+}
 .navbar-brand {
     font-size: 1.4rem;
     color: var(--sand-base) !important;
     font-weight: 700;
     letter-spacing: -0.02em;
+}
+
+.navbar-brand-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.7rem;
+    height: 1.6rem;
+    vertical-align: middle;
+}
+
+.navbar-brand-icon .bi-folder-fill {
+    font-size: 1.6rem;
+    color: var(--sand-base);
+    line-height: 1;
+}
+
+.navbar-brand-letter {
+    position: absolute;
+    top: 52%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: var(--purple-surface);
+    line-height: 1;
 }
 
 .arsenal-brand {
@@ -101,7 +131,49 @@ hr { border-color: rgba(139,124,246,0.15); }
     color: var(--sand-base);
     letter-spacing: 0.02em;
     text-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    margin-left: auto;
+}
+
+.header-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+}
+
+.header-nav-link {
+    color: var(--sand-base);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.55rem 0.8rem 0;
+    border-radius: 8px 8px 0 0;
+    transition: all 0.15s ease;
+    opacity: 0.9;
+}
+
+.header-nav-link:hover {
+    color: var(--sand-base);
+    background: rgba(167, 139, 250, 0.18);
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .navbar-brand,
+    .arsenal-brand {
+        display: none;
+    }
+    .header-nav {
+        bottom: auto;
+        top: 50%;
+        transform: translate(-50%, -50%);
+    }
+    .header-nav-link {
+        font-size: 0.85rem;
+        padding: 0.35rem 0.5rem 0;
+    }
 }
 
 /* ── Кнопки (3D рельеф) ── */
@@ -445,6 +517,7 @@ hr { border-color: rgba(139,124,246,0.15); }
 .doc-group {
     background: linear-gradient(180deg, #e8d5c4 0%, #fdf8f0 25%, #fdf8f0 75%, #f5e6d3 100%);
     border-radius: 16px;
+    margin-bottom: 1rem;
     box-shadow: 0 8px 28px rgba(0,0,0,0.15),
                 0 0 0 1px rgba(167,139,250,0.06);
     border: 1px solid rgba(167,139,250,0.10);
@@ -506,6 +579,10 @@ hr { border-color: rgba(139,124,246,0.15); }
 .doc-group .text-muted,
 .doc-card .text-muted {
     color: #7a6048 !important;
+}
+
+.glossary-term-card .text-muted {
+    color: #000 !important;
 }
 
 /* ── Элементы документов ── */
@@ -748,6 +825,111 @@ hr { border-color: rgba(139,124,246,0.15); }
 .preview-code code {
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     color: inherit;
+}
+
+.markdown-preview {
+    background: #f7f4ed;
+    color: #2d2a26;
+    padding: 2rem 2.5rem;
+    min-height: 300px;
+    font-size: 1.05rem;
+    line-height: 1.75;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+    color: #1f1c18;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+}
+
+.markdown-preview p {
+    margin-bottom: 1rem;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.markdown-preview li {
+    margin-bottom: 0.35rem;
+}
+
+.markdown-preview a {
+    color: #8b5a2b;
+    text-decoration: underline;
+}
+
+.markdown-preview a:hover {
+    color: #5c3a1b;
+}
+
+.markdown-preview code {
+    background: #ede8dc;
+    color: #8b1d4b;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.9em;
+}
+
+.markdown-preview pre {
+    background: #efe9dc;
+    border: 1px solid #e0d8c8;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+
+.markdown-preview pre code {
+    background: transparent;
+    color: #2d2a26;
+    padding: 0;
+    font-size: 0.9rem;
+}
+
+.markdown-preview blockquote {
+    border-left: 4px solid #d6cbb6;
+    padding-left: 1rem;
+    color: #5a5448;
+    margin-bottom: 1rem;
+}
+
+.markdown-preview img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+}
+
+.markdown-preview table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+    border: 1px solid #ded5c4;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+}
+
+.markdown-preview th {
+    background: #efe9dc;
+    font-weight: 600;
+}
+
+.markdown-preview hr {
+    border-color: #ded5c4;
+    margin: 1.5rem 0;
 }
 
 /* ── Модальные окна ── */
@@ -1830,4 +2012,705 @@ footer {
     .backup-table .btn-text {
         display: none;
     }
+}
+
+/* ═══════════════════════════════════════════════════
+   alexandrite — файловое хранилище заметок
+   ═══════════════════════════════════════════════════ */
+
+.alexandrite-layout {
+    display: flex;
+    flex: 1;
+    min-height: calc(100vh - 170px);
+    border-top: 1px solid rgba(167, 139, 250, 0.15);
+}
+
+.alexandrite-sidebar {
+    width: 360px;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, var(--purple-surface) 0%, var(--purple-darker) 100%);
+    border-right: 1px solid rgba(167, 139, 250, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.alexandrite-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid rgba(167, 139, 250, 0.18);
+    color: var(--sand-base);
+}
+
+.alexandrite-current-root {
+    padding: 0.5rem 1.1rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(167, 139, 250, 0.12);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.alexandrite-tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.75rem;
+}
+
+.alexandrite-tree ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.alexandrite-tree-children-wrap {
+    display: none;
+}
+
+.alexandrite-tree-item.expanded > .alexandrite-tree-children-wrap {
+    display: block;
+}
+
+.alexandrite-tree-item.expanded > .alexandrite-tree-row .alexandrite-tree-toggle {
+    transform: rotate(90deg);
+}
+
+.alexandrite-tree-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--sand-base);
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.alexandrite-tree-row:hover {
+    background: rgba(167, 139, 250, 0.18);
+}
+
+.alexandrite-tree-row.active {
+    background: rgba(167, 139, 250, 0.25);
+}
+
+.alexandrite-tree-toggle {
+    font-size: 0.7rem;
+    transition: transform 0.15s ease;
+    width: 14px;
+    text-align: center;
+}
+
+.alexandrite-tree-toggle.invisible {
+    visibility: hidden;
+}
+
+.alexandrite-tree-spacer {
+    width: 14px;
+}
+
+.alexandrite-tree-icon {
+    font-size: 1rem;
+    color: var(--purple-accent2);
+}
+
+.alexandrite-tree-title {
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.alexandrite-preview-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.alexandrite-preview-pane .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.alexandrite-preview {
+    position: absolute;
+    inset: 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.alexandrite-preview-body {
+    position: relative;
+    height: calc(100% - 80px);
+    overflow: auto;
+    margin-top: 1rem;
+    min-height: 0;
+}
+
+.alexandrite-text-preview {
+    background: var(--purple-darker);
+    color: var(--sand-base);
+    padding: 1.25rem;
+    border-radius: 12px;
+    border: 1px solid rgba(167, 139, 250, 0.18);
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0;
+    min-height: 100%;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.alexandrite-image-preview {
+    max-width: 100%;
+    max-height: 80vh;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+/* ── Действия в шапке сайдбара ── */
+.alexandrite-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* ── Тулбар превью ── */
+.alexandrite-preview-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(167, 139, 250, 0.18);
+    flex-wrap: wrap;
+}
+
+.alexandrite-preview-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+/* ── Редактор файла ── */
+.alexandrite-editor {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--purple-darker) !important;
+    color: var(--sand-base) !important;
+    border: 1px solid rgba(167, 139, 250, 0.25) !important;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    resize: none;
+    box-sizing: border-box;
+    overflow: auto;
+    display: none;
+}
+
+.alexandrite-editor:focus {
+    border-color: var(--purple-accent) !important;
+    box-shadow: 0 0 0 0.25rem rgba(167, 139, 250, 0.25) !important;
+}
+
+.alexandrite-preview-body.editing {
+    overflow: hidden;
+}
+
+.alexandrite-preview-body.editing .alexandrite-editor {
+    display: block;
+}
+
+/* ── Markdown preview ── */
+.alexandrite-markdown {
+    color: var(--sand-base);
+    line-height: 1.7;
+    max-width: 900px;
+}
+
+.alexandrite-markdown h1,
+.alexandrite-markdown h2,
+.alexandrite-markdown h3,
+.alexandrite-markdown h4,
+.alexandrite-markdown h5,
+.alexandrite-markdown h6 {
+    color: var(--sand-base);
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+}
+
+.alexandrite-markdown p {
+    margin-bottom: 0.75rem;
+}
+
+.alexandrite-markdown a {
+    color: var(--purple-accent2);
+    text-decoration: underline;
+}
+
+.alexandrite-markdown code {
+    background: rgba(167, 139, 250, 0.15);
+    color: var(--purple-accent2);
+    padding: 0.15rem 0.35rem;
+    border-radius: 5px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.alexandrite-markdown pre {
+    background: var(--purple-darker);
+    border: 1px solid rgba(167, 139, 250, 0.18);
+    border-radius: 10px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+
+.alexandrite-markdown pre code {
+    background: transparent;
+    padding: 0;
+    color: var(--sand-base);
+}
+
+.alexandrite-markdown blockquote {
+    border-left: 3px solid var(--purple-accent);
+    padding-left: 1rem;
+    margin-left: 0;
+    color: var(--text-muted);
+}
+
+.alexandrite-markdown ul,
+.alexandrite-markdown ol {
+    padding-left: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.alexandrite-markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.alexandrite-markdown th,
+.alexandrite-markdown td {
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+}
+
+.alexandrite-markdown th {
+    background: rgba(167, 139, 250, 0.12);
+}
+
+/* ── Файловый браузер для выбора папки ── */
+.alexandrite-browser-path {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.alexandrite-browser-path .form-control {
+    background: var(--purple-surface2);
+    color: var(--sand-base);
+    border-color: var(--btn-purple);
+}
+
+.alexandrite-browser-list {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid rgba(167, 139, 250, 0.18);
+    border-radius: 10px;
+    background: var(--purple-deep);
+}
+
+.alexandrite-browser-items {
+    margin: 0;
+}
+
+.alexandrite-browser-item {
+    background: transparent;
+    color: var(--sand-base);
+    border-color: rgba(167, 139, 250, 0.12);
+    padding: 0.5rem 0.75rem;
+    cursor: default;
+    transition: background 0.15s ease;
+}
+
+.alexandrite-browser-item:hover {
+    background: rgba(167, 139, 250, 0.12);
+}
+
+.alexandrite-browser-name {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    flex: 1;
+    overflow: hidden;
+}
+
+.alexandrite-browser-name .bi-folder-fill {
+    color: var(--purple-accent2);
+    flex-shrink: 0;
+}
+
+.alexandrite-browser-name span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 768px) {
+    .alexandrite-layout {
+        flex-direction: column;
+    }
+    .alexandrite-sidebar {
+        width: 100%;
+        max-height: 50vh;
+        border-right: none;
+        border-bottom: 1px solid rgba(167, 139, 250, 0.15);
+    }
+}
+
+/* ═══════════════════════════════════════════════════
+   Глоссарий
+   ═══════════════════════════════════════════════════ */
+
+.glossary-page-wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.glossary-letters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.glossary-letter-btn {
+    min-width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: linear-gradient(180deg, var(--sand-light) 0%, var(--sand-base) 100%);
+    color: var(--sand-text);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 2px 0 var(--sand-darker), 0 3px 8px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.glossary-letter-btn:hover {
+    background: linear-gradient(180deg, var(--sand-dark) 0%, var(--sand-darker) 100%);
+    transform: translateY(-1px);
+}
+
+.glossary-letter-btn.active {
+    background: linear-gradient(180deg, var(--btn-purple) 0%, var(--btn-purple-dark) 100%);
+    color: #fff;
+    box-shadow: 0 2px 0 var(--purple-accent), 0 3px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+.glossary-terms-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.glossary-term-card {
+    background: linear-gradient(180deg, #e8d5c4 0%, #fdf8f0 25%, #fdf8f0 75%, #f5e6d3 100%);
+    border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    border: 1px solid rgba(167,139,250,0.10);
+    overflow: hidden;
+}
+
+.glossary-term-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.1rem;
+    cursor: pointer;
+    user-select: none;
+    background: var(--sand-dark);
+    transition: background 0.15s ease;
+}
+
+.glossary-term-header:hover {
+    background: var(--sand-darker);
+}
+
+.glossary-term-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--btn-purple);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
+.glossary-term-name {
+    font-weight: 700;
+    color: #000;
+    font-size: 1.05rem;
+}
+
+.glossary-term-chevron {
+    color: var(--sand-muted);
+    transition: transform 0.2s ease;
+}
+
+.glossary-term-header[aria-expanded="true"] .glossary-term-chevron {
+    transform: rotate(180deg);
+}
+
+.glossary-term-body {
+    padding: 1rem 1.1rem;
+    color: #000;
+    border-left: 3px solid var(--purple-accent);
+    margin: 0.75rem 1.1rem 1rem;
+    background: rgba(255,255,255,0.4);
+    border-radius: 0 10px 10px 0;
+}
+
+.glossary-term-definition {
+    line-height: 1.6;
+    white-space: pre-line;
+    color: #000;
+}
+
+.glossary-term-short-section {
+    padding: 0.75rem 1rem;
+    background: rgba(167, 139, 250, 0.08);
+    border-left: 5px solid var(--btn-purple);
+    border-radius: 12px;
+    color: #000;
+    line-height: 1.55;
+    font-weight: 500;
+}
+
+.glossary-term-definition-section {
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid var(--sand-darker);
+    border-radius: 12px;
+    color: #000;
+    line-height: 1.6;
+}
+
+.glossary-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+}
+
+/* Темы глоссария */
+.sidebar-title,
+.glossary-sidebar-title {
+    color: var(--sand-base);
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.glossary-topics-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.glossary-topic-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    color: var(--sand-base);
+}
+
+.glossary-topic-item:hover,
+.glossary-topic-item.active {
+    background: rgba(167, 139, 250, 0.18);
+}
+
+.glossary-topic-name {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1;
+    font-weight: 600;
+    font-size: 0.92rem;
+}
+
+.glossary-topic-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: var(--btn-purple);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.glossary-topic-actions button {
+    color: var(--sand-base);
+    padding: 0.1rem 0.25rem;
+    font-size: 0.8rem;
+    line-height: 1;
+}
+
+.glossary-topic-actions button:hover {
+    color: var(--purple-accent2);
+}
+
+.glossary-topic-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.glossary-topic-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid var(--sand-darker);
+    background: linear-gradient(180deg, var(--sand-light) 0%, var(--sand-base) 100%);
+    color: var(--sand-text);
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.glossary-topic-chip:hover {
+    background: var(--sand-dark);
+}
+
+.glossary-topic-chip.active {
+    background: linear-gradient(180deg, var(--btn-purple) 0%, var(--btn-purple-dark) 100%);
+    color: #fff;
+    border-color: var(--purple-accent);
+}
+
+.glossary-term-topic-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    background: var(--btn-purple);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+/* Подтема под названием термина */
+.glossary-term-subtopic {
+    font-size: 0.75rem;
+    color: var(--sand-muted);
+    font-weight: 500;
+}
+
+/* Кнопка добавления темы в заголовке сайдбара */
+.glossary-topic-add-btn {
+    margin-left: 0.75rem;
+}
+
+/* Группа темы в сайдбаре */
+.glossary-topic-group {
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.glossary-topic-group.active,
+.glossary-topic-group:hover {
+    background: rgba(167, 139, 250, 0.1);
+}
+
+.glossary-topic-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.6rem;
+    color: var(--sand-base);
+    cursor: pointer;
+    user-select: none;
+}
+
+.glossary-topic-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--sand-base);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.glossary-topic-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.glossary-subtopics-list {
+    display: flex;
+    flex-direction: column;
+    padding-left: 1.6rem;
+    padding-bottom: 0.3rem;
+}
+
+.glossary-subtopic-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--sand-base);
+    opacity: 0.9;
+    transition: background 0.15s ease;
+}
+
+.glossary-subtopic-item:hover,
+.glossary-subtopic-item.active {
+    background: rgba(167, 139, 250, 0.18);
+    opacity: 1;
+}
+
+.glossary-subtopic-name {
+    font-size: 0.88rem;
 }

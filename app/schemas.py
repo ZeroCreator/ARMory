@@ -174,3 +174,82 @@ class SidebarBlockReorderRequest(BaseModel):
 
 class SidebarLinkReorderRequest(BaseModel):
     link_ids: List[int]
+
+
+# ═══════════════════════════════════════════════════
+# Глоссарий
+# ═══════════════════════════════════════════════════
+
+class GlossarySubtopicOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    topic_id: int
+    name: str
+    sort_order: int = 0
+    term_count: int = 0
+    created_at: datetime
+
+
+class GlossarySubtopicCreate(BaseModel):
+    topic_id: int
+    name: str
+
+
+class GlossarySubtopicUpdate(BaseModel):
+    topic_id: Optional[int] = None
+    name: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class GlossaryTopicShortOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    sort_order: int = 0
+    term_count: int = 0
+    created_at: datetime
+
+
+class GlossaryTopicOut(GlossaryTopicShortOut):
+    subtopics: List[GlossarySubtopicOut] = []
+
+
+class GlossaryTopicCreate(BaseModel):
+    name: str
+
+
+class GlossaryTopicUpdate(BaseModel):
+    name: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class GlossaryTermOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    term: str
+    short_definition: Optional[str] = None
+    definition: Optional[str] = None
+    letter: Optional[str] = None
+    topic_id: Optional[int] = None
+    topic: Optional[GlossaryTopicShortOut] = None
+    subtopic_id: Optional[int] = None
+    subtopic: Optional[GlossarySubtopicOut] = None
+    sort_order: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class GlossaryTermCreate(BaseModel):
+    term: str
+    short_definition: Optional[str] = None
+    definition: Optional[str] = None
+    topic_id: Optional[int] = None
+    subtopic_id: Optional[int] = None
+
+
+class GlossaryTermUpdate(BaseModel):
+    term: Optional[str] = None
+    short_definition: Optional[str] = None
+    definition: Optional[str] = None
+    topic_id: Optional[int] = None
+    subtopic_id: Optional[int] = None
