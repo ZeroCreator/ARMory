@@ -41,9 +41,18 @@
 <div class="glossary-page-wrapper">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="mb-0"><i class="bi bi-book me-2"></i>Глоссарий</h2>
-        <button class="btn btn-primary" onclick="showGlossaryModal()">
-            <i class="bi bi-plus-lg me-1"></i>Добавить термин
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-success" onclick="exportGlossary()" title="Экспорт в Excel">
+                <i class="bi bi-file-earmark-excel me-1"></i>Экспорт
+            </button>
+            <button class="btn btn-outline-info" onclick="document.getElementById('glossary-import-file').click()" title="Импорт из Excel">
+                <i class="bi bi-upload me-1"></i>Импорт
+            </button>
+            <input type="file" id="glossary-import-file" accept=".xlsx" style="display:none;" onchange="importGlossary(this)">
+            <button class="btn btn-primary" onclick="showGlossaryModal()">
+                <i class="bi bi-plus-lg me-1"></i>Добавить термин
+            </button>
+        </div>
     </div>
 
     <div class="glossary-toolbar mb-3">

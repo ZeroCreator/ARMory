@@ -1,9 +1,12 @@
+import io
 import re
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
+from openpyxl import Workbook, load_workbook
 
 from app.database import get_db
 from app.models import GlossaryTerm, GlossaryTopic, GlossarySubtopic
@@ -344,6 +347,182 @@ async def count_glossary_terms(
             query = query.where(GlossaryTerm.subtopic_id == subtopic_id)
     result = await db.execute(query)
     return result.scalar_one()
+
+
+@router.get("/export")
+async def export_glossary(db: AsyncSession = Depends(get_db)):
+    """Экспорт глоссария в Excel (.xlsx)."""
+    wb = Workbook()
+    wb.remove(wb.active)
+
+    # --- Термины (сначала, чтобы открывалась эта вкладка) ---
+    ws_terms = wb.create_sheet("terms")
+    ws_terms.append(["id", "term", "short_definition", "definition", "topic_name", "subtopic_name", "sort_order"])
+    result = await db.execute(
+        select(GlossaryTerm).options(selectinload(GlossaryTerm.topic), selectinload(GlossaryTerm.subtopic))
+        .order_by(GlossaryTerm.letter, GlossaryTerm.term)
+    )
+    terms = result.scalars().all()
+    for term in terms:
+        ws_terms.append([
+            term.id,
+            term.term,
+            term.short_definition or "",
+            term.definition or "",
+            term.topic.name if term.topic else "",
+            term.subtopic.name if term.subtopic else "",
+            term.sort_order,
+        ])
+
+    # --- Темы ---
+    ws_topics = wb.create_sheet("topics")
+    ws_topics.append(["id", "name", "sort_order"])
+    result = await db.execute(select(GlossaryTopic).order_by(GlossaryTopic.sort_order))
+    topics = result.scalars().all()
+    topic_name_by_id = {}
+    for t in topics:
+        ws_topics.append([t.id, t.name, t.sort_order])
+        topic_name_by_id[t.id] = t.name
+
+    # --- Подтемы ---
+    ws_subtopics = wb.create_sheet("subtopics")
+    ws_subtopics.append(["id", "topic_name", "name", "sort_order"])
+    result = await db.execute(
+        select(GlossarySubtopic).options(selectinload(GlossarySubtopic.topic)).order_by(GlossarySubtopic.sort_order)
+    )
+    subtopics = result.scalars().all()
+    for s in subtopics:
+        ws_subtopics.append([s.id, s.topic.name if s.topic else "", s.name, s.sort_order])
+
+    wb.active = ws_terms
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=glossary_export.xlsx"},
+    )
+
+
+@router.post("/import")
+async def import_glossary(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Импорт глоссария из Excel (.xlsx)."""
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Only .xlsx files are allowed")
+
+    content = await file.read()
+    try:
+        wb = load_workbook(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid xlsx file: {e}")
+
+    # Загружаем существующие данные для дедупликации по имени
+    existing_topics = {
+        t.name.lower(): t for t in (await db.execute(select(GlossaryTopic))).scalars().all()
+    }
+    existing_subtopics = {
+        ((s.topic.name.lower() if s.topic else ""), s.name.lower()): s
+        for s in (await db.execute(select(GlossarySubtopic).options(selectinload(GlossarySubtopic.topic)))).scalars().all()
+    }
+    existing_terms = {
+        t.term.lower(): t for t in (await db.execute(select(GlossaryTerm))).scalars().all()
+    }
+
+    topic_name_to_id: dict[str, int] = {}
+    subtopic_key_to_id: dict[tuple[str, str], int] = {}
+    created_topics = created_subtopics = created_terms = updated_terms = 0
+
+    # --- Темы ---
+    ws_topics = wb["topics"] if "topics" in wb.sheetnames else None
+    if ws_topics:
+        for row in ws_topics.iter_rows(min_row=2, values_only=True):
+            name = str(row[1] or "").strip()
+            if not name:
+                continue
+            sort_order = row[2] if row[2] is not None else 0
+            key = name.lower()
+            if key in existing_topics:
+                topic_name_to_id[name] = existing_topics[key].id
+            else:
+                topic = GlossaryTopic(name=name, sort_order=sort_order)
+                db.add(topic)
+                await db.flush()
+                topic_name_to_id[name] = topic.id
+                existing_topics[key] = topic
+                created_topics += 1
+
+    # --- Подтемы ---
+    ws_subtopics = wb["subtopics"] if "subtopics" in wb.sheetnames else None
+    if ws_subtopics:
+        for row in ws_subtopics.iter_rows(min_row=2, values_only=True):
+            topic_name = str(row[1] or "").strip()
+            name = str(row[2] or "").strip()
+            if not name:
+                continue
+            sort_order = row[3] if row[3] is not None else 0
+            topic_id = topic_name_to_id.get(topic_name)
+            if topic_id is None:
+                continue
+            key = (topic_name.lower(), name.lower())
+            if key in existing_subtopics:
+                subtopic_key_to_id[key] = existing_subtopics[key].id
+            else:
+                subtopic = GlossarySubtopic(topic_id=topic_id, name=name, sort_order=sort_order)
+                db.add(subtopic)
+                await db.flush()
+                subtopic_key_to_id[key] = subtopic.id
+                existing_subtopics[key] = subtopic
+                created_subtopics += 1
+
+    # --- Термины ---
+    ws_terms = wb["terms"] if "terms" in wb.sheetnames else None
+    if ws_terms:
+        for row in ws_terms.iter_rows(min_row=2, values_only=True):
+            term_text = str(row[1] or "").strip()
+            if not term_text:
+                continue
+            short_definition = str(row[2] or "").strip()
+            definition = str(row[3] or "").strip()
+            topic_name = str(row[4] or "").strip()
+            subtopic_name = str(row[5] or "").strip()
+            sort_order = row[6] if row[6] is not None else 0
+
+            topic_id = topic_name_to_id.get(topic_name)
+            subtopic_id = None
+            if subtopic_name:
+                subtopic_id = subtopic_key_to_id.get((topic_name.lower(), subtopic_name.lower()))
+
+            key = term_text.lower()
+            if key in existing_terms:
+                term = existing_terms[key]
+                term.short_definition = short_definition
+                term.definition = definition
+                term.topic_id = topic_id
+                term.subtopic_id = subtopic_id
+                term.sort_order = sort_order
+                updated_terms += 1
+            else:
+                term = GlossaryTerm(
+                    term=term_text,
+                    short_definition=short_definition,
+                    definition=definition,
+                    letter=_normalize_letter(term_text),
+                    topic_id=topic_id,
+                    subtopic_id=subtopic_id,
+                    sort_order=sort_order,
+                )
+                db.add(term)
+                created_terms += 1
+
+    await db.commit()
+    return {
+        "created_topics": created_topics,
+        "created_subtopics": created_subtopics,
+        "created_terms": created_terms,
+        "updated_terms": updated_terms,
+    }
 
 
 @router.post("", response_model=GlossaryTermOut, status_code=201)

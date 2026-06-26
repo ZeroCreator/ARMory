@@ -83,6 +83,8 @@
 | POST | `/api/glossary/subtopics` | Создать подтему |
 | PATCH | `/api/glossary/subtopics/{id}` | Обновить подтему |
 | DELETE | `/api/glossary/subtopics/{id}` | Удалить подтему |
+| GET | `/api/glossary/export` | Экспорт глоссария в `.xlsx` |
+| POST | `/api/glossary/import` | Импорт глоссария из `.xlsx` |
 
 ## Alexandrite
 

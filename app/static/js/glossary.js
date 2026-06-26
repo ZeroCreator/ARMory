@@ -511,6 +511,53 @@ async function deleteGlossaryTermById(termId) {
     }
 }
 
+async function exportGlossary() {
+    try {
+        const res = await fetch(`${API_BASE}/glossary/export`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `glossary_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        alert('Ошибка экспорта: ' + e.message);
+    }
+}
+
+async function importGlossary(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+        alert('Выберите файл .xlsx');
+        input.value = '';
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('file', file);
+
+    try {
+        const res = await fetch(`${API_BASE}/glossary/import`, {
+            method: 'POST',
+            body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+        alert(`Импорт завершён:\n- тем создано: ${data.created_topics}\n- подтем создано: ${data.created_subtopics}\n- терминов создано: ${data.created_terms}\n- терминов обновлено: ${data.updated_terms}`);
+        input.value = '';
+        loadGlossary();
+        loadGlossaryTopics();
+    } catch (e) {
+        alert('Ошибка импорта: ' + e.message);
+        input.value = '';
+    }
+}
+
 // ═══════════════════════════════════════════════════
 // Инициализация
 // ═══════════════════════════════════════════════════
