@@ -19,8 +19,10 @@ let alexandriteOpenOnLoad = null;     // путь файла для автома
 async function loadAlexandriteRoots() {
     try {
         const roots = await api(`${API_BASE}/alexandrite/roots`);
-        if (roots.length && roots[0].exists && !alexandriteRoot) {
-            await setAlexandriteRoot(roots[0].path);
+        // По умолчанию открываем uploads, если он есть
+        const defaultRoot = roots.find(r => r.name === 'uploads') || roots[0];
+        if (defaultRoot && defaultRoot.exists && !alexandriteRoot) {
+            await setAlexandriteRoot(defaultRoot.path);
         }
     } catch (e) {
         console.error('Failed to load roots:', e);

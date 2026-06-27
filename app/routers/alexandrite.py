@@ -88,15 +88,30 @@ def _build_tree(path: Path, relative: str = "") -> List[dict]:
 
 @router.get("/roots")
 async def list_roots(settings: Settings = Depends(get_settings)):
-    """Вернуть настроенные корневые папки. Пока одна."""
-    default = Path(settings.alexandrite_vault_path).expanduser().resolve()
-    return [
-        {
-            "name": default.name or "alexandrite",
-            "path": str(default),
-            "exists": default.exists() and default.is_dir(),
-        }
-    ]
+    """Вернуть настроенные корневые папки.
+
+    По умолчанию локальный просмотр начинается с папки uploads,
+    но Alexandrite-хранилище тоже доступно для выбора.
+    """
+    roots = []
+
+    uploads = Path(settings.local_storage_path).expanduser().resolve()
+    if uploads.exists() and uploads.is_dir():
+        roots.append({
+            "name": "uploads",
+            "path": str(uploads),
+            "exists": True,
+        })
+
+    vault = Path(settings.alexandrite_vault_path).expanduser().resolve()
+    if vault.exists() and vault.is_dir():
+        roots.append({
+            "name": vault.name or "alexandrite",
+            "path": str(vault),
+            "exists": True,
+        })
+
+    return roots
 
 
 @router.get("/browse")
