@@ -2269,6 +2269,9 @@ footer {
     overflow: auto;
     margin-top: 1rem;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .alexandrite-text-preview {
@@ -2280,10 +2283,12 @@ footer {
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     font-size: 0.95rem;
     line-height: 1.6;
-    margin: 0;
+    margin: 0 auto;
     min-height: 100%;
     white-space: pre-wrap;
     word-break: break-word;
+    max-width: 900px;
+    width: 100%;
 }
 
 .alexandrite-image-preview {
@@ -2291,6 +2296,8 @@ footer {
     max-height: 80vh;
     border-radius: 12px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    display: block;
+    margin: 0 auto;
 }
 
 /* ── Действия в шапке сайдбара ── */
@@ -2355,6 +2362,8 @@ footer {
     color: var(--sand-base);
     line-height: 1.7;
     max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
 }
 
 .alexandrite-markdown h1,

@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # Путь к папке Alexandrite на Яндекс.Диске (для синхронизации и архивов)
     yandex_disk_alexandrite_path: str = "ARMory/alexandrite"
 
+    # Ограничение просмотра Яндекс.Диска в Alexandrite указанной папкой.
+    # Если не задано — доступен весь диск. Например: ARMory
+    alexandrite_yandex_root_path: str | None = None
+
     # Отключение планировщика (вкладка не отображается на главной странице)
     scheduler_enabled: bool = True
 

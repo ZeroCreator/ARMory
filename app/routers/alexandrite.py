@@ -395,6 +395,26 @@ def _get_yandex_storage(settings: Settings) -> YandexDiskStorage:
     return YandexDiskStorage(token)
 
 
+def _resolve_yandex_path(path: Optional[str], settings: Settings) -> str:
+    """Проверяет и применяет ограничение просмотра Яндекс.Диска.
+
+    Если задан ALEXANDRITE_YANDEX_ROOT_PATH, все пути должны быть внутри него.
+    Возвращает нормализованный путь относительно Яндекс.Диска.
+    """
+    restricted_root = settings.alexandrite_yandex_root_path
+    requested = path.strip("/") if path else ""
+
+    if restricted_root:
+        restricted_root = restricted_root.strip("/")
+        if not requested:
+            return restricted_root
+        if requested != restricted_root and not requested.startswith(restricted_root + "/"):
+            raise HTTPException(status_code=403, detail="Доступ за пределы разрешённой папки запрещён")
+        return requested
+
+    return requested
+
+
 @router.get("/yandex/tree")
 async def yandex_tree(
     path: Optional[str] = Query(None),
@@ -403,7 +423,7 @@ async def yandex_tree(
     """Возвращает содержимое одного уровня папки на Яндекс.Диске."""
     yandex = _get_yandex_storage(settings)
 
-    remote_folder = path.strip("/") if path else ""
+    remote_folder = _resolve_yandex_path(path, settings)
     try:
         items = await asyncio.to_thread(yandex.list_files, remote_folder)
     except Exception as e:
@@ -434,7 +454,8 @@ async def yandex_file(
     """Скачивает файл с Яндекс.Диска и отдаёт его содержимое для просмотра."""
     yandex = _get_yandex_storage(settings)
 
-    remote_path = path.strip("/")
+    remote_path = _resolve_yandex_path(path, settings)
+    ext = Path(remote_path).suffix.lower()
     ext = Path(remote_path).suffix.lower()
     mime, _ = mimetypes.guess_type(remote_path)
     mime = mime or "application/octet-stream"
