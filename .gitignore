@@ -49,6 +49,7 @@ data/alexandrite/
 # Backups
 backups/
 backup_*.tar.gz
+*.bak.*
 
 # OS
 .DS_Store
