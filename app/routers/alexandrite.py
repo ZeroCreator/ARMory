@@ -1,7 +1,9 @@
+import asyncio
 import os
 import base64
 import mimetypes
 import shutil
+import tempfile
 from pathlib import Path
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -9,6 +11,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from app.config import get_settings, Settings
+from app.yandex_disk import YandexDiskStorage
 
 router = APIRouter(prefix="/api/alexandrite", tags=["alexandrite"])
 
@@ -379,3 +382,110 @@ async def delete_directory(
 
     shutil.rmtree(dir_path)
     return {"status": "deleted"}
+
+
+# ═══════════════════════════════════════════════════
+# Alexandrite: просмотр Яндекс.Диска (read-only)
+# ═══════════════════════════════════════════════════
+
+def _get_yandex_storage(settings: Settings) -> YandexDiskStorage:
+    token = settings.yandex_disk_token
+    if not token:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
+    return YandexDiskStorage(token)
+
+
+@router.get("/yandex/tree")
+async def yandex_tree(
+    path: Optional[str] = Query(None),
+    settings: Settings = Depends(get_settings),
+):
+    """Возвращает содержимое одного уровня папки на Яндекс.Диске."""
+    yandex = _get_yandex_storage(settings)
+
+    remote_folder = path.strip("/") if path else ""
+    try:
+        items = await asyncio.to_thread(yandex.list_files, remote_folder)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ошибка Яндекс.Диска: {e}")
+
+    tree = []
+    for item in items:
+        name = item.get("name", "")
+        item_path = item.get("path", "")
+        if item_path.startswith("disk:/"):
+            item_path = item_path[6:]
+        item_type = item.get("type", "file")
+        tree.append({
+            "name": name,
+            "path": item_path,
+            "type": "directory" if item_type == "dir" else "file",
+            "size": item.get("size", 0) if item_type != "dir" else 0,
+        })
+
+    return {"root": remote_folder, "tree": tree}
+
+
+@router.get("/yandex/file")
+async def yandex_file(
+    path: str = Query(...),
+    settings: Settings = Depends(get_settings),
+):
+    """Скачивает файл с Яндекс.Диска и отдаёт его содержимое для просмотра."""
+    yandex = _get_yandex_storage(settings)
+
+    remote_path = path.strip("/")
+    ext = Path(remote_path).suffix.lower()
+    mime, _ = mimetypes.guess_type(remote_path)
+    mime = mime or "application/octet-stream"
+
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        downloaded = await asyncio.to_thread(yandex.download_file, remote_path, tmp_path)
+        if not downloaded:
+            raise HTTPException(status_code=404, detail="Не удалось скачать файл с Яндекс.Диска")
+
+        local_path = Path(tmp_path)
+
+        if ext in IMAGE_EXTENSIONS:
+            with open(local_path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("utf-8")
+            return {
+                "type": "image",
+                "mime_type": mime,
+                "content": f"data:{mime};base64,{encoded}",
+                "name": Path(remote_path).name,
+            }
+
+        if ext in TEXT_EXTENSIONS or (mime and mime.startswith("text/")):
+            try:
+                content = local_path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                return {
+                    "type": "binary",
+                    "mime_type": mime,
+                    "content": None,
+                    "name": Path(remote_path).name,
+                    "message": "Файл не является текстом",
+                }
+            return {
+                "type": "text",
+                "mime_type": mime,
+                "content": content,
+                "name": Path(remote_path).name,
+            }
+
+        return {
+            "type": "binary",
+            "mime_type": mime,
+            "content": None,
+            "name": Path(remote_path).name,
+            "message": "Бинарный файл — предпросмотр не поддерживается",
+        }
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass

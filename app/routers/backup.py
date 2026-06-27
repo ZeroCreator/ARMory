@@ -3,7 +3,8 @@ import os
 import shutil
 import sqlite3
 import tarfile
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict
 
@@ -32,6 +33,22 @@ _YANDEX_BASE = settings.yandex_disk_path.strip("/")
 REMOTE_DB = f"{_YANDEX_BASE}/projectdocs.db"
 REMOTE_UPLOADS = f"{_YANDEX_BASE}/uploads"
 REMOTE_BACKUPS = settings.yandex_disk_backups_path.strip("/")
+REMOTE_ALEXANDRITE = settings.yandex_disk_alexandrite_path.strip("/")
+REMOTE_ALEXANDRITE_BACKUPS = f"{REMOTE_BACKUPS}/alexandrite"
+
+# Хранилище фоновых задач экспорта Alexandrite (job_id -> status)
+_alexandrite_export_jobs: Dict[str, dict] = {}
+
+
+def _cleanup_old_export_jobs() -> None:
+    """Удаляет задачи экспорта старше 24 часов, чтобы не текла память."""
+    cutoff = datetime.now() - timedelta(hours=24)
+    expired = [
+        job_id for job_id, job in _alexandrite_export_jobs.items()
+        if datetime.fromisoformat(job.get("created_at", "2000-01-01T00:00:00")) < cutoff
+    ]
+    for job_id in expired:
+        del _alexandrite_export_jobs[job_id]
 
 
 def _get_yandex() -> YandexDiskStorage | None:
@@ -303,6 +320,158 @@ def _list_backups(yandex: YandexDiskStorage) -> list:
     return sorted(backups, key=lambda x: x.get("modified", ""), reverse=True)
 
 
+# ── хелперы Alexandrite ──────────────────────────────────────────────
+
+def _is_hidden_path(path: Path, root: Path) -> bool:
+    """Проверяет, что путь или любая его родительская папка скрытая (начинается с точки)."""
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        return False
+    return any(part.startswith(".") for part in rel.parts)
+
+
+def _gather_alexandrite_stats(local_path: Path) -> dict:
+    """Собирает статистику по локальной папке Alexandrite (без скрытых файлов)."""
+    files_count = 0
+    dirs_count = 0
+    total_size = 0
+    if local_path.exists():
+        for entry in local_path.rglob("*"):
+            if _is_hidden_path(entry, local_path):
+                continue
+            if entry.is_file():
+                files_count += 1
+                total_size += entry.stat().st_size
+            elif entry.is_dir():
+                dirs_count += 1
+    return {
+        "files": files_count,
+        "directories": dirs_count,
+        "total_size": total_size,
+        "path": str(local_path),
+    }
+
+
+def _upload_alexandrite(
+    yandex: YandexDiskStorage,
+    local_src: Path,
+    remote_base: str,
+    job_id: str | None = None,
+) -> dict:
+    """Загружает файлы из папки Alexandrite на Я.Диск, пропуская скрытые.
+
+    Если передан job_id, обновляет статус выполнения в _alexandrite_export_jobs.
+    """
+    uploaded = 0
+    failed = 0
+    if not local_src.exists():
+        return {"uploaded": 0, "failed": 0}
+
+    files = [f for f in local_src.rglob("*") if f.is_file() and not _is_hidden_path(f, local_src)]
+
+    if job_id and job_id in _alexandrite_export_jobs:
+        _alexandrite_export_jobs[job_id]["total"] = len(files)
+        _alexandrite_export_jobs[job_id]["status"] = "running"
+
+    for idx, local_file in enumerate(files, start=1):
+        rel = local_file.relative_to(local_src)
+        remote_path = f"{remote_base}/{rel.as_posix()}"
+
+        if job_id and job_id in _alexandrite_export_jobs:
+            _alexandrite_export_jobs[job_id]["current_file"] = rel.as_posix()
+            _alexandrite_export_jobs[job_id]["processed"] = idx - 1
+
+        if yandex.upload_file(str(local_file), remote_path):
+            uploaded += 1
+        else:
+            failed += 1
+            print(f"[ALEXANDRITE BACKUP] FAILED {rel}")
+
+        if job_id and job_id in _alexandrite_export_jobs:
+            _alexandrite_export_jobs[job_id]["uploaded"] = uploaded
+            _alexandrite_export_jobs[job_id]["failed"] = failed
+            _alexandrite_export_jobs[job_id]["processed"] = idx
+
+    return {"uploaded": uploaded, "failed": failed}
+
+
+def _download_alexandrite(yandex: YandexDiskStorage, remote_base: str, local_dst: Path) -> dict:
+    """Скачивает файлы папки Alexandrite с Я.Диска, пропуская скрытые."""
+    downloaded = 0
+    skipped = 0
+
+    remote_files = yandex.list_all_files(remote_base)
+    for f in remote_files:
+        rel = f["rel"]
+        if "/." in rel or rel.startswith("."):
+            continue
+        local_file = local_dst / rel
+        need_download = True
+        if local_file.exists():
+            if local_file.stat().st_size == f["size"]:
+                need_download = False
+                skipped += 1
+        if need_download:
+            remote_path = f["path"]
+            if remote_path.startswith("disk:/"):
+                remote_path = remote_path[6:]
+            yandex.download_file(remote_path, str(local_file))
+            downloaded += 1
+
+    return {"downloaded": downloaded, "skipped": skipped}
+
+
+def _create_alexandrite_tarball(local_src: Path, dest_path: Path) -> None:
+    """Создаёт tar.gz только с содержимым папки Alexandrite, без скрытых файлов."""
+    with tarfile.open(dest_path, "w:gz") as tar:
+        if local_src.exists():
+            for fp in local_src.rglob("*"):
+                if fp.is_file() and not _is_hidden_path(fp, local_src):
+                    arcname = "alexandrite/" + fp.relative_to(local_src).as_posix()
+                    tar.add(fp, arcname=arcname)
+
+
+def _extract_alexandrite_tarball(tar_path: Path, local_dst: Path) -> None:
+    """Распаковывает tar.gz в папку Alexandrite."""
+    with tarfile.open(tar_path, "r:gz") as tar:
+        for member in tar.getmembers():
+            if member.name.startswith("alexandrite/"):
+                extracted = tar.extractfile(member)
+                if extracted:
+                    rel = member.name[len("alexandrite/"):]
+                    out_path = local_dst / rel
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
+                    out_path.write_bytes(extracted.read())
+
+
+def _local_auto_backup_alexandrite(local_src: Path) -> Path:
+    """Локальная резервная копия папки Alexandrite перед destructive операциями."""
+    backup_dir = Path("data/backups")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    auto_dir = backup_dir / f"auto_{ts}"
+    auto_dir.mkdir(parents=True, exist_ok=True)
+    if local_src.exists():
+        shutil.copytree(local_src, auto_dir / "alexandrite", dirs_exist_ok=True)
+    return auto_dir
+
+
+def _list_alexandrite_backups(yandex: YandexDiskStorage) -> list:
+    """Возвращает список архивов Alexandrite на Я.Диске."""
+    items = yandex.list_files(REMOTE_ALEXANDRITE_BACKUPS)
+    backups = []
+    for item in items:
+        name = item.get("name", "")
+        if item.get("type") == "file" and name.endswith(".tar.gz") and name.startswith("alexandrite_backup_"):
+            backups.append({
+                "name": name,
+                "size": item.get("size", 0),
+                "modified": _format_dt(item.get("modified", "")),
+            })
+    return sorted(backups, key=lambda x: x.get("modified", ""), reverse=True)
+
+
 # ── эндпоинты ────────────────────────────────────────────────────────
 
 
@@ -515,4 +684,224 @@ async def delete_archive(payload: dict):
     ok = await asyncio.to_thread(yandex.delete, remote_path)
     if not ok:
         raise HTTPException(status_code=502, detail="Не удалось удалить архив с Яндекс.Диска")
+    return {"success": True}
+
+
+# ── эндпоинты Alexandrite ────────────────────────────────────────────
+
+@router.get("/alexandrite/stats")
+async def alexandrite_stats():
+    yandex = _get_yandex()
+    yandex_status = {"connected": False, "info": "Токен не настроен"}
+    if yandex:
+        conn = await asyncio.to_thread(yandex.test_connection)
+        yandex_status = {
+            "connected": conn["ok"],
+            "info": conn.get("info", ""),
+            "used": conn.get("used", ""),
+            "total": conn.get("total", ""),
+        }
+
+    local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
+    stats = _gather_alexandrite_stats(local_path)
+    return {"local": stats, "yandex": yandex_status}
+
+
+@router.post("/alexandrite/export")
+async def alexandrite_export():
+    yandex = _get_yandex()
+    if not yandex:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
+
+    local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
+
+    await asyncio.to_thread(yandex.create_folder, REMOTE_ALEXANDRITE)
+    upload_stats = await asyncio.to_thread(_upload_alexandrite, yandex, local_path, REMOTE_ALEXANDRITE)
+
+    stats = _gather_alexandrite_stats(local_path)
+    return {
+        "success": True,
+        "stats": {
+            **stats,
+            "files_uploaded": upload_stats["uploaded"],
+            "files_failed": upload_stats["failed"],
+        },
+    }
+
+
+async def _run_alexandrite_export_async(yandex: YandexDiskStorage, local_path: Path, job_id: str) -> None:
+    """Фоновая задача экспорта Alexandrite с обновлением статуса."""
+    try:
+        await asyncio.to_thread(yandex.create_folder, REMOTE_ALEXANDRITE)
+        await asyncio.to_thread(_upload_alexandrite, yandex, local_path, REMOTE_ALEXANDRITE, job_id)
+        if job_id in _alexandrite_export_jobs:
+            _alexandrite_export_jobs[job_id]["status"] = "completed"
+            _alexandrite_export_jobs[job_id]["current_file"] = ""
+    except Exception as e:
+        if job_id in _alexandrite_export_jobs:
+            _alexandrite_export_jobs[job_id]["status"] = "error"
+            _alexandrite_export_jobs[job_id]["error"] = str(e)
+            _alexandrite_export_jobs[job_id]["current_file"] = ""
+
+
+@router.post("/alexandrite/export-async")
+async def alexandrite_export_async():
+    yandex = _get_yandex()
+    if not yandex:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
+
+    _cleanup_old_export_jobs()
+
+    local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
+    job_id = str(uuid.uuid4())
+    _alexandrite_export_jobs[job_id] = {
+        "status": "starting",
+        "total": 0,
+        "uploaded": 0,
+        "failed": 0,
+        "processed": 0,
+        "current_file": "",
+        "created_at": datetime.now().isoformat(),
+    }
+    asyncio.create_task(_run_alexandrite_export_async(yandex, local_path, job_id))
+    return {"job_id": job_id}
+
+
+@router.get("/alexandrite/export-status/{job_id}")
+async def alexandrite_export_status(job_id: str):
+    job = _alexandrite_export_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+    return job
+
+
+@router.post("/alexandrite/import")
+async def alexandrite_import():
+    yandex = _get_yandex()
+    if not yandex:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
+
+    local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
+
+    auto_backup = await asyncio.to_thread(_local_auto_backup_alexandrite, local_path)
+
+    # Очищаем локальную папку перед скачиванием
+    if local_path.exists():
+        for child in local_path.iterdir():
+            if child.is_dir():
+                shutil.rmtree(child)
+            elif child.is_file():
+                child.unlink()
+    else:
+        local_path.mkdir(parents=True, exist_ok=True)
+
+    download_stats = await asyncio.to_thread(_download_alexandrite, yandex, REMOTE_ALEXANDRITE, local_path)
+    stats = _gather_alexandrite_stats(local_path)
+
+    return {
+        "success": True,
+        "stats": {
+            **stats,
+            "files_downloaded": download_stats["downloaded"],
+            "files_skipped": download_stats["skipped"],
+            "auto_backup": str(auto_backup),
+        },
+    }
+
+
+@router.post("/alexandrite/archive")
+async def create_alexandrite_archive():
+    yandex = _get_yandex()
+    if not yandex:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
+
+    local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    archive_name = f"alexandrite_backup_{ts}.tar.gz"
+    local_archive = Path(os.environ.get("TMPDIR", "/tmp")) / archive_name
+
+    try:
+        await asyncio.to_thread(_create_alexandrite_tarball, local_path, local_archive)
+        remote_path = f"{REMOTE_ALEXANDRITE_BACKUPS}/{archive_name}"
+        await asyncio.to_thread(yandex.ensure_folders, remote_path)
+        uploaded = await asyncio.to_thread(yandex.upload_file, str(local_archive), remote_path)
+        if not uploaded:
+            raise HTTPException(status_code=502, detail="Не удалось загрузить архив Alexandrite на Яндекс.Диск")
+        return {"success": True, "archive": archive_name}
+    finally:
+        if local_archive.exists():
+            local_archive.unlink()
+
+
+@router.get("/alexandrite/archives")
+async def list_alexandrite_archives():
+    yandex = _get_yandex()
+    if not yandex:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
+    backups = await asyncio.to_thread(_list_alexandrite_backups, yandex)
+    return {"archives": backups}
+
+
+@router.post("/alexandrite/restore")
+async def restore_alexandrite_archive(payload: dict):
+    yandex = _get_yandex()
+    if not yandex:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
+
+    name = payload.get("name")
+    if not name or not name.endswith(".tar.gz"):
+        raise HTTPException(status_code=400, detail="Некорректное имя архива")
+
+    local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
+    auto_backup = await asyncio.to_thread(_local_auto_backup_alexandrite, local_path)
+
+    temp_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_alexandrite_restore_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        remote_path = f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}"
+        local_archive = temp_dir / name
+        downloaded = await asyncio.to_thread(yandex.download_file, remote_path, str(local_archive))
+        if not downloaded:
+            raise HTTPException(status_code=502, detail="Не удалось скачать архив Alexandrite с Яндекс.Диска")
+
+        # Очищаем локальную папку перед распаковкой
+        if local_path.exists():
+            for child in local_path.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child)
+                elif child.is_file():
+                    child.unlink()
+        else:
+            local_path.mkdir(parents=True, exist_ok=True)
+
+        await asyncio.to_thread(_extract_alexandrite_tarball, local_archive, local_path)
+        stats = _gather_alexandrite_stats(local_path)
+
+        return {
+            "success": True,
+            "stats": {
+                **stats,
+                "auto_backup": str(auto_backup),
+            },
+        }
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@router.post("/alexandrite/delete")
+async def delete_alexandrite_archive(payload: dict):
+    yandex = _get_yandex()
+    if not yandex:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
+
+    name = payload.get("name")
+    if not name or not name.endswith(".tar.gz"):
+        raise HTTPException(status_code=400, detail="Некорректное имя архива")
+
+    remote_path = f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}"
+    ok = await asyncio.to_thread(yandex.delete, remote_path)
+    if not ok:
+        raise HTTPException(status_code=502, detail="Не удалось удалить архив Alexandrite с Яндекс.Диска")
     return {"success": True}

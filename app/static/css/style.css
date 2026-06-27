@@ -1999,9 +1999,31 @@ footer {
     display: flex;
     align-items: center;
 }
+.collapsible-section-title {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.collapsible-section-title .section-toggle-icon {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    font-size: 0.85em;
+}
+.collapsible-section-title[aria-expanded="true"] .section-toggle-icon {
+    transform: rotate(90deg);
+}
 .backup-section-desc {
     font-size: 0.9rem;
     color: var(--sand-muted);
+    margin-bottom: 0.75rem;
+}
+.backup-subsection-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--sand-text);
+    display: flex;
+    align-items: center;
+    margin-top: 1.25rem;
     margin-bottom: 0.75rem;
 }
 .backup-table th {
@@ -2123,6 +2145,28 @@ footer {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.alexandrite-source-selector {
+    display: flex;
+    gap: 0.3rem;
+    padding: 0.6rem 1.1rem;
+    border-bottom: 1px solid rgba(167, 139, 250, 0.12);
+}
+.alexandrite-source-selector .btn {
+    flex: 1;
+    color: var(--sand-base);
+    border-color: rgba(167, 139, 250, 0.35);
+    background: transparent;
+}
+.alexandrite-source-selector .btn:hover {
+    background: rgba(167, 139, 250, 0.12);
+    border-color: rgba(167, 139, 250, 0.6);
+}
+.alexandrite-source-selector .btn.active {
+    background: rgba(167, 139, 250, 0.25);
+    border-color: rgba(167, 139, 250, 0.8);
+    color: #fff;
 }
 
 .alexandrite-tree {

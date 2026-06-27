@@ -3,6 +3,8 @@
 // ═══════════════════════════════════════════════════
 
 let alexandriteRoot = '';
+let alexandriteSource = 'local';      // 'local' или 'yandex'
+let alexandriteYandexPath = '';       // текущий путь на Яндекс.Диске
 let alexandriteHoverTimeout = null;
 let alexandriteBrowseCurrent = '';
 let alexandriteCurrentFile = null;   // относительный путь текущего файла
@@ -40,8 +42,50 @@ async function setAlexandriteRoot(forcedRoot) {
     await loadAlexandriteTree();
 }
 
+function setAlexandriteSource(source) {
+    if (source !== 'local' && source !== 'yandex') return;
+    alexandriteSource = source;
+    localStorage.setItem('alexandrite_source', source);
+
+    document.querySelectorAll('#alexandrite-source-selector button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.source === source);
+    });
+
+    const localOnlyButtons = [
+        document.getElementById('alexandrite-create-file-btn'),
+        document.getElementById('alexandrite-create-folder-btn'),
+        document.getElementById('alexandrite-choose-root-btn'),
+    ];
+    localOnlyButtons.forEach(btn => {
+        if (btn) btn.style.display = source === 'local' ? '' : 'none';
+    });
+
+    document.getElementById('alexandrite-preview').style.display = 'none';
+    document.getElementById('alexandrite-empty').style.display = 'flex';
+    alexandriteCurrentFile = null;
+    alexandriteCurrentContent = '';
+
+    loadAlexandriteTree();
+}
+
 async function loadAlexandriteTree() {
     const container = document.getElementById('alexandrite-tree');
+
+    if (alexandriteSource === 'yandex') {
+        document.getElementById('alexandrite-current-root').textContent = alexandriteYandexPath || '/';
+        container.innerHTML = `<div class="text-muted small text-center py-3">Загрузка...</div>`;
+        try {
+            const pathParam = alexandriteYandexPath ? `?path=${encodeURIComponent(alexandriteYandexPath)}` : '';
+            const data = await api(`${API_BASE}/alexandrite/yandex/tree${pathParam}`);
+            alexandriteYandexPath = data.root;
+            document.getElementById('alexandrite-current-root').textContent = alexandriteYandexPath || '/';
+            renderAlexandriteTree(data.tree, container, 0, true);
+        } catch (e) {
+            container.innerHTML = `<div class="alert alert-danger m-2">Ошибка загрузки: ${e.message}</div>`;
+        }
+        return;
+    }
+
     if (!alexandriteRoot) {
         container.innerHTML = `<div class="text-muted small text-center py-3">Выберите папку</div>`;
         return;
@@ -51,13 +95,13 @@ async function loadAlexandriteTree() {
         const data = await api(`${API_BASE}/alexandrite/tree?root=${encodeURIComponent(alexandriteRoot)}`);
         alexandriteRoot = data.root; // нормализованный путь
         document.getElementById('alexandrite-current-root').textContent = data.root;
-        renderAlexandriteTree(data.tree, container);
+        renderAlexandriteTree(data.tree, container, 0, false);
     } catch (e) {
         container.innerHTML = `<div class="alert alert-danger m-2">Ошибка загрузки: ${e.message}</div>`;
     }
 }
 
-function renderAlexandriteTree(items, container, level = 0) {
+function renderAlexandriteTree(items, container, level = 0, isYandex = false) {
     if (!items || items.length === 0) {
         if (level === 0) {
             container.innerHTML = `<div class="text-muted small text-center py-3">Папка пуста</div>`;
@@ -76,13 +120,14 @@ function renderAlexandriteTree(items, container, level = 0) {
 
         const isDir = item.type === 'directory';
         const hasChildren = isDir && item.children && item.children.length > 0;
+        const lazyYandexDir = isYandex && isDir;
         const icon = isDir
-            ? (hasChildren ? 'bi-folder-fill' : 'bi-folder')
+            ? ((hasChildren || lazyYandexDir) ? 'bi-folder-fill' : 'bi-folder')
             : getFileIcon(item.name);
 
         li.innerHTML = `
             <div class="alexandrite-tree-row" style="padding-left: ${level * 16}px">
-                ${isDir ? `<i class="bi bi-chevron-right alexandrite-tree-toggle ${hasChildren ? '' : 'invisible'}"></i>` : '<span class="alexandrite-tree-spacer"></span>'}
+                ${isDir ? `<i class="bi bi-chevron-right alexandrite-tree-toggle ${(hasChildren || lazyYandexDir) ? '' : 'invisible'}"></i>` : '<span class="alexandrite-tree-spacer"></span>'}
                 <i class="bi ${icon} alexandrite-tree-icon"></i>
                 <span class="alexandrite-tree-title">${escapeHtml(item.name)}</span>
             </div>
@@ -91,21 +136,30 @@ function renderAlexandriteTree(items, container, level = 0) {
         const row = li.querySelector('.alexandrite-tree-row');
 
         if (isDir) {
+            if (lazyYandexDir) {
+                li.dataset.loaded = 'false';
+            }
             row.addEventListener('click', (e) => {
                 if (e.target.closest('.alexandrite-tree-toggle')) {
                     e.stopPropagation();
                 }
-                li.classList.toggle('expanded');
+                if (lazyYandexDir && li.dataset.loaded === 'false' && !li.classList.contains('expanded')) {
+                    loadAlexandriteYandexFolder(item.path, li, level + 1);
+                } else {
+                    li.classList.toggle('expanded');
+                }
             });
-            row.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                showAlexandriteFolderContextMenu(e, item.path);
-            });
+            if (!isYandex) {
+                row.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showAlexandriteFolderContextMenu(e, item.path);
+                });
+            }
             if (hasChildren) {
                 const childrenContainer = document.createElement('div');
                 childrenContainer.className = 'alexandrite-tree-children-wrap';
-                renderAlexandriteTree(item.children, childrenContainer, level + 1);
+                renderAlexandriteTree(item.children, childrenContainer, level + 1, isYandex);
                 li.appendChild(childrenContainer);
             }
         } else {
@@ -117,11 +171,13 @@ function renderAlexandriteTree(items, container, level = 0) {
                 clearTimeout(alexandriteHoverTimeout);
             });
             row.addEventListener('click', () => previewAlexandriteFile(item.path));
-            row.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                showAlexandriteFileContextMenu(e, item.path);
-            });
+            if (!isYandex) {
+                row.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showAlexandriteFileContextMenu(e, item.path);
+                });
+            }
         }
 
         ul.appendChild(li);
@@ -130,8 +186,24 @@ function renderAlexandriteTree(items, container, level = 0) {
     container.innerHTML = '';
     container.appendChild(ul);
 
-    if (alexandriteOpenOnLoad && level === 0) {
+    if (alexandriteOpenOnLoad && level === 0 && !isYandex) {
         revealAndOpenAlexandriteFile(alexandriteOpenOnLoad);
+    }
+}
+
+async function loadAlexandriteYandexFolder(path, li, level) {
+    const childrenContainer = document.createElement('div');
+    childrenContainer.className = 'alexandrite-tree-children-wrap';
+    childrenContainer.innerHTML = `<div class="text-muted small py-1" style="padding-left: ${level * 16}px">Загрузка...</div>`;
+    li.appendChild(childrenContainer);
+    li.classList.add('expanded');
+
+    try {
+        const data = await api(`${API_BASE}/alexandrite/yandex/tree?path=${encodeURIComponent(path)}`);
+        li.dataset.loaded = 'true';
+        renderAlexandriteTree(data.tree, childrenContainer, level, true);
+    } catch (e) {
+        childrenContainer.innerHTML = `<div class="alert alert-danger small m-1" style="padding-left: ${level * 16}px">Ошибка: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -213,7 +285,7 @@ function getFileIcon(name) {
 }
 
 async function previewAlexandriteFile(path) {
-    if (!alexandriteRoot) return;
+    if (alexandriteSource === 'local' && !alexandriteRoot) return;
     alexandriteCurrentFile = path;
     alexandriteEditMode = false;
 
@@ -231,7 +303,10 @@ async function previewAlexandriteFile(path) {
     updateAlexandriteModeButtons();
 
     try {
-        const data = await api(`${API_BASE}/alexandrite/file?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(path)}`);
+        const url = alexandriteSource === 'yandex'
+            ? `${API_BASE}/alexandrite/yandex/file?path=${encodeURIComponent(path)}`
+            : `${API_BASE}/alexandrite/file?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(path)}`;
+        const data = await api(url);
         meta.textContent = data.mime_type || '';
 
         if (data.type === 'text') {
@@ -265,6 +340,7 @@ function updateAlexandriteModeButtons() {
     const viewBtn = document.getElementById('alexandrite-mode-view');
     const editBtn = document.getElementById('alexandrite-mode-edit');
     const saveBtn = document.getElementById('alexandrite-save-btn');
+    const deleteBtn = document.getElementById('alexandrite-delete-btn');
 
     if (!alexandriteCurrentFile) {
         hideAlexandriteEditControls();
@@ -272,7 +348,9 @@ function updateAlexandriteModeButtons() {
     }
 
     const ext = alexandriteCurrentFile.split('.').pop().toLowerCase();
-    const editable = ext === 'md' || ext === 'txt';
+    const editable = alexandriteSource === 'local' && (ext === 'md' || ext === 'txt');
+
+    if (deleteBtn) deleteBtn.style.display = alexandriteSource === 'local' ? '' : 'none';
 
     viewBtn.style.display = editable ? 'inline-block' : 'none';
     editBtn.style.display = editable ? 'inline-block' : 'none';
@@ -688,6 +766,13 @@ function showToast(message, type = 'success') {
 
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('alexandrite-tree')) {
+        const savedSource = localStorage.getItem('alexandrite_source');
+        if (savedSource === 'yandex') {
+            setAlexandriteSource('yandex');
+        } else {
+            setAlexandriteSource('local');
+        }
+
         const params = new URLSearchParams(window.location.search);
         const rootParam = params.get('root');
         const openPath = params.get('open');
@@ -695,19 +780,21 @@ document.addEventListener('DOMContentLoaded', () => {
             alexandriteOpenOnLoad = openPath;
         }
 
-        if (rootParam) {
-            // Внешняя ссылка на конкретную папку (например, из хранилища проекта)
-            alexandriteRoot = rootParam;
-            document.getElementById('alexandrite-current-root').textContent = rootParam;
-            loadAlexandriteTree();
-        } else {
-            const saved = localStorage.getItem('alexandrite_root');
-            if (saved) {
-                alexandriteRoot = saved;
-                document.getElementById('alexandrite-current-root').textContent = saved;
+        if (alexandriteSource === 'local') {
+            if (rootParam) {
+                // Внешняя ссылка на конкретную папку (например, из хранилища проекта)
+                alexandriteRoot = rootParam;
+                document.getElementById('alexandrite-current-root').textContent = rootParam;
                 loadAlexandriteTree();
+            } else {
+                const saved = localStorage.getItem('alexandrite_root');
+                if (saved) {
+                    alexandriteRoot = saved;
+                    document.getElementById('alexandrite-current-root').textContent = saved;
+                    loadAlexandriteTree();
+                }
+                loadAlexandriteRoots();
             }
-            loadAlexandriteRoots();
         }
 
         // Обработчики контекстного меню папки

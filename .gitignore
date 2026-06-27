@@ -44,8 +44,7 @@ ENV/
 projectdocs.db
 data/uploads/*
 !data/uploads/.gitkeep
-data/alexandrite/*
-!data/alexandrite/.gitkeep
+data/alexandrite/
 
 # Backups
 backups/

@@ -9,17 +9,27 @@
         <div class="alexandrite-sidebar-header">
             <h5 class="mb-0"><i class="bi bi-gem me-2"></i>Alexandrite</h5>
             <div class="alexandrite-header-actions">
-                <button class="btn btn-sm btn-outline-success" onclick="showCreateFileModal()" title="Создать файл">
+                <button id="alexandrite-create-file-btn" class="btn btn-sm btn-outline-success" onclick="showCreateFileModal()" title="Создать файл">
                     <i class="bi bi-file-earmark-plus"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-brown" onclick="showCreateFolderModal()" title="Создать папку">
+                <button id="alexandrite-create-folder-btn" class="btn btn-sm btn-outline-brown" onclick="showCreateFolderModal()" title="Создать папку">
                     <i class="bi bi-folder-plus"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-primary" onclick="showAlexandriteRootModal()" title="Выбрать папку">
+                <button id="alexandrite-choose-root-btn" class="btn btn-sm btn-outline-primary" onclick="showAlexandriteRootModal()" title="Выбрать папку">
                     <i class="bi bi-folder-symlink"></i>
                 </button>
             </div>
         </div>
+
+        <div class="alexandrite-source-selector" id="alexandrite-source-selector">
+            <button type="button" class="btn btn-sm active" data-source="local" onclick="setAlexandriteSource('local')">
+                <i class="bi bi-hdd me-1"></i>Локально
+            </button>
+            <button type="button" class="btn btn-sm" data-source="yandex" onclick="setAlexandriteSource('yandex')">
+                <i class="bi bi-cloud me-1"></i>Яндекс.Диск
+            </button>
+        </div>
+
         <div class="alexandrite-current-root" id="alexandrite-current-root" title="Текущая папка">
             —
         </div>
@@ -161,5 +171,5 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script src="/static/js/alexandrite.js?v=6"></script>
+<script src="/static/js/alexandrite.js?v=7"></script>
 {% endblock %}

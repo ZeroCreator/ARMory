@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     timezone: str = "Europe/Moscow"
 
     # alexandrite — папка для файлового хранилища заметок
-    alexandrite_vault_path: str = "./data/uploads"
+    alexandrite_vault_path: str = "./data/alexandrite"
+
+    # Путь к папке Alexandrite на Яндекс.Диске (для синхронизации и архивов)
+    yandex_disk_alexandrite_path: str = "ARMory/alexandrite"
 
     # Отключение планировщика (вкладка не отображается на главной странице)
     scheduler_enabled: bool = True

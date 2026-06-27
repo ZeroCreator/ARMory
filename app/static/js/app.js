@@ -1760,6 +1760,37 @@ function initSchedulerTabs() {
     }
 }
 
+function initCollapsibleBackupSections() {
+    const titles = document.querySelectorAll('.collapsible-section-title');
+    titles.forEach(title => {
+        const key = title.dataset.collapseKey;
+        const targetId = title.getAttribute('data-bs-target');
+        const targetEl = document.querySelector(targetId);
+        if (!targetEl) return;
+
+        const defaultExpanded = title.dataset.collapseDefault === 'true';
+        const saved = key ? localStorage.getItem(`collapse_${key}`) : null;
+        const shouldShow = saved === null ? defaultExpanded : saved === 'true';
+        const collapse = bootstrap.Collapse.getOrCreateInstance(targetEl, { toggle: false });
+        if (shouldShow) {
+            collapse.show();
+            title.setAttribute('aria-expanded', 'true');
+        } else {
+            collapse.hide();
+            title.setAttribute('aria-expanded', 'false');
+        }
+
+        targetEl.addEventListener('shown.bs.collapse', () => {
+            title.setAttribute('aria-expanded', 'true');
+            if (key) localStorage.setItem(`collapse_${key}`, 'true');
+        });
+        targetEl.addEventListener('hidden.bs.collapse', () => {
+            title.setAttribute('aria-expanded', 'false');
+            if (key) localStorage.setItem(`collapse_${key}`, 'false');
+        });
+    });
+}
+
 async function loadCalendarEvents() {
     try {
         const events = await api(`${API_BASE}/calendar/events`);
@@ -1925,17 +1956,23 @@ async function loadBackupStats() {
         const data = await api(`${API_BASE}/backup/stats`);
         const ls = data.local;
         localEl.innerHTML = `
-            <div class="backup-stat-row"><span>Проекты</span><span class="badge bg-purple">${ls.projects}</span></div>
-            <div class="backup-stat-row"><span>Разделы</span><span class="badge bg-purple">${ls.sections}</span></div>
-            <div class="backup-stat-row"><span>Группы</span><span class="badge bg-purple">${ls.documents}</span></div>
-            <div class="backup-stat-row"><span>Ссылки</span><span class="badge bg-info">${ls.links}</span></div>
-            <div class="backup-stat-row"><span>Файлы</span><span class="badge bg-primary">${ls.files}</span></div>
-            <div class="backup-stat-row"><span>Заметки</span><span class="badge bg-warning text-dark">${ls.notes}</span></div>
-            <div class="backup-stat-row"><span>Заметки к ссылкам</span><span class="badge bg-warning text-dark">${ls.sidebar_link_notes}</span></div>
-            <div class="backup-stat-row"><span>Боковые блоки</span><span class="badge bg-brown">${ls.sidebar_blocks}</span></div>
-            <div class="backup-stat-row"><span>Боковые ссылки</span><span class="badge bg-brown">${ls.sidebar_links}</span></div>
-            <div class="backup-stat-row"><span>События календаря</span><span class="badge bg-success">${ls.calendar_events}</span></div>
-            <div class="backup-stat-row"><span>Общий размер файлов</span><span class="backup-stat-value backup-size-value">${formatSize(ls.total_files_size)}</span></div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="backup-stat-row"><span>Проекты</span><span class="badge bg-purple">${ls.projects}</span></div>
+                    <div class="backup-stat-row"><span>Разделы</span><span class="badge bg-purple">${ls.sections}</span></div>
+                    <div class="backup-stat-row"><span>Группы</span><span class="badge bg-purple">${ls.documents}</span></div>
+                    <div class="backup-stat-row"><span>Ссылки</span><span class="badge bg-info">${ls.links}</span></div>
+                    <div class="backup-stat-row"><span>Файлы</span><span class="badge bg-primary">${ls.files}</span></div>
+                    <div class="backup-stat-row"><span>Заметки</span><span class="badge bg-warning text-dark">${ls.notes}</span></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="backup-stat-row"><span>Заметки к ссылкам</span><span class="badge bg-warning text-dark">${ls.sidebar_link_notes}</span></div>
+                    <div class="backup-stat-row"><span>Боковые блоки</span><span class="badge bg-brown">${ls.sidebar_blocks}</span></div>
+                    <div class="backup-stat-row"><span>Боковые ссылки</span><span class="badge bg-brown">${ls.sidebar_links}</span></div>
+                    <div class="backup-stat-row"><span>События календаря</span><span class="badge bg-success">${ls.calendar_events}</span></div>
+                    <div class="backup-stat-row"><span>Общий размер файлов</span><span class="backup-stat-value backup-size-value">${formatSize(ls.total_files_size)}</span></div>
+                </div>
+            </div>
         `;
 
         const ys = data.yandex;
@@ -2038,7 +2075,10 @@ async function loadBackupArchives() {
             </tr>
         `).join('');
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-danger small">Ошибка загрузки архивов</td></tr>`;
+        const msg = e.message && e.message.includes('не настроен')
+            ? 'Яндекс.Диск не настроен'
+            : 'Ошибка загрузки архивов';
+        tbody.innerHTML = `<tr><td colspan="4" class="text-danger small">${escapeHtml(msg)}</td></tr>`;
     }
 }
 
@@ -2089,6 +2129,174 @@ async function deleteArchive(name) {
         loadBackupArchives();
     } catch (e) {
         setBackupStatus('Ошибка удаления: ' + e.message, true);
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// БЭКАП / СИНХРОНИЗАЦИЯ ALEXANDRITE
+// ═══════════════════════════════════════════════════
+
+async function loadAlexandriteBackupStats() {
+    const localEl = document.getElementById('alexandrite-backup-local-stats');
+    if (!localEl) return;
+    try {
+        const data = await api(`${API_BASE}/backup/alexandrite/stats`);
+        const ls = data.local;
+        localEl.innerHTML = `
+            <div class="backup-stat-row"><span>Папка</span><span class="backup-stat-value small text-truncate" style="max-width:60%" title="${escapeHtml(ls.path)}">${escapeHtml(ls.path)}</span></div>
+            <div class="backup-stat-row"><span>Файлов</span><span class="badge bg-purple">${ls.files}</span></div>
+            <div class="backup-stat-row"><span>Папок</span><span class="badge bg-brown">${ls.directories}</span></div>
+            <div class="backup-stat-row"><span>Общий размер</span><span class="backup-stat-value backup-size-value">${formatSize(ls.total_size)}</span></div>
+        `;
+    } catch (e) {
+        localEl.innerHTML = `<div class="alert alert-danger small">Ошибка загрузки статистики Alexandrite</div>`;
+    }
+}
+
+function pollAlexandriteExportStatus(jobId) {
+    const btn = document.getElementById('alexandrite-sync-export-btn');
+    const poll = async () => {
+        try {
+            const data = await api(`${API_BASE}/backup/alexandrite/export-status/${jobId}`);
+            if (data.status === 'starting') {
+                setBackupStatus('Подготовка к загрузке папки Alexandrite...', false);
+                setTimeout(poll, 1000);
+            } else if (data.status === 'running') {
+                const percent = data.total ? Math.round((data.processed / data.total) * 100) : 0;
+                const current = data.current_file ? ` (${data.current_file})` : '';
+                setBackupStatus(`Загрузка Alexandrite: ${data.processed} из ${data.total} (${percent}%)${current}`, false);
+                setTimeout(poll, 2000);
+            } else if (data.status === 'completed') {
+                const failedText = data.failed ? `, не удалось: ${data.failed}` : '';
+                setBackupStatus(`Готово. Загружено: ${data.uploaded}${failedText}.`, false);
+                loadAlexandriteBackupStats();
+                if (btn) btn.disabled = false;
+            } else if (data.status === 'error') {
+                setBackupStatus('Ошибка загрузки Alexandrite: ' + (data.error || ''), true);
+                if (btn) btn.disabled = false;
+            }
+        } catch (e) {
+            setBackupStatus('Ошибка получения статуса загрузки Alexandrite: ' + e.message, true);
+            if (btn) btn.disabled = false;
+        }
+    };
+    poll();
+}
+
+async function syncAlexandriteExport() {
+    const btn = document.getElementById('alexandrite-sync-export-btn');
+    btn.disabled = true;
+    setBackupStatus('Запуск загрузки папки Alexandrite на Яндекс.Диск...', false);
+    try {
+        const res = await api(`${API_BASE}/backup/alexandrite/export-async`, { method: 'POST' });
+        pollAlexandriteExportStatus(res.job_id);
+    } catch (e) {
+        setBackupStatus('Ошибка запуска синхронизации Alexandrite: ' + e.message, true);
+        btn.disabled = false;
+    }
+}
+
+async function syncAlexandriteImport() {
+    if (!confirm('Загрузить папку Alexandrite с Яндекс.Диска?\nТекущие локальные файлы Alexandrite будут заменены!')) return;
+    const btn = document.getElementById('alexandrite-sync-import-btn');
+    btn.disabled = true;
+    setBackupStatus('Загрузка папки Alexandrite с Яндекс.Диска...', false);
+    try {
+        const res = await api(`${API_BASE}/backup/alexandrite/import`, { method: 'POST' });
+        const s = res.stats;
+        setBackupStatus(
+            `Папка Alexandrite загружена с Яндекс.Диска. Файлов скачано: ${s.files_downloaded}, пропущено: ${s.files_skipped}.`,
+            false
+        );
+        loadAlexandriteBackupStats();
+        loadAlexandriteArchives();
+    } catch (e) {
+        setBackupStatus('Ошибка загрузки Alexandrite: ' + e.message, true);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function createAlexandriteArchive() {
+    const btn = document.getElementById('alexandrite-archive-btn');
+    btn.disabled = true;
+    setBackupStatus('Создание архива Alexandrite и загрузка на Яндекс.Диск...', false);
+    try {
+        const res = await api(`${API_BASE}/backup/alexandrite/archive`, { method: 'POST' });
+        setBackupStatus(`Архив ${res.archive} создан и загружен на Яндекс.Диск.`, false);
+        loadAlexandriteArchives();
+    } catch (e) {
+        setBackupStatus('Ошибка создания архива Alexandrite: ' + e.message, true);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function loadAlexandriteArchives() {
+    const tbody = document.querySelector('#alexandrite-archives-table tbody');
+    if (!tbody) return;
+    try {
+        const data = await api(`${API_BASE}/backup/alexandrite/archives`);
+        const archives = data.archives || [];
+        if (archives.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-muted small">Архивы Alexandrite не найдены</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = archives.map(a => `
+            <tr>
+                <td>${escapeHtml(a.name)}</td>
+                <td>${formatSize(a.size)}</td>
+                <td>${escapeHtml(a.modified || '-')}</td>
+                <td class="text-end">
+                    <button class="scheduler-btn scheduler-btn-green btn-sm" onclick="restoreAlexandriteArchive('${escapeHtml(a.name)}')">
+                        <i class="bi bi-cloud-download"></i><span class="btn-text ms-1">Восстановить</span>
+                    </button>
+                    <button class="scheduler-btn scheduler-btn-red btn-sm ms-1" onclick="deleteAlexandriteArchive('${escapeHtml(a.name)}')">
+                        <i class="bi bi-trash"></i><span class="btn-text ms-1">Удалить</span>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        const msg = e.message && e.message.includes('не настроен')
+            ? 'Яндекс.Диск не настроен'
+            : 'Ошибка загрузки архивов Alexandrite';
+        tbody.innerHTML = `<tr><td colspan="4" class="text-danger small">${escapeHtml(msg)}</td></tr>`;
+    }
+}
+
+async function restoreAlexandriteArchive(name) {
+    if (!confirm(`Восстановить папку Alexandrite из архива ${name}?\nТекущие локальные файлы Alexandrite будут заменены!`)) return;
+    setBackupStatus('Восстановление папки Alexandrite из архива...', false);
+    try {
+        const res = await api(`${API_BASE}/backup/alexandrite/restore`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name}),
+        });
+        setBackupStatus(
+            `Папка Alexandrite восстановлена из архива. Файлов: ${res.stats.files}, папок: ${res.stats.directories}.`,
+            false
+        );
+        loadAlexandriteBackupStats();
+        loadAlexandriteArchives();
+    } catch (e) {
+        setBackupStatus('Ошибка восстановления Alexandrite: ' + e.message, true);
+    }
+}
+
+async function deleteAlexandriteArchive(name) {
+    if (!confirm(`Удалить архив Alexandrite ${name} с Яндекс.Диска?`)) return;
+    try {
+        await api(`${API_BASE}/backup/alexandrite/delete`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name}),
+        });
+        setBackupStatus(`Архив Alexandrite ${name} удалён.`, false);
+        loadAlexandriteArchives();
+    } catch (e) {
+        setBackupStatus('Ошибка удаления архива Alexandrite: ' + e.message, true);
     }
 }
 

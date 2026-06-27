@@ -4,6 +4,7 @@ ProJectDocsHub — веб-приложение для сбора и управл
 Author: Shkola Olga
 """
 import os
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -212,6 +213,11 @@ async def lifespan(app: FastAPI):
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
+
+        # Создаём data-директории, если их нет
+        Path(settings.local_storage_path).expanduser().mkdir(parents=True, exist_ok=True)
+        Path(settings.alexandrite_vault_path).expanduser().mkdir(parents=True, exist_ok=True)
+        Path("data/backups").mkdir(parents=True, exist_ok=True)
 
     yield
     await engine.dispose()
