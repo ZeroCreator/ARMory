@@ -1731,7 +1731,6 @@ function initSchedulerTabs() {
     tabEl.forEach(tab => {
         tab.addEventListener('shown.bs.tab', event => {
             const target = event.target.getAttribute('data-bs-target');
-            localStorage.setItem('scheduler_active_tab', target);
             if (target === '#calendar-pane' && !calendarInstance) {
                 initCalendar();
             }
@@ -1750,14 +1749,6 @@ function initSchedulerTabs() {
         if (calendarInstance) calendarInstance.updateSize();
     });
 
-    const savedTab = localStorage.getItem('scheduler_active_tab');
-    if (savedTab) {
-        const tabButton = document.querySelector(`#schedulerTab button[data-bs-target="${savedTab}"]`);
-        if (tabButton) {
-            const tab = new bootstrap.Tab(tabButton);
-            tab.show();
-        }
-    }
 }
 
 function initCollapsibleBackupSections() {
