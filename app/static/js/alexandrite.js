@@ -430,17 +430,18 @@ async function saveAlexandriteFile() {
 
 async function deleteAlexandriteFile() {
     if (!alexandriteCurrentFile || !alexandriteRoot) return;
-    if (!confirm(`Удалить файл «${alexandriteCurrentFile.split('/').pop()}»?`)) return;
+    const filePath = alexandriteCurrentFile;
+    if (!confirm(`Удалить файл «${filePath.split('/').pop()}»?`)) return;
 
     try {
-        await api(`${API_BASE}/alexandrite/file?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(alexandriteCurrentFile)}`, {
+        await api(`${API_BASE}/alexandrite/file?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(filePath)}`, {
             method: 'DELETE',
         });
         alexandriteCurrentFile = null;
         alexandriteCurrentContent = '';
         document.getElementById('alexandrite-preview').style.display = 'none';
         document.getElementById('alexandrite-empty').style.display = 'flex';
-        await loadAlexandriteTree();
+        removeAlexandriteTreeItem(filePath, 'file');
         showToast('Файл удалён');
     } catch (e) {
         showToast(`Ошибка удаления: ${e.message}`, 'danger');
@@ -593,6 +594,36 @@ async function renameAlexandriteFolder(folderPath) {
     }
 }
 
+function getExpandedAlexandritePaths() {
+    const paths = [];
+    document.querySelectorAll('.alexandrite-tree-item.expanded').forEach(item => {
+        if (item.dataset.path) paths.push(item.dataset.path);
+    });
+    return paths;
+}
+
+function expandAlexandritePaths(paths) {
+    document.querySelectorAll('.alexandrite-tree-item').forEach(item => {
+        if (item.dataset.path && paths.includes(item.dataset.path)) {
+            item.classList.add('expanded');
+        }
+    });
+}
+
+function removeAlexandriteTreeItem(itemPath, itemType) {
+    const expanded = getExpandedAlexandritePaths();
+    let item = null;
+    document.querySelectorAll(`.alexandrite-tree-item[data-type="${itemType}"]`).forEach(el => {
+        if (el.dataset.path === itemPath) item = el;
+    });
+    if (item) {
+        item.remove();
+        expandAlexandritePaths(expanded);
+    } else {
+        loadAlexandriteTree().then(() => expandAlexandritePaths(expanded));
+    }
+}
+
 async function deleteAlexandriteFolder(folderPath) {
     if (!alexandriteRoot || !folderPath) return;
     const name = folderPath.split('/').pop();
@@ -602,7 +633,7 @@ async function deleteAlexandriteFolder(folderPath) {
         await api(`${API_BASE}/alexandrite/directory?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(folderPath)}`, {
             method: 'DELETE',
         });
-        await loadAlexandriteTree();
+        removeAlexandriteTreeItem(folderPath, 'directory');
         showToast('Папка удалена');
     } catch (e) {
         showToast(`Ошибка удаления: ${e.message}`, 'danger');
@@ -649,7 +680,7 @@ async function deleteAlexandriteFileFromContext(filePath) {
             document.getElementById('alexandrite-preview').style.display = 'none';
             document.getElementById('alexandrite-empty').style.display = 'flex';
         }
-        await loadAlexandriteTree();
+        removeAlexandriteTreeItem(filePath, 'file');
         showToast('Файл удалён');
     } catch (e) {
         showToast(`Ошибка удаления: ${e.message}`, 'danger');

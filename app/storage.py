@@ -31,6 +31,10 @@ class StorageBackend:
         """Delete file by identifier (path or key)"""
         raise NotImplementedError
 
+    async def delete_subfolder(self, subfolder: str) -> bool:
+        """Delete a subfolder and all its contents."""
+        raise NotImplementedError
+
     async def rename_subfolder(self, old_subfolder: str, new_subfolder: str) -> bool:
         """Rename/move a subfolder on the filesystem."""
         raise NotImplementedError
@@ -117,6 +121,13 @@ class LocalStorage(StorageBackend):
             return True
         return False
 
+    async def delete_subfolder(self, subfolder: str) -> bool:
+        path = self.base_path / subfolder
+        if path.exists() and path.is_dir():
+            shutil.rmtree(path)
+            return True
+        return False
+
     async def rename_subfolder(self, old_subfolder: str, new_subfolder: str) -> bool:
         old_path = self.base_path / old_subfolder
         new_path = self.base_path / new_subfolder
@@ -187,6 +198,21 @@ class S3Storage(StorageBackend):
         try:
             self.s3.delete_object(Bucket=self.bucket, Key=identifier)
             return True
+        except Exception:
+            return False
+
+    async def delete_subfolder(self, subfolder: str) -> bool:
+        """Удаляет все объекты S3 с префиксом subfolder/."""
+        try:
+            prefix = f"uploads/{subfolder}/"
+            paginator = self.s3.get_paginator('list_objects_v2')
+            deleted_any = False
+            for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+                objects = [{'Key': obj['Key']} for obj in page.get('Contents', [])]
+                if objects:
+                    self.s3.delete_objects(Bucket=self.bucket, Delete={'Objects': objects})
+                    deleted_any = True
+            return deleted_any
         except Exception:
             return False
 

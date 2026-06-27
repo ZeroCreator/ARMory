@@ -104,6 +104,11 @@ async def delete_project(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ):
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     # Сначала удалить файлы из хранилища
     result = await db.execute(
         select(DocumentItem)
@@ -115,10 +120,10 @@ async def delete_project(
         if item.file_path:
             await storage.delete(item.file_path)
 
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    # Удалить папку проекта в хранилище, если осталась пустой
+    project_subfolder = f"{project.id}_{slugify(project.name)}"
+    await storage.delete_subfolder(project_subfolder)
+
     await db.delete(project)
     await db.commit()
     return None
