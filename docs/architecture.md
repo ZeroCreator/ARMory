@@ -1,90 +1,135 @@
-# Архитектура
+# Архитектура ARMory
+
+ARMory — веб-приложение для управления документацией проектов: проекты → разделы → группы → элементы (файлы, заметки, ссылки). Реализовано на Python с использованием FastAPI, SQLAlchemy и Jinja2.
+
+## Стек
+
+- **Backend**: FastAPI + SQLAlchemy 2.0 (async) + aiosqlite
+- **Frontend**: Jinja2 templates + Bootstrap 5 + vanilla JS + SortableJS
+- **База данных**: SQLite (`data/projectdocs.db`)
+- **Хранилище файлов**: локальная файловая система (`data/uploads/`) или S3-совместимое хранилище
+- **Документация**: MkDocs + Material
 
 ## Структура проекта
 
 ```
-app/
-├── main.py           # Точка входа, lifespan, миграции, роутинг страниц
-├── config.py         # Pydantic Settings (env-переменные)
-├── database.py       # SQLAlchemy async engine + session
-├── models.py         # ORM модели
-├── schemas.py        # Pydantic схемы для валидации
-├── storage.py        # Абстракция хранилища: LocalStorage / S3Storage
-├── yandex_disk.py    # Клиент для Яндекс.Диск REST API (sync, backups)
-├── routers/
-│   ├── projects.py   # CRUD проектов
-│   ├── sections.py   # CRUD разделов
-│   ├── documents.py  # CRUD групп, items, upload, download, preview
-│   ├── sidebar.py    # CRUD блоков и ссылок сайдбара
-│   ├── scheduler.py  # Планировщик задач через at
-│   ├── calendar.py   # CRUD событий календаря
-│   ├── backup.py     # Синхронизация и архивные бэкапы на Яндекс.Диск
-│   ├── glossary.py   # CRUD терминов, тем и подтем глоссария
-│   └── alexandrite.py # Файловое хранилище заметок
-├── templates/        # Jinja2 шаблоны
-└── static/           # CSS + JS
+ARMory/
+├── app/                    # Исходный код приложения
+│   ├── __init__.py
+│   ├── main.py             # Точка входа FastAPI
+│   ├── config.py           # Pydantic Settings
+│   ├── database.py         # Подключение к БД и фабрика сессий
+│   ├── models.py           # SQLAlchemy модели
+│   ├── schemas.py          # Pydantic схемы
+│   ├── storage.py          # Абстракция хранилища файлов
+│   ├── templates/          # Jinja2 шаблоны
+│   ├── static/             # CSS, JS, изображения
+│   └── routers/            # Модули API и страниц
+│       ├── projects.py
+│       ├── items.py
+│       ├── backups.py
+│       ├── scheduler.py
+│       ├── calendar.py
+│       ├── alexandrite.py
+│       └── ...
+├── data/                   # Данные приложения
+│   ├── projectdocs.db      # База данных
+│   ├── uploads/            # Загруженные файлы
+│   ├── alexandrite/        # Хранилище Alexandrite (автосоздаётся)
+│   └── backups/            # Локальные резервные копии
+├── docs/                   # Markdown-документация для MkDocs
+├── site/                   # Собранная статика MkDocs
+├── scripts/                # Скрипты для планировщика задач
+├── backups/                # Пользовательская документация и экспорт
+├── lib/                    # Общие shell-скрипты
+├── tests/                  # Тесты (pytest)
+├── compose.yml             # Docker Compose production
+├── compose.dev.yml         # Docker Compose development
+├── compose.gateway.yml     # Compose с внешним gateway
+├── Dockerfile
+├── pyproject.toml
+├── uv.lock
+└── run.sh                  # Скрипт запуска
 ```
 
 ## Модель данных
 
-### Project
-- `id`, `name`, `description`, `sort_order`
-- `created_at`, `updated_at`
-- связи `sections` и `documents`
+```
+Project
+├── Section
+│   ├── Group
+│   │   ├── Item (file, note, link)
+│   │   └── ItemFile
+│   └── Task (scheduler)
+└── CalendarEvent
+```
 
-### Section (раздел / категория)
-- `id`, `project_id`, `name`, `description`, `sort_order`
-- связь `documents`
+### Основные сущности
 
-### Document (группа)
-- `id`, `project_id`, `section_id` (nullable)
-- `title`, `description`, `category`, `sort_order`
-- связь `items`
+- **Project** — верхний уровень, соответствует реальному проекту или продукту.
+- **Section** — раздел внутри проекта.
+- **Group** — группа элементов внутри раздела. Поддерживает ручную сортировку перетаскиванием.
+- **Item** — элемент группы: файл, заметка или ссылка. Элементы тоже можно сортировать внутри группы.
+- **ItemFile** — история загруженных файлов для элемента, позволяет заменять файл с сохранением названия.
+- **Task** — задача планировщика с датами, повторениями и напоминаниями.
+- **CalendarEvent** — событие календаря.
 
-### DocumentItem (ссылка, файл или заметка)
-- `id`, `document_id`
-- `item_type` (`link` | `file` | `note`), `title`
-- `url` — для ссылок
-- `file_path`, `file_name`, `file_size`, `mime_type` — для файлов
-- `content` — текст заметки
+## Хранилище файлов
 
-### SidebarBlock / SidebarLink
-- Динамические блоки ссылок в левой и правой колонке
-- Управляются через API (`/api/sidebar/blocks`)
+### Локальное хранилище
 
-### CalendarEvent
-- `id`, `title`, `description`, `note`
-- `start_date`, `end_date`, `all_day`, `color`
-- `created_at`
-- Таблица создаётся автоматически при старте (миграция в `lifespan`)
+Файлы сохраняются в `data/uploads/<project_id>_<slug>/`.
 
-### GlossaryTopic / GlossarySubtopic / GlossaryTerm
-- Темы и подтемы для группировки терминов.
-- Термин содержит `term`, `short_definition`, `definition`, `letter`, связи с темой и подтемой.
+При удалении проекта вся его папка удаляется автоматически.
 
-### Alexandrite
-- Не использует таблицы БД: работает напрямую с файловой системой через `app/routers/alexandrite.py`.
-- Корневая папка задаётся через `ALEXANDRITE_VAULT_PATH` (по умолчанию `./data/uploads`).
+### S3
 
-## Абстракция хранилища
+Поддерживается любое S3-совместимое хранилище. Префикс объектов: `<project_id>_<slug>/`.
 
-`StorageBackend` — интерфейс с методами `save()`, `delete()`, `get_local_path()`, `get_download_url()`, `get_preview_url()`, `get_public_url()`.
+## Alexandrite
 
-Реализации:
+Отдельное хранилище знаний в формате Markdown с двухпанельным интерфейсом:
 
-- **LocalStorage** — сохраняет в `./data/uploads/{project_id}_{name}/{doc_id}_{title}/`, отдаёт через `FileResponse`. Папки автоматически переименовываются при смене названия проекта/документа.
-- **S3Storage** — загружает в бакет S3, скачивание через **presigned URL** (даже для приватных бакетов)
+- **Локальный режим** — полный доступ: создание, редактирование, переименование, удаление файлов и папок.
+- **Режим Яндекс.Диска** — read-only просмотр Markdown-файлов и папок, расположенных в `YANDEX_DISK_ALEXANDRITE_PATH`. Для ограничения корневой папки используется `ALEXANDRITE_YANDEX_ROOT_PATH`.
 
-Переключение через переменную окружения `STORAGE_TYPE=local` или `s3`.
+Состояние дерева (развёрнутые папки) сохраняется в `localStorage` браузера.
 
-## Синхронизация с Яндекс.Диском
+## Конфигурация
 
-Отдельный модуль `yandex_disk.py` реализует клиент для REST API Яндекс.Диска:
-- `upload_file()` / `download_file()` — прямая синхронизация
-- `list_files()` / `list_all_files()` — рекурсивный листинг
-- `create_folder()` / `ensure_folders()` — создание папок
-- `delete()` — удаление файлов и папок
+Конфигурация загружается из переменных окружения и файла `.env` через `pydantic-settings`.
 
-Роутер `backup.py` предоставляет два функционала:
-1. **Sync** — прямая синхронизация `projectdocs.db` + `uploads/` ↔ Яндекс.Диск
-2. **Archive backups** — создание / восстановление / удаление `.tar.gz` архивов на диске
+Ключевые параметры:
+
+```python
+app_name: str = "ARMory"
+database_url: str = "sqlite+aiosqlite:///./projectdocs.db"
+storage_type: str = "local"          # local | s3
+local_storage_path: str = "./data/uploads"
+alexandrite_vault_path: str = "./data/alexandrite"
+yandex_disk_path: str = "ARMory/data"
+yandex_disk_backups_path: str = "ARMory/backups"
+yandex_disk_alexandrite_path: str = "ARMory/alexandrite"
+scheduler_enabled: bool = True
+```
+
+## Жизненный цикл запроса
+
+1. FastAPI получает HTTP-запрос.
+2. Зависимости (`Depends`) предоставляют сессию БД (`AsyncSession`) и бэкенд хранилища (`StorageBackend`).
+3. Роутер выполняет бизнес-логику, обращается к БД и/или хранилищу.
+4. Jinja2-шаблон рендерит HTML или возвращается JSON.
+
+## Асинхронность
+
+- Все операции с БД выполняются через `AsyncSession`.
+- IO-bound операции (S3, Яндекс.Диск) выполняются асинхронно.
+- Долгие операции экспорта Alexandrite запускаются в фоновых `asyncio.create_task`.
+
+## Масштабируемость
+
+Текущая архитектура рассчитана на один инстанс. SQLite и локальное хранилище не позволяют запускать несколько реплик без общего хранилища. Для горизонтального масштабирования потребуется:
+
+- PostgreSQL вместо SQLite
+- S3 вместо локальной ФС
+- Redis или аналог для фоновых задач
