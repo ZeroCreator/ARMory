@@ -99,6 +99,10 @@ class ReorderRequest(BaseModel):
     document_ids: List[int]
 
 
+class DocumentItemReorderRequest(BaseModel):
+    item_ids: List[int]
+
+
 class SectionReorderRequest(BaseModel):
     section_ids: List[int]
 

@@ -11,7 +11,10 @@ from typing import Optional
 
 from app.database import get_db
 from app.models import Document, DocumentItem, Project, Section, DocType
-from app.schemas import DocumentOut, DocumentItemOut, ReorderRequest, SectionOut, SectionReorderRequest
+from app.schemas import (
+    DocumentOut, DocumentItemOut, ReorderRequest, DocumentItemReorderRequest,
+    SectionOut, SectionReorderRequest,
+)
 from app.storage import get_storage, StorageBackend, slugify
 
 router = APIRouter(prefix="/api/projects/{project_id}/documents", tags=["documents"])
@@ -310,6 +313,23 @@ async def create_item(
         await db.commit()
 
     return item
+
+
+@router.patch("/{doc_id}/items/reorder", status_code=204)
+async def reorder_items(
+    project_id: int,
+    doc_id: int,
+    data: DocumentItemReorderRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    for idx, item_id in enumerate(data.item_ids):
+        await db.execute(
+            update(DocumentItem)
+            .where(DocumentItem.id == item_id, DocumentItem.document_id == doc_id)
+            .values(sort_order=idx)
+        )
+    await db.commit()
+    return None
 
 
 @router.patch("/{doc_id}/items/{item_id}", response_model=DocumentItemOut)

@@ -242,12 +242,27 @@ app.include_router(glossary.router)
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "title": settings.app_name})
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "title": settings.app_name,
+            "scheduler_enabled": settings.scheduler_enabled,
+        },
+    )
 
 
 @app.get("/projects/{project_id}", response_class=HTMLResponse)
 async def project_page(request: Request, project_id: int):
-    return templates.TemplateResponse("project.html", {"request": request, "project_id": project_id, "title": settings.app_name})
+    return templates.TemplateResponse(
+        "project.html",
+        {
+            "request": request,
+            "project_id": project_id,
+            "title": settings.app_name,
+            "local_storage_path": settings.local_storage_path,
+        },
+    )
 
 
 @app.get("/alexandrite", response_class=HTMLResponse)

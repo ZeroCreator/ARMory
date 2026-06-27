@@ -15,6 +15,17 @@ let glossaryTotalCount = 0;
 // Темы и подтемы
 // ═══════════════════════════════════════════════════
 
+async function updateGlossaryAllCount() {
+    const el = document.getElementById('glossary-all-count');
+    if (!el) return;
+    try {
+        const count = await api(`${API_BASE}/glossary/count`);
+        el.textContent = typeof count === 'number' ? count : '—';
+    } catch (e) {
+        el.textContent = '—';
+    }
+}
+
 async function loadGlossaryTopics() {
     try {
         glossaryTopics = await api(`${API_BASE}/glossary/topics`);
@@ -24,6 +35,7 @@ async function loadGlossaryTopics() {
         });
         renderGlossaryTopics();
         fillTopicSelect();
+        updateGlossaryAllCount();
     } catch (e) {
         document.getElementById('glossary-topics-list').innerHTML =
             `<div class="text-danger small text-center py-3">${e.message}</div>`;
@@ -50,6 +62,7 @@ function renderGlossaryTopics() {
     const allItem = `
         <div class="glossary-topic-item ${glossaryFilter.type === 'all' ? 'active' : ''}" onclick="setGlossaryFilter('all')">
             <span class="glossary-topic-name">Все термины</span>
+            <span class="glossary-topic-count" id="glossary-all-count">—</span>
         </div>
     `;
     const noTopicItem = `

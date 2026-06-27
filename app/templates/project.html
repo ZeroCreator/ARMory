@@ -207,7 +207,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form id="edit-item-form">
+                <form id="edit-item-form" enctype="multipart/form-data">
                     <input type="hidden" name="doc_id" id="edit-item-doc-id">
                     <input type="hidden" name="item_id" id="edit-item-item-id">
                     <div class="mb-3">
@@ -221,6 +221,10 @@
                     <div class="mb-3 d-none" id="edit-item-content-wrap">
                         <label class="form-label">Текст заметки</label>
                         <textarea class="form-control" name="content" id="edit-item-content" rows="5"></textarea>
+                    </div>
+                    <div class="mb-3 d-none" id="edit-item-file-wrap">
+                        <label class="form-label">Заменить файл</label>
+                        <input type="file" class="form-control" name="file" id="edit-item-file">
                     </div>
                 </form>
             </div>
@@ -288,6 +292,7 @@
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
     const PROJECT_ID = {{ project_id }};
+    const LOCAL_STORAGE_PATH = {{ local_storage_path | tojson }};
     document.addEventListener('DOMContentLoaded', () => {
         loadProject(PROJECT_ID);
         loadSections(PROJECT_ID);

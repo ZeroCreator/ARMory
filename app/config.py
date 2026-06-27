@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # alexandrite — папка для файлового хранилища заметок
     alexandrite_vault_path: str = "./data/uploads"
 
+    # Отключение планировщика (вкладка не отображается на главной странице)
+    scheduler_enabled: bool = True
+
     class Config:
         env_file = ".env"
         extra = "ignore"

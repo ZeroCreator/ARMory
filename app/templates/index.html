@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% if scheduler_enabled %}
 <!-- Планировщик / Календарь -->
 <div class="scheduler-section mb-4">
     <div class="scheduler-card">
@@ -148,7 +149,9 @@
         </div>
     </div>
 </div>
+{% endif %}
 
+{% if scheduler_enabled %}
 <!-- Модал события календаря -->
 <div class="modal fade" id="calendarEventModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-sm">
@@ -194,6 +197,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">Проекты</h2>
@@ -242,10 +246,13 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         loadProjects().then(() => {
+            {% if scheduler_enabled %}
             initScheduler();
             fillSchedulerTasks();
+            {% endif %}
         });
         loadSidebars();
+        {% if scheduler_enabled %}
         initSchedulerTabs();
         loadBackupStats();
         loadBackupArchives();
@@ -254,6 +261,7 @@
             if (!calendarInstance) initCalendar();
             loadCalendarEvents();
         }
+        {% endif %}
     });
 </script>
 {% endblock %}

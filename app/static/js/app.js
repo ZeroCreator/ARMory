@@ -224,15 +224,48 @@ function renderPagination(containerId, currentPage, totalPages, onPageChange, sc
         return;
     }
 
-    let html = '';
-    for (let i = 1; i <= totalPages; i++) {
-        const activeClass = i === currentPage ? 'active' : '';
-        html += `<button class="pagination-btn ${activeClass}" data-page="${i}">${i}</button>`;
+    // Строгое представление: 3 цифры + многоточие + последняя страница
+    const windowSize = 3;
+    const half = Math.floor(windowSize / 2);
+    let start = Math.max(1, currentPage - half);
+    let end = Math.min(totalPages, currentPage + half);
+
+    if (end - start + 1 < windowSize) {
+        if (start === 1) {
+            end = Math.min(totalPages, start + windowSize - 1);
+        } else if (end === totalPages) {
+            start = Math.max(1, end - windowSize + 1);
+        }
     }
+
+    const pages = [];
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (end < totalPages) {
+        pages.push('ellipsis');
+        pages.push(totalPages);
+    }
+
+    let html = '';
+    html += `<button class="pagination-btn pagination-btn-nav" data-page="${currentPage - 1}" aria-label="Назад" ${currentPage === 1 ? 'disabled' : ''}>` +
+            `<i class="bi bi-chevron-left"></i></button>`;
+
+    pages.forEach(p => {
+        if (p === 'ellipsis') {
+            html += `<span class="pagination-btn pagination-btn-ellipsis" aria-hidden="true">...</span>`;
+        } else {
+            const activeClass = p === currentPage ? 'active' : '';
+            html += `<button class="pagination-btn ${activeClass}" data-page="${p}" aria-label="Страница ${p}">${p}</button>`;
+        }
+    });
+
+    html += `<button class="pagination-btn pagination-btn-nav" data-page="${currentPage + 1}" aria-label="Вперёд" ${currentPage === totalPages ? 'disabled' : ''}>` +
+            `<i class="bi bi-chevron-right"></i></button>`;
+
     container.innerHTML = html;
 
-    container.querySelectorAll('.pagination-btn').forEach(btn => {
+    container.querySelectorAll('.pagination-btn[data-page]').forEach(btn => {
         btn.addEventListener('click', () => {
+            if (btn.disabled) return;
             const page = parseInt(btn.dataset.page, 10);
             onPageChange(page);
             if (scrollTarget) scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -456,6 +489,9 @@ async function loadSections(projectId) {
         document.querySelectorAll('.section-body, .ungrouped-block').forEach(el => {
             initGroupSortable(projectId, el);
         });
+        document.querySelectorAll('.doc-group-body').forEach(el => {
+            initItemSortable(projectId, el);
+        });
     } catch (e) {
         container.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${e.message}</div>`;
     }
@@ -566,13 +602,17 @@ function renderItem(doc, item, idx) {
     }
     const previewBtn = (isLink)
         ? ''
-        : `<button class="btn btn-sm btn-outline-primary" onclick='event.stopPropagation(); openItemPreview(${JSON.stringify({...item, category: cat, document_id: doc.id}).replace(/'/g, "&#39;")})'><i class="bi bi-eye"></i></button>`;
+        : `<button class="btn btn-sm btn-outline-brown" onclick='event.stopPropagation(); openItemPreview(${JSON.stringify({...item, category: cat, document_id: doc.id}).replace(/'/g, "&#39;")})'><i class="bi bi-eye"></i></button>`;
     const downloadBtn = (isLink || isNote)
         ? ''
         : `<a href="${API_BASE}/projects/${PROJECT_ID}/documents/${doc.id}/items/${item.id}/download" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i></a>`;
+    const alexandriteBtn = (isLink || isNote)
+        ? ''
+        : `<button class="btn btn-sm btn-outline-primary" onclick='event.stopPropagation(); openItemInAlexandrite(${JSON.stringify(item).replace(/'/g, "&#39;")})' title="Открыть в Alexandrite"><i class="bi bi-gem"></i></button>`;
 
     return `
-        <div class="doc-item d-flex align-items-center gap-2 py-2 ${idx > 0 ? 'border-top' : ''}">
+        <div class="doc-item d-flex align-items-center gap-2 py-2 ${idx > 0 ? 'border-top' : ''}" data-id="${item.id}" data-document-id="${doc.id}">
+            <div class="doc-item-drag-handle" onclick="event.stopPropagation()" title="Переместить"><i class="bi bi-grip-vertical"></i></div>
             <div class="doc-item-icon ${cat}"><i class="bi ${iconClass}"></i></div>
             <div class="doc-item-info flex-fill">
                 <div class="doc-item-title d-flex align-items-center gap-2">
@@ -582,6 +622,7 @@ function renderItem(doc, item, idx) {
                 <div class="doc-item-meta">${subtitle}</div>
             </div>
             <div class="doc-item-actions d-flex gap-1">
+                ${alexandriteBtn}
                 <button class="btn btn-sm btn-outline-secondary" onclick='event.stopPropagation(); showEditItemModal(${doc.id}, ${JSON.stringify(item).replace(/'/g, "&#39;")})'><i class="bi bi-pencil"></i></button>
                 ${previewBtn}
                 ${downloadBtn}
@@ -705,6 +746,33 @@ function initGroupSortable(projectId, el) {
     });
 }
 
+function initItemSortable(projectId, el) {
+    if (!el) return;
+    const groupEl = el.closest('.doc-group');
+    const docId = groupEl ? parseInt(groupEl.dataset.id) : null;
+    if (!docId) return;
+    const existing = el._itemSortable;
+    if (existing) existing.destroy();
+
+    el._itemSortable = Sortable.create(el, {
+        animation: 150,
+        handle: '.doc-item-drag-handle',
+        draggable: '.doc-item',
+        forceFallback: true,
+        fallbackClass: 'sortable-drag',
+        ghostClass: 'sortable-ghost',
+        dragClass: 'sortable-drag',
+        onEnd: function () {
+            const ids = Array.from(el.children)
+                .filter(child => child.classList.contains('doc-item'))
+                .map(child => parseInt(child.dataset.id));
+            if (ids.length > 1) {
+                reorderItems(projectId, docId, ids);
+            }
+        }
+    });
+}
+
 async function reorderDocuments(projectId, documentIds) {
     try {
         await api(`${API_BASE}/projects/${projectId}/documents/reorder`, {
@@ -714,6 +782,19 @@ async function reorderDocuments(projectId, documentIds) {
         });
     } catch (e) {
         console.error('Reorder documents failed:', e);
+        loadSections(projectId);
+    }
+}
+
+async function reorderItems(projectId, docId, itemIds) {
+    try {
+        await api(`${API_BASE}/projects/${projectId}/documents/${docId}/items/reorder`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({item_ids: itemIds})
+        });
+    } catch (e) {
+        console.error('Reorder items failed:', e);
         loadSections(projectId);
     }
 }
@@ -862,24 +943,29 @@ async function createItem() {
 
 function showEditItemModal(docId, item) {
     const f = document.getElementById('edit-item-form');
+    f.reset();
     f.doc_id.value = docId;
     f.item_id.value = item.id;
     f.title.value = item.title || '';
     const urlWrap = document.getElementById('edit-item-url-wrap');
     const contentWrap = document.getElementById('edit-item-content-wrap');
+    const fileWrap = document.getElementById('edit-item-file-wrap');
     if (item.item_type === 'link') {
         urlWrap.classList.remove('d-none');
         contentWrap.classList.add('d-none');
+        fileWrap.classList.add('d-none');
         f.url.value = item.url || '';
         f.content.value = '';
     } else if (item.item_type === 'note') {
         urlWrap.classList.add('d-none');
         contentWrap.classList.remove('d-none');
+        fileWrap.classList.add('d-none');
         f.url.value = '';
         f.content.value = item.content || '';
     } else {
         urlWrap.classList.add('d-none');
         contentWrap.classList.add('d-none');
+        fileWrap.classList.remove('d-none');
         f.url.value = '';
         f.content.value = '';
     }
@@ -897,6 +983,9 @@ async function updateItem() {
     }
     if (!f.content.parentElement.classList.contains('d-none')) {
         fd.append('content', f.content.value);
+    }
+    if (!f.file.parentElement.classList.contains('d-none') && f.file.files[0]) {
+        fd.append('file', f.file.files[0]);
     }
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/documents/${docId}/items/${itemId}`, {
@@ -926,6 +1015,13 @@ async function deleteItem(docId, itemId) {
     } catch (e) {
         alert('Ошибка: ' + e.message);
     }
+}
+
+function openItemInAlexandrite(item) {
+    if (!item.file_path) return alert('Файл не найден');
+    const root = encodeURIComponent(LOCAL_STORAGE_PATH || './data/uploads');
+    const path = encodeURIComponent(item.file_path);
+    window.open(`/alexandrite?root=${root}&open=${path}`, '_blank');
 }
 
 // ═══════════════════════════════════════════════════
@@ -1097,12 +1193,14 @@ function getSidebarBlockCollapsedState() {
 }
 
 function isSidebarBlockCollapsed(blockId) {
-    return getSidebarBlockCollapsedState()[blockId] === true;
+    // По умолчанию блоки свёрнуты
+    const state = getSidebarBlockCollapsedState();
+    return state[blockId] !== false;
 }
 
 function toggleSidebarBlock(blockId) {
     const state = getSidebarBlockCollapsedState();
-    state[blockId] = !state[blockId];
+    state[blockId] = !isSidebarBlockCollapsed(blockId);
     localStorage.setItem('sidebar_blocks_collapsed', JSON.stringify(state));
     const block = document.querySelector(`.sidebar-block[data-id="${blockId}"]`);
     if (!block) return;

@@ -30,7 +30,7 @@ def _normalize_letter(term: str) -> str:
         return "#"
     first = term.strip()[0].upper()
     first = first.replace("Ё", "Е")
-    if re.match(r"[А-Я]", first):
+    if re.match(r"[А-ЯA-Z]", first):
         return first
     return "#"
 
