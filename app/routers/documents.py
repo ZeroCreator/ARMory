@@ -16,6 +16,9 @@ from app.schemas import (
     SectionOut, SectionReorderRequest,
 )
 from app.storage import get_storage, StorageBackend, slugify
+from app.config import Settings, get_settings
+from app.routers.collabora import build_collabora_iframe_url
+from app.routers.wopi import OFFICE_EXTENSIONS, encode_file_id
 
 router = APIRouter(prefix="/api/projects/{project_id}/documents", tags=["documents"])
 
@@ -717,3 +720,47 @@ async def preview_item(
         return RedirectResponse(url=public_url)
 
     raise HTTPException(status_code=404, detail="File not available")
+
+
+@router.get("/{doc_id}/items/{item_id}/collabora")
+async def collabora_item(
+    project_id: int,
+    doc_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
+):
+    """Вернуть URL iframe для редактирования файла проекта в Collabora Online."""
+    if not settings.collabora_enabled:
+        raise HTTPException(status_code=503, detail="Collabora Online is not enabled")
+
+    result = await db.execute(
+        select(DocumentItem)
+        .join(Document)
+        .where(DocumentItem.id == item_id, DocumentItem.document_id == doc_id, Document.project_id == project_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    if item.item_type != DocType.file:
+        raise HTTPException(status_code=400, detail="Not a file")
+
+    if not item.file_path:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    ext = Path(item.file_name or item.file_path).suffix.lower()
+    if ext not in OFFICE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported file type for Collabora")
+
+    local_path = await storage.get_local_path(item.file_path)
+    if not local_path or not os.path.exists(local_path):
+        raise HTTPException(status_code=400, detail="File is not available locally")
+
+    file_id = encode_file_id(project_file_path=item.file_path)
+    iframe_url = await build_collabora_iframe_url(file_id, ext, settings)
+    return {
+        "url": iframe_url,
+        "wopi_src": f"{settings.armory_public_url.rstrip('/')}/wopi/files/{file_id}",
+    }

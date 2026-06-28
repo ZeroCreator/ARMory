@@ -174,7 +174,9 @@ function renderAlexandriteTree(items, container, level = 0, isYandex = false) {
                 clearTimeout(alexandriteHoverTimeout);
             });
             row.addEventListener('click', () => {
-                if (isPreviewableFile(item.name)) {
+                if (alexandriteSource === 'local' && isOfficeFile(item.name)) {
+                    openAlexandriteCollabora(item.path);
+                } else if (isPreviewableFile(item.name)) {
                     previewAlexandriteFile(item.path);
                 } else {
                     openAlexandriteFile(item.path);
@@ -322,6 +324,49 @@ async function openAlexandriteFile(path) {
     }
 }
 
+function isOfficeFile(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    return ['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'odt', 'ods', 'odp'].includes(ext);
+}
+
+function showAlexandriteCollabora(iframeUrl, path) {
+    const empty = document.getElementById('alexandrite-empty');
+    const preview = document.getElementById('alexandrite-preview');
+    const title = document.getElementById('alexandrite-preview-title');
+    const meta = document.getElementById('alexandrite-preview-meta');
+    const body = document.getElementById('alexandrite-preview-body');
+
+    empty.style.display = 'none';
+    preview.style.display = 'block';
+    title.textContent = path.split('/').pop();
+    meta.textContent = 'Collabora Online';
+    body.innerHTML = '';
+    body.classList.remove('editing');
+
+    const iframe = document.createElement('iframe');
+    iframe.src = iframeUrl;
+    iframe.className = 'alexandrite-collabora-frame';
+    iframe.sandbox = 'allow-scripts allow-same-origin allow-popups allow-forms';
+    iframe.title = path.split('/').pop();
+    body.appendChild(iframe);
+
+    hideAlexandriteEditControls();
+    const deleteBtn = document.getElementById('alexandrite-delete-btn');
+    if (deleteBtn) deleteBtn.style.display = '';
+}
+
+async function openAlexandriteCollabora(path) {
+    if (!alexandriteRoot) return;
+    const url = `${API_BASE}/alexandrite/collabora?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(path)}`;
+    try {
+        const data = await api(url);
+        showAlexandriteCollabora(data.url, path);
+    } catch (e) {
+        showToast(`Collabora недоступна: ${e.message}`, 'warning');
+        openAlexandriteFile(path);
+    }
+}
+
 async function previewAlexandriteFile(path) {
     if (alexandriteSource === 'local' && !alexandriteRoot) return;
     alexandriteCurrentFile = path;
@@ -361,13 +406,18 @@ async function previewAlexandriteFile(path) {
         } else {
             alexandriteCurrentContent = '';
             const container = document.createElement('div');
-            container.className = 'empty-state py-5';
+            container.className = 'alexandrite-binary-preview';
             container.innerHTML = `<i class="bi bi-file-earmark-lock"></i><p>${escapeHtml(data.message || 'Невозможно отобразить файл')}</p>`;
             const actionBtn = document.createElement('button');
             actionBtn.type = 'button';
             actionBtn.className = 'btn btn-primary mt-3';
-            actionBtn.innerHTML = `<i class="bi bi-box-arrow-up-right me-2"></i>${alexandriteSource === 'local' ? 'Открыть в приложении' : 'Скачать'}`;
-            actionBtn.addEventListener('click', () => openAlexandriteFile(path));
+            if (alexandriteSource === 'local' && isOfficeFile(path)) {
+                actionBtn.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i>Открыть в Collabora';
+                actionBtn.addEventListener('click', () => openAlexandriteCollabora(path));
+            } else {
+                actionBtn.innerHTML = `<i class="bi bi-box-arrow-up-right me-2"></i>${alexandriteSource === 'local' ? 'Открыть в приложении' : 'Скачать'}`;
+                actionBtn.addEventListener('click', () => openAlexandriteFile(path));
+            }
             container.appendChild(actionBtn);
             body.appendChild(container);
             hideAlexandriteEditControls();

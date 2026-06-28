@@ -40,6 +40,19 @@ class Settings(BaseSettings):
     # Отключение планировщика (вкладка не отображается на главной странице)
     scheduler_enabled: bool = True
 
+    # Публичный URL ARMory (используется для WOPI / Collabora)
+    armory_public_url: str = "https://armory.team-73.ru"
+
+    # Collabora Online — редактирование документов в Alexandrite
+    collabora_enabled: bool = False
+    collabora_domain: str = "armory.team-73.ru"
+    collabora_internal_url: str = "http://collabora:9980"
+    collabora_public_url: str = "https://armory.team-73.ru/collabora"
+    collabora_service_root: str = "/collabora"
+    collabora_wopi_secret: str = ""
+    collabora_admin_user: str = "admin"
+    collabora_admin_password: str = "changeme"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

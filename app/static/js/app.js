@@ -609,6 +609,10 @@ function renderItem(doc, item, idx) {
     const alexandriteBtn = (isLink || isNote)
         ? ''
         : `<button class="btn btn-sm btn-outline-primary" onclick='event.stopPropagation(); openItemInAlexandrite(${JSON.stringify(item).replace(/'/g, "&#39;")})' title="Открыть в Alexandrite"><i class="bi bi-gem"></i></button>`;
+    const isOffice = !isLink && !isNote && ['word', 'spreadsheet', 'presentation'].includes(cat);
+    const collaboraBtn = isOffice
+        ? `<button class="btn btn-sm btn-outline-info" onclick='event.stopPropagation(); openItemInCollabora(${JSON.stringify({...item, category: cat, document_id: doc.id}).replace(/'/g, "&#39;")})' title="Открыть в Collabora"><i class="bi bi-file-earmark-text"></i></button>`
+        : '';
 
     return `
         <div class="doc-item d-flex align-items-center gap-2 py-2 ${idx > 0 ? 'border-top' : ''}" data-id="${item.id}" data-document-id="${doc.id}">
@@ -622,6 +626,7 @@ function renderItem(doc, item, idx) {
                 <div class="doc-item-meta">${subtitle}</div>
             </div>
             <div class="doc-item-actions d-flex gap-1">
+                ${collaboraBtn}
                 ${alexandriteBtn}
                 <button class="btn btn-sm btn-outline-secondary" onclick='event.stopPropagation(); showEditItemModal(${doc.id}, ${JSON.stringify(item).replace(/'/g, "&#39;")})'><i class="bi bi-pencil"></i></button>
                 ${previewBtn}
@@ -1051,16 +1056,7 @@ async function openItemPreview(item) {
     const cat = item.category || detectCategoryFromItem(item);
 
     if (item.item_type === 'file' && ['word', 'spreadsheet', 'presentation'].includes(cat)) {
-        try {
-            const resp = await fetch(getItemOpenUrl(item), { method: 'POST', credentials: 'same-origin' });
-            if (!resp.ok) {
-                const errData = await resp.json().catch(() => ({}));
-                throw new Error(errData.detail || 'HTTP ' + resp.status);
-            }
-        } catch (e) {
-            alert('Не удалось открыть файл: ' + e.message);
-        }
-        return;
+        return openItemInCollabora(item);
     }
 
     const modalEl = document.getElementById('previewModal');
@@ -1137,7 +1133,7 @@ async function openItemPreview(item) {
             break;
         }
         default: {
-            if (item.item_type === 'file' && ['word', 'spreadsheet', 'presentation', 'archive'].includes(cat)) {
+            if (item.item_type === 'file' && cat === 'archive') {
                 const label = getItemLabel(item);
                 content.innerHTML = `
                     <div class="empty-state py-5">
@@ -1153,6 +1149,35 @@ async function openItemPreview(item) {
                 content.innerHTML = `<iframe src="${getItemPreviewUrl(item)}" class="w-100 border-0" style="height:75vh;"></iframe>`;
             }
         }
+    }
+}
+
+async function openItemInCollabora(item) {
+    const modalEl = document.getElementById('previewModal');
+    const content = document.getElementById('preview-content');
+    const title = document.getElementById('preview-title');
+    const downloadBtn = document.getElementById('preview-download');
+
+    title.textContent = item.file_name || item.title || 'Документ';
+    downloadBtn.href = getItemDownloadUrl(item);
+    downloadBtn.style.display = 'inline-block';
+    content.innerHTML = '<div class="text-center p-5"><div class="spinner-border"></div></div>';
+
+    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    modal.show();
+
+    try {
+        const data = await api(`${API_BASE}/projects/${PROJECT_ID}/documents/${item.document_id}/items/${item.id}/collabora`);
+        content.innerHTML = `<iframe src="${escapeHtml(data.url)}" class="w-100 border-0" style="height:75vh;" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>`;
+    } catch (e) {
+        content.innerHTML = `
+            <div class="empty-state py-5">
+                <i class="bi bi-exclamation-triangle"></i>
+                <p>Не удалось открыть в Collabora: ${escapeHtml(e.message)}</p>
+                <a href="${getItemDownloadUrl(item)}" class="btn btn-success">
+                    <i class="bi bi-download me-1"></i> Скачать файл
+                </a>
+            </div>`;
     }
 }
 

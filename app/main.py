@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.database import engine, Base
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora
 from app.config import get_settings
 
 settings = get_settings()
@@ -244,6 +244,8 @@ app.include_router(calendar.router)
 app.include_router(backup.router)
 app.include_router(alexandrite.router)
 app.include_router(glossary.router)
+app.include_router(wopi.router)
+app.include_router(collabora.router)
 
 
 @app.get("/", response_class=HTMLResponse)

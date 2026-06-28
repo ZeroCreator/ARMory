@@ -59,6 +59,29 @@ OAUTH2_PROXY_COOKIE_SECRET=<openssl rand -base64 32>
 
 Callback URL для Stalwart: `https://armory.team-73.ru/oauth2/callback`.
 
+## Collabora Online
+
+Для редактирования офисных документов в Alexandrite добавьте в `.env`:
+
+```env
+COLLABORA_ENABLED=true
+COLLABORA_DOMAIN=armory.team-73.ru
+COLLABORA_INTERNAL_URL=http://collabora:9980
+COLLABORA_PUBLIC_URL=https://armory.team-73.ru/collabora
+COLLABORA_SERVICE_ROOT=/collabora
+COLLABORA_WOPI_SECRET=<openssl rand -hex 32>
+COLLABORA_ADMIN_USER=admin
+COLLABORA_ADMIN_PASSWORD=<сложный пароль>
+```
+
+Запустите стек с Collabora:
+
+```bash
+docker compose -f compose.yml -f compose.gateway.yml up -d --build
+```
+
+ARMory автоматически проксирует `/collabora/*` на внутренний сервис Collabora, поэтому дополнительная настройка шлюза не требуется.
+
 ## HTTPS + домен (Nginx + Certbot)
 
 ```bash

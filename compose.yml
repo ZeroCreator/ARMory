@@ -16,5 +16,22 @@ services:
     networks:
       - armory-net
 
+  collabora:
+    image: collabora/code:latest
+    container_name: armory-collabora
+    restart: unless-stopped
+    expose:
+      - "9980"
+    environment:
+      - domain=${COLLABORA_DOMAIN:-armory\.team-73\.ru}
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=true --o:wopi.host[@allow]=armory --o:net.service_root=/collabora
+      - dictionaries=ru_RU en_US
+      - username=${COLLABORA_ADMIN_USER:-admin}
+      - password=${COLLABORA_ADMIN_PASSWORD:-changeme}
+    cap_add:
+      - MKNOD
+    networks:
+      - armory-net
+
 networks:
   armory-net:
