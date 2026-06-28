@@ -12,6 +12,8 @@
 - Древовидная структура файлов и папок в левом сайдбаре.
 - Hover-просмотр файлов в правой панели.
 - Поддержка текстовых файлов (Markdown, код, plain text) и изображений.
+- **Бинарные файлы** (`.docx`, `.xlsx`, `.pdf` и др.): предпросмотр не отображается, но по клику файл открывается в системном приложении при локальном запуске ARMory. При удалённом доступе файл скачивается.
+- **Светлый режим дня** — переключатель в правом верхнем углу панели предпросмотра перекрашивает сайдбар и область просмотра в светло-песочную тему. Выбор сохраняется в localStorage.
 - Создание файлов `.md` и `.txt`.
 - Создание вложенных папок.
 - Контекстное меню по правому клику:
@@ -48,6 +50,8 @@ ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
 | GET | `/api/alexandrite/roots` | Настроенные корневые папки |
 | GET | `/api/alexandrite/tree?root=<path>` | Дерево файлов и папок |
 | GET | `/api/alexandrite/file?root=<path>&path=<relative>` | Содержимое файла |
+| GET | `/api/alexandrite/file/download?root=<path>&path=<relative>` | Скачать файл |
+| POST | `/api/alexandrite/file/open?root=<path>&path=<relative>` | Открыть файл в системном приложении (только `localhost`) |
 | POST | `/api/alexandrite/file?root=<path>` | Создать файл `.md` или `.txt` |
 | PUT | `/api/alexandrite/file?root=<path>` | Обновить содержимое файла |
 | PATCH | `/api/alexandrite/file?root=<path>` | Переименовать файл |
@@ -62,3 +66,4 @@ ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
 |-------|------|----------|
 | GET | `/api/alexandrite/yandex/tree?path=<path>` | Содержимое папки на Яндекс.Диске |
 | GET | `/api/alexandrite/yandex/file?path=<path>` | Содержимое файла с Яндекс.Диска |
+| GET | `/api/alexandrite/yandex/download?path=<path>` | Скачать файл с Яндекс.Диска |

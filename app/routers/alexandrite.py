@@ -2,12 +2,15 @@ import asyncio
 import os
 import base64
 import mimetypes
+import platform
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 from typing import List, Optional
 
 from app.config import get_settings, Settings
@@ -231,6 +234,65 @@ async def get_file(
         "name": file_path.name,
         "message": "Бинарный файл — предпросмотр не поддерживается",
     }
+
+
+@router.get("/file/download")
+async def download_file(
+    path: str = Query(...),
+    root: Optional[str] = Query(None),
+    settings: Settings = Depends(get_settings),
+):
+    """Скачать файл из локального хранилища."""
+    root_path = _resolve_root(root, settings)
+    file_path = _resolve_file_path(root_path, path)
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    mime, _ = mimetypes.guess_type(str(file_path))
+    return FileResponse(
+        file_path,
+        filename=file_path.name,
+        media_type=mime or "application/octet-stream",
+    )
+
+
+@router.post("/file/open")
+async def open_file(
+    request: Request,
+    path: str = Query(...),
+    root: Optional[str] = Query(None),
+    settings: Settings = Depends(get_settings),
+):
+    """Открыть файл в системном приложении. Работает только при локальном запуске."""
+    client_host = request.client.host if request.client else None
+    if client_host not in ("127.0.0.1", "::1", "localhost"):
+        raise HTTPException(status_code=403, detail="Remote open not allowed")
+
+    root_path = _resolve_root(root, settings)
+    file_path = _resolve_file_path(root_path, path)
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    system = platform.system()
+    try:
+        if system == "Windows":
+            os.startfile(str(file_path))
+        elif system == "Darwin":
+            subprocess.Popen(
+                ["open", str(file_path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            subprocess.Popen(
+                ["xdg-open", str(file_path)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
+
+    return {"status": "opened", "path": str(file_path)}
 
 
 class FileCreate(BaseModel):
@@ -525,3 +587,43 @@ async def yandex_file(
             os.unlink(tmp_path)
         except OSError:
             pass
+
+
+@router.get("/yandex/download")
+async def yandex_download(
+    path: str = Query(...),
+    settings: Settings = Depends(get_settings),
+):
+    """Скачать файл с Яндекс.Диска."""
+    yandex = _get_yandex_storage(settings)
+    remote_path = _resolve_yandex_path(path, settings)
+
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        downloaded = await asyncio.to_thread(yandex.download_file, remote_path, tmp_path)
+        if not downloaded:
+            raise HTTPException(status_code=404, detail="Не удалось скачать файл с Яндекс.Диска")
+
+        local_path = Path(tmp_path)
+        mime, _ = mimetypes.guess_type(remote_path)
+        cleanup = BackgroundTask(os.unlink, tmp_path)
+        return FileResponse(
+            local_path,
+            filename=Path(remote_path).name,
+            media_type=mime or "application/octet-stream",
+            background=cleanup,
+        )
+    except HTTPException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    except Exception as e:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=502, detail=f"Ошибка Яндекс.Диска: {e}")

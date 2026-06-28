@@ -2249,6 +2249,13 @@ footer {
     position: relative;
 }
 
+.alexandrite-preview-topbar {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 10;
+}
+
 .alexandrite-preview-pane .empty-state {
     flex: 1;
     display: flex;
@@ -2314,6 +2321,7 @@ footer {
     justify-content: space-between;
     gap: 1rem;
     padding-bottom: 0.75rem;
+    padding-right: 3.5rem;
     border-bottom: 1px solid rgba(167, 139, 250, 0.18);
     flex-wrap: wrap;
 }
@@ -2495,6 +2503,176 @@ footer {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* ── Alexandrite: светлый режим дня ── */
+.alexandrite-layout.alexandrite-day {
+    border-top-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-sidebar {
+    background: linear-gradient(180deg, var(--sand-light) 0%, var(--sand-base) 100%);
+    border-right-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-sidebar-header {
+    border-bottom-color: var(--sand-darker);
+    color: var(--sand-text);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-current-root {
+    color: var(--sand-muted);
+    border-bottom-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-source-selector {
+    border-bottom-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-source-selector .btn {
+    color: var(--sand-text);
+    border-color: var(--sand-darker);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-source-selector .btn:hover {
+    background: var(--sand-dark);
+    border-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-source-selector .btn.active {
+    background: var(--sand-darker);
+    border-color: var(--sand-muted);
+    color: var(--sand-text);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-tree-row {
+    color: var(--sand-text);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-tree-row:hover {
+    background: rgba(91, 78, 140, 0.08);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-tree-row.active {
+    background: rgba(91, 78, 140, 0.15);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-tree-icon {
+    color: var(--btn-purple);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-preview-pane {
+    background: var(--sand-light);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-preview-header {
+    border-bottom-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-preview-title {
+    color: var(--sand-text);
+}
+
+.alexandrite-preview-meta {
+    color: var(--text-muted);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-preview-meta {
+    color: var(--sand-muted);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-text-preview {
+    background: var(--sand-base);
+    color: var(--sand-text);
+    border-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-editor {
+    background: var(--sand-base) !important;
+    color: var(--sand-text) !important;
+    border-color: var(--sand-darker) !important;
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-editor:focus {
+    box-shadow: 0 0 0 0.25rem rgba(91, 78, 140, 0.2) !important;
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-markdown {
+    color: var(--sand-text);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-markdown h1,
+.alexandrite-layout.alexandrite-day .alexandrite-markdown h2,
+.alexandrite-layout.alexandrite-day .alexandrite-markdown h3,
+.alexandrite-layout.alexandrite-day .alexandrite-markdown h4,
+.alexandrite-layout.alexandrite-day .alexandrite-markdown h5,
+.alexandrite-layout.alexandrite-day .alexandrite-markdown h6 {
+    color: var(--sand-text);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-markdown a {
+    color: var(--btn-purple);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-markdown code {
+    background: var(--sand-dark);
+    color: var(--sand-text);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-markdown pre {
+    background: var(--sand-base);
+    border-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-markdown pre code {
+    color: var(--sand-text);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-markdown blockquote {
+    color: var(--sand-muted);
+    border-left-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-markdown th,
+.alexandrite-layout.alexandrite-day .alexandrite-markdown td {
+    border-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-markdown th {
+    background: var(--sand-dark);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-image-preview {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-preview-pane .empty-state {
+    color: var(--sand-muted);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-preview-pane .empty-state i {
+    color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-browser-path .form-control {
+    background: var(--sand-base);
+    color: var(--sand-text);
+    border-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-browser-list {
+    background: var(--sand-base);
+    border-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-browser-item {
+    color: var(--sand-text);
+    border-color: var(--sand-darker);
+}
+
+.alexandrite-layout.alexandrite-day .alexandrite-browser-item:hover {
+    background: var(--sand-dark);
 }
 
 @media (max-width: 768px) {

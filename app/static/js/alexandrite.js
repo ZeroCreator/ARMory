@@ -15,6 +15,7 @@ let alexandriteCreateFolderParent = ''; // родительская папка �
 let alexandriteContextFolder = null;  // целевая папка контекстного меню
 let alexandriteContextFile = null;    // целевой файл контекстного меню
 let alexandriteOpenOnLoad = null;     // путь файла для автоматического открытия из query string
+let alexandriteDayMode = false;       // светлый режим дня
 
 async function loadAlexandriteRoots() {
     try {
@@ -172,7 +173,13 @@ function renderAlexandriteTree(items, container, level = 0, isYandex = false) {
             row.addEventListener('mouseleave', () => {
                 clearTimeout(alexandriteHoverTimeout);
             });
-            row.addEventListener('click', () => previewAlexandriteFile(item.path));
+            row.addEventListener('click', () => {
+                if (isPreviewableFile(item.name)) {
+                    previewAlexandriteFile(item.path);
+                } else {
+                    openAlexandriteFile(item.path);
+                }
+            });
             if (!isYandex) {
                 row.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
@@ -286,6 +293,35 @@ function getFileIcon(name) {
     return map[ext] || 'bi-file-earmark';
 }
 
+function isPreviewableFile(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    const textExts = new Set([
+        'md', 'txt', 'py', 'js', 'ts', 'html', 'css', 'json', 'yaml', 'yml',
+        'sql', 'java', 'go', 'rs', 'cpp', 'c', 'h', 'ini', 'cfg', 'log',
+        'sh', 'bash', 'zsh', 'ps1', 'xml', 'toml', 'env', 'example',
+    ]);
+    const imageExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico']);
+    return textExts.has(ext) || imageExts.has(ext);
+}
+
+async function openAlexandriteFile(path) {
+    if (alexandriteSource === 'yandex') {
+        const url = `${API_BASE}/alexandrite/yandex/download?path=${encodeURIComponent(path)}`;
+        window.open(url, '_blank');
+        return;
+    }
+    if (!alexandriteRoot) return;
+
+    const openUrl = `${API_BASE}/alexandrite/file/open?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(path)}`;
+    try {
+        await api(openUrl, { method: 'POST' });
+        showToast('Файл открыт');
+    } catch (e) {
+        const downloadUrl = `${API_BASE}/alexandrite/file/download?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(path)}`;
+        window.open(downloadUrl, '_blank');
+    }
+}
+
 async function previewAlexandriteFile(path) {
     if (alexandriteSource === 'local' && !alexandriteRoot) return;
     alexandriteCurrentFile = path;
@@ -324,7 +360,16 @@ async function previewAlexandriteFile(path) {
             hideAlexandriteEditControls();
         } else {
             alexandriteCurrentContent = '';
-            body.innerHTML = `<div class="empty-state py-5"><i class="bi bi-file-earmark-lock"></i><p>${escapeHtml(data.message || 'Невозможно отобразить файл')}</p></div>`;
+            const container = document.createElement('div');
+            container.className = 'empty-state py-5';
+            container.innerHTML = `<i class="bi bi-file-earmark-lock"></i><p>${escapeHtml(data.message || 'Невозможно отобразить файл')}</p>`;
+            const actionBtn = document.createElement('button');
+            actionBtn.type = 'button';
+            actionBtn.className = 'btn btn-primary mt-3';
+            actionBtn.innerHTML = `<i class="bi bi-box-arrow-up-right me-2"></i>${alexandriteSource === 'local' ? 'Открыть в приложении' : 'Скачать'}`;
+            actionBtn.addEventListener('click', () => openAlexandriteFile(path));
+            container.appendChild(actionBtn);
+            body.appendChild(container);
             hideAlexandriteEditControls();
         }
     } catch (e) {
@@ -797,8 +842,34 @@ function showToast(message, type = 'success') {
     toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
 }
 
+function applyAlexandriteTheme() {
+    const layout = document.querySelector('.alexandrite-layout');
+    if (!layout) return;
+    layout.classList.toggle('alexandrite-day', alexandriteDayMode);
+    const icon = document.getElementById('alexandrite-theme-icon');
+    if (icon) {
+        icon.className = alexandriteDayMode ? 'bi bi-moon' : 'bi bi-sun';
+    }
+    const btn = document.getElementById('alexandrite-theme-btn');
+    if (btn) {
+        btn.title = alexandriteDayMode ? 'Тёмная тема' : 'Светлая тема';
+    }
+}
+
+function toggleAlexandriteTheme() {
+    alexandriteDayMode = !alexandriteDayMode;
+    localStorage.setItem('alexandrite_day_mode', alexandriteDayMode ? '1' : '0');
+    applyAlexandriteTheme();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('alexandrite-tree')) {
+        const savedDayMode = localStorage.getItem('alexandrite_day_mode');
+        if (savedDayMode === '1') {
+            alexandriteDayMode = true;
+            applyAlexandriteTheme();
+        }
+
         const savedSource = localStorage.getItem('alexandrite_source');
         if (savedSource === 'yandex') {
             setAlexandriteSource('yandex');
