@@ -23,6 +23,11 @@ function formatSize(bytes) {
     return (bytes/1024/1024).toFixed(1) + ' MB';
 }
 
+function isLocalhost() {
+    const host = window.location.hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0';
+}
+
 
 // ═══════════════════════════════════════════════════
 // Категории
@@ -609,10 +614,6 @@ function renderItem(doc, item, idx) {
     const alexandriteBtn = (isLink || isNote)
         ? ''
         : `<button class="btn btn-sm btn-outline-primary" onclick='event.stopPropagation(); openItemInAlexandrite(${JSON.stringify(item).replace(/'/g, "&#39;")})' title="Открыть в Alexandrite"><i class="bi bi-gem"></i></button>`;
-    const isOffice = !isLink && !isNote && ['word', 'spreadsheet', 'presentation'].includes(cat);
-    const collaboraBtn = isOffice
-        ? `<button class="btn btn-sm btn-outline-info" onclick='event.stopPropagation(); openItemInCollabora(${JSON.stringify({...item, category: cat, document_id: doc.id}).replace(/'/g, "&#39;")})' title="Открыть в Collabora"><i class="bi bi-file-earmark-text"></i></button>`
-        : '';
 
     return `
         <div class="doc-item d-flex align-items-center gap-2 py-2 ${idx > 0 ? 'border-top' : ''}" data-id="${item.id}" data-document-id="${doc.id}">
@@ -626,7 +627,6 @@ function renderItem(doc, item, idx) {
                 <div class="doc-item-meta">${subtitle}</div>
             </div>
             <div class="doc-item-actions d-flex gap-1">
-                ${collaboraBtn}
                 ${alexandriteBtn}
                 <button class="btn btn-sm btn-outline-secondary" onclick='event.stopPropagation(); showEditItemModal(${doc.id}, ${JSON.stringify(item).replace(/'/g, "&#39;")})'><i class="bi bi-pencil"></i></button>
                 ${previewBtn}
@@ -1029,6 +1029,15 @@ function openItemInAlexandrite(item) {
     window.open(`/alexandrite?root=${root}&open=${path}`, '_blank');
 }
 
+async function openItemLocally(item) {
+    try {
+        await api(getItemOpenUrl(item), { method: 'POST' });
+        showToast('Файл открыт в приложении');
+    } catch (e) {
+        showToast(`Не удалось открыть файл: ${e.message}`, 'warning');
+    }
+}
+
 // ═══════════════════════════════════════════════════
 // ПРЕДПРОСМОТР
 // ═══════════════════════════════════════════════════
@@ -1054,8 +1063,12 @@ function getItemOpenUrl(item) {
 
 async function openItemPreview(item) {
     const cat = item.category || detectCategoryFromItem(item);
+    const isOffice = item.item_type === 'file' && ['word', 'spreadsheet', 'presentation'].includes(cat);
 
-    if (item.item_type === 'file' && ['word', 'spreadsheet', 'presentation'].includes(cat)) {
+    if (isOffice) {
+        if (isLocalhost()) {
+            return openItemLocally(item);
+        }
         return openItemInCollabora(item);
     }
 

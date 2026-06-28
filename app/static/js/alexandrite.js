@@ -2,6 +2,11 @@
 // alexandrite — файловое хранилище заметок
 // ═══════════════════════════════════════════════════
 
+function isLocalhost() {
+    const host = window.location.hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0';
+}
+
 let alexandriteRoot = '';
 let alexandriteSource = 'local';      // 'local' или 'yandex'
 let alexandriteYandexPath = '';       // текущий путь на Яндекс.Диске
@@ -174,7 +179,7 @@ function renderAlexandriteTree(items, container, level = 0, isYandex = false) {
                 clearTimeout(alexandriteHoverTimeout);
             });
             row.addEventListener('click', () => {
-                if (alexandriteSource === 'local' && isOfficeFile(item.name)) {
+                if (alexandriteSource === 'local' && isOfficeFile(item.name) && !isLocalhost()) {
                     openAlexandriteCollabora(item.path);
                 } else if (isPreviewableFile(item.name)) {
                     previewAlexandriteFile(item.path);
@@ -412,8 +417,13 @@ async function previewAlexandriteFile(path) {
             actionBtn.type = 'button';
             actionBtn.className = 'btn btn-primary mt-3';
             if (alexandriteSource === 'local' && isOfficeFile(path)) {
-                actionBtn.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i>Открыть в Collabora';
-                actionBtn.addEventListener('click', () => openAlexandriteCollabora(path));
+                if (isLocalhost()) {
+                    actionBtn.innerHTML = '<i class="bi bi-box-arrow-up-right me-2"></i>Открыть в приложении';
+                    actionBtn.addEventListener('click', () => openAlexandriteFile(path));
+                } else {
+                    actionBtn.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i>Открыть в Collabora';
+                    actionBtn.addEventListener('click', () => openAlexandriteCollabora(path));
+                }
             } else {
                 actionBtn.innerHTML = `<i class="bi bi-box-arrow-up-right me-2"></i>${alexandriteSource === 'local' ? 'Открыть в приложении' : 'Скачать'}`;
                 actionBtn.addEventListener('click', () => openAlexandriteFile(path));
