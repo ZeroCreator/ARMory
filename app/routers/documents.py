@@ -762,5 +762,5 @@ async def collabora_item(
     iframe_url = await build_collabora_iframe_url(file_id, ext, settings)
     return {
         "url": iframe_url,
-        "wopi_src": f"{settings.armory_public_url.rstrip('/')}/wopi/files/{file_id}",
+        "wopi_src": f"{settings.collabora_wopi_internal_url.rstrip('/')}/wopi/files/{file_id}",
     }

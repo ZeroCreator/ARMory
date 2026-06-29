@@ -131,7 +131,7 @@ def _file_info(file_path: Path, settings: Settings) -> dict:
         "UserCanWrite": True,
         "UserCanNotWriteRelative": True,
         "ReadOnly": False,
-        "PostMessageOrigin": settings.collabora_public_url,
+        "PostMessageOrigin": settings.armory_public_url,
         "LastModifiedTime": mtime.isoformat(),
         "BreadcrumbDocName": file_path.name,
     }

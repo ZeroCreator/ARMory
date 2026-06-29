@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     collabora_domain: str = "armory.team-73.ru"
     collabora_internal_url: str = "http://collabora:9980"
     collabora_public_url: str = "https://armory.team-73.ru/collabora"
+    # Внутренний URL ARMory, по которому контейнер Collabora обращается к WOPI-эндпоинтам.
+    # Collabora и app — в одной docker-сети; публичный адрес изнутри недоступен (hairpin),
+    # поэтому WOPI-callback идёт напрямую в приложение.
+    collabora_wopi_internal_url: str = "http://app:8088"
     collabora_service_root: str = "/collabora"
     collabora_wopi_secret: str = ""
     collabora_admin_user: str = "admin"

@@ -98,7 +98,7 @@ async def get_collabora_url(
 
     return JSONResponse({
         "url": iframe_url,
-        "wopi_src": f"{settings.armory_public_url.rstrip('/')}/wopi/files/{file_id}",
+        "wopi_src": f"{settings.collabora_wopi_internal_url.rstrip('/')}/wopi/files/{file_id}",
     })
 
 
@@ -117,7 +117,7 @@ async def build_collabora_iframe_url(
         raise HTTPException(status_code=502, detail=f"Collabora does not support {ext}")
 
     token = create_access_token(file_id, settings)
-    wopi_src = f"{settings.armory_public_url.rstrip('/')}/wopi/files/{file_id}"
+    wopi_src = f"{settings.collabora_wopi_internal_url.rstrip('/')}/wopi/files/{file_id}"
 
     urlsrc_public = _make_collabora_public_url(urlsrc, settings)
 
