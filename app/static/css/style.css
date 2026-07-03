@@ -665,6 +665,19 @@ hr { border-color: rgba(139,124,246,0.15); }
 }
 .doc-drag-handle:hover { color: #7a7068; }
 
+.doc-item-highlighted {
+    background: rgba(167, 139, 250, 0.22) !important;
+    box-shadow: 0 0 0 2px var(--purple-accent), 0 0 16px rgba(167, 139, 250, 0.35);
+    border-radius: 10px;
+    animation: highlightPulse 1.2s ease-in-out 2;
+}
+
+@keyframes highlightPulse {
+    0% { box-shadow: 0 0 0 2px var(--purple-accent), 0 0 16px rgba(167, 139, 250, 0.35); }
+    50% { box-shadow: 0 0 0 4px var(--purple-accent), 0 0 28px rgba(167, 139, 250, 0.55); }
+    100% { box-shadow: 0 0 0 2px var(--purple-accent), 0 0 16px rgba(167, 139, 250, 0.35); }
+}
+
 .doc-item-drag-handle {
     color: #b8a9a0;
     cursor: grab;
@@ -1363,6 +1376,30 @@ footer {
     cursor: pointer;
     transition: all 0.12s ease;
     white-space: nowrap;
+    user-select: none;
+}
+.project-item-context-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 1rem;
+    color: var(--text-light);
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+.project-item-context-item:hover {
+    background: rgba(167, 139, 250, 0.18);
+    color: var(--purple-accent2);
+}
+.project-item-context-item.text-danger {
+    color: #e08e8e;
+}
+.project-item-context-item.text-danger:hover {
+    background: rgba(138, 74, 74, 0.25);
+    color: #f5c2c7;
 }
 .sidebar-context-item:hover {
     background: rgba(167, 139, 250, 0.18);

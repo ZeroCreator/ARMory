@@ -132,6 +132,18 @@
         <div class="sidebar-context-item text-danger" data-action="delete"><i class="bi bi-trash"></i> Удалить</div>
     </div>
 
+    <!-- Контекстное меню файлов проекта -->
+    <div id="project-item-context-menu" class="sidebar-context-menu" style="display:none;">
+        <div class="project-item-context-item" data-action="copy-link"><i class="bi bi-link-45deg"></i> Копировать ссылку на файл</div>
+        <div class="sidebar-context-divider"></div>
+        <div class="project-item-context-item" data-action="preview"><i class="bi bi-eye"></i> Открыть предпросмотр</div>
+        <div class="project-item-context-item" data-action="alexandrite"><i class="bi bi-gem"></i> Открыть в Alexandrite</div>
+        <div class="project-item-context-item" data-action="download"><i class="bi bi-download"></i> Скачать файл</div>
+        <div class="sidebar-context-divider"></div>
+        <div class="project-item-context-item" data-action="edit"><i class="bi bi-pencil"></i> Изменить</div>
+        <div class="project-item-context-item text-danger" data-action="delete"><i class="bi bi-trash"></i> Удалить</div>
+    </div>
+
     <!-- Модал редактирования блока боковой панели -->
     <div class="modal fade" id="editSidebarBlockModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-sm">
@@ -215,7 +227,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="/static/js/fullcalendar.min.js"></script>
     <script src="/static/js/fullcalendar-ru.min.js"></script>
-    <script src="/static/js/app.js?v=43"></script>
+    <script src="/static/js/app.js?v=47"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -497,8 +497,94 @@ async function loadSections(projectId) {
         document.querySelectorAll('.doc-group-body').forEach(el => {
             initItemSortable(projectId, el);
         });
+        handleOpenItemFromUrl();
     } catch (e) {
         container.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${e.message}</div>`;
+    }
+}
+
+function toggleItemHighlight(itemEl) {
+    if (!itemEl) return;
+    const isHighlighted = itemEl.classList.contains('doc-item-highlighted');
+    document.querySelectorAll('.doc-item-highlighted').forEach(el => el.classList.remove('doc-item-highlighted'));
+    if (!isHighlighted) {
+        itemEl.classList.add('doc-item-highlighted');
+    }
+}
+
+function handleOpenItemFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const openItemId = params.get('open_item');
+    if (!openItemId) return;
+
+    const itemId = parseInt(openItemId, 10);
+    if (!itemId) return;
+
+    const itemEl = document.querySelector(`.doc-item[data-id="${itemId}"]`);
+    if (!itemEl) return;
+
+    // Развернуть раздел, если элемент внутри раздела
+    const sectionCard = itemEl.closest('.section-card');
+    if (sectionCard) {
+        const sectionId = parseInt(sectionCard.dataset.id, 10);
+        const state = getCollapsedState(PROJECT_ID);
+        if (state[sectionId] !== false) {
+            state[sectionId] = false;
+            localStorage.setItem(`sections_collapsed_${PROJECT_ID}`, JSON.stringify(state));
+            const body = sectionCard.querySelector('.section-body');
+            const icon = sectionCard.querySelector('.section-toggle-icon');
+            if (body) body.classList.remove('d-none');
+            if (icon) {
+                icon.classList.remove('bi-chevron-right');
+                icon.classList.add('bi-chevron-down');
+            }
+        }
+    }
+
+    // Развернуть группу
+    const groupEl = itemEl.closest('.doc-group');
+    if (groupEl) {
+        const groupId = parseInt(groupEl.dataset.id, 10);
+        const state = getGroupCollapsedState(PROJECT_ID);
+        if (state[groupId] !== false) {
+            state[groupId] = false;
+            localStorage.setItem(`groups_collapsed_${PROJECT_ID}`, JSON.stringify(state));
+            const body = groupEl.querySelector('.doc-group-body');
+            const icon = groupEl.querySelector('.group-toggle-icon');
+            if (body) body.classList.remove('d-none');
+            if (icon) {
+                icon.classList.remove('bi-chevron-right');
+                icon.classList.add('bi-chevron-down');
+            }
+        }
+    }
+
+    // Подсветить элемент
+    toggleItemHighlight(itemEl);
+
+    // Прокрутить к элементу
+    setTimeout(() => {
+        itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+
+    // Открыть предпросмотр файла
+    let itemData = null;
+    try {
+        itemData = JSON.parse(itemEl.dataset.item.replace(/&quot;/g, '"').replace(/&#39;/g, "'"));
+    } catch (e) {
+        console.warn('Failed to parse item data for preview', e);
+    }
+    if (itemData && itemData.item_type !== 'link') {
+        setTimeout(() => {
+            openItemPreview(itemData);
+        }, 400);
+    }
+
+    // Очистить параметр URL, чтобы при обновлении страницы не открывалось повторно
+    if (window.history.replaceState) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('open_item');
+        window.history.replaceState({}, '', url.toString());
     }
 }
 
@@ -615,11 +701,12 @@ function renderItem(doc, item, idx) {
         ? ''
         : `<button class="btn btn-sm btn-outline-primary" onclick='event.stopPropagation(); openItemInAlexandrite(${JSON.stringify(item).replace(/'/g, "&#39;")})' title="Открыть в Alexandrite"><i class="bi bi-gem"></i></button>`;
 
+    const itemData = JSON.stringify({...item, category: cat, document_id: doc.id}).replace(/"/g, '&quot;').replace(/'/g, "&#39;");
     return `
-        <div class="doc-item d-flex align-items-center gap-2 py-2 ${idx > 0 ? 'border-top' : ''}" data-id="${item.id}" data-document-id="${doc.id}">
+        <div class="doc-item d-flex align-items-center gap-2 py-2 ${idx > 0 ? 'border-top' : ''}" data-id="${item.id}" data-document-id="${doc.id}" data-item="${itemData}" oncontextmenu="handleProjectItemContextMenu(event, ${doc.id}, ${item.id})">
             <div class="doc-item-drag-handle" onclick="event.stopPropagation()" title="Переместить"><i class="bi bi-grip-vertical"></i></div>
             <div class="doc-item-icon ${cat}"><i class="bi ${iconClass}"></i></div>
-            <div class="doc-item-info flex-fill">
+            <div class="doc-item-info flex-fill" onclick='${isLink ? `event.stopPropagation(); toggleItemHighlight(this.closest(".doc-item"))` : `event.stopPropagation(); toggleItemHighlight(this.closest(".doc-item")); openItemPreview(${JSON.stringify({...item, category: cat, document_id: doc.id}).replace(/'/g, "&#39;")})`}'>
                 <div class="doc-item-title d-flex align-items-center gap-2">
                     ${titleHtml}
                     <span class="doc-category ${cat}">${escapeHtml(label)}</span>
@@ -634,6 +721,80 @@ function renderItem(doc, item, idx) {
                 <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); deleteItem(${doc.id}, ${item.id})"><i class="bi bi-trash"></i></button>
             </div>
         </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+// КОНТЕКСТНОЕ МЕНЮ ФАЙЛОВ ПРОЕКТА
+// ═══════════════════════════════════════════════════
+
+let projectItemContextTarget = null;
+
+function handleProjectItemContextMenu(event, docId, itemId) {
+    event.preventDefault();
+    event.stopPropagation();
+    const itemEl = event.currentTarget;
+    let item = null;
+    try {
+        item = JSON.parse(itemEl.dataset.item.replace(/&quot;/g, '"').replace(/&#39;/g, "'"));
+    } catch (e) {
+        console.warn('Failed to parse item data', e);
+    }
+    projectItemContextTarget = { docId, itemId, item, element: itemEl };
+    const menu = document.getElementById('project-item-context-menu');
+    // Скрыть/показать пункты, недоступные для ссылок или заметок
+    const isFile = item && item.item_type === 'file';
+    menu.querySelectorAll('.project-item-context-item').forEach(el => {
+        const action = el.dataset.action;
+        if (['preview', 'alexandrite', 'download'].includes(action)) {
+            el.style.display = isFile ? 'flex' : 'none';
+        } else {
+            el.style.display = 'flex';
+        }
+    });
+    menu.style.display = 'block';
+    const x = Math.min(event.clientX, window.innerWidth - 220);
+    const y = Math.min(event.clientY, window.innerHeight - 80);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+}
+
+function hideProjectItemContextMenu() {
+    const menu = document.getElementById('project-item-context-menu');
+    if (menu) menu.style.display = 'none';
+    projectItemContextTarget = null;
+}
+
+function copyProjectItemShareLink(docId, itemId) {
+    const url = `${window.location.origin}/projects/${PROJECT_ID}?open_item=${itemId}`;
+    copyTextToClipboard(url);
+}
+
+function copyTextToClipboard(text) {
+    const fallbackCopy = (txt) => {
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.setSelectionRange(0, txt.length);
+        try {
+            document.execCommand('copy');
+        } catch (e) {
+            console.error('Fallback copy error:', e);
+        }
+        document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch((err) => {
+            console.warn('Clipboard API failed, using fallback:', err);
+            fallbackCopy(text);
+        });
+    } else {
+        fallbackCopy(text);
+    }
 }
 
 // ═══════════════════════════════════════════════════
@@ -1482,10 +1643,38 @@ function hideSidebarContextMenu() {
 
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#sidebar-context-menu')) hideSidebarContextMenu();
+    if (!e.target.closest('#project-item-context-menu')) hideProjectItemContextMenu();
 });
-document.addEventListener('scroll', hideSidebarContextMenu, true);
+document.addEventListener('scroll', (e) => {
+    hideSidebarContextMenu();
+    hideProjectItemContextMenu();
+}, true);
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') hideSidebarContextMenu();
+    if (e.key === 'Escape') {
+        hideSidebarContextMenu();
+        hideProjectItemContextMenu();
+    }
+});
+
+document.getElementById('project-item-context-menu').addEventListener('click', (e) => {
+    const item = e.target.closest('.project-item-context-item');
+    if (!item || !projectItemContextTarget) return;
+    const action = item.dataset.action;
+    const { docId, itemId, item: itemData } = projectItemContextTarget;
+    hideProjectItemContextMenu();
+    if (action === 'copy-link') {
+        copyProjectItemShareLink(docId, itemId);
+    } else if (action === 'preview' && itemData) {
+        openItemPreview(itemData);
+    } else if (action === 'alexandrite' && itemData) {
+        openItemInAlexandrite(itemData);
+    } else if (action === 'download' && itemData) {
+        window.location.href = getItemDownloadUrl(itemData);
+    } else if (action === 'edit') {
+        showEditItemModal(docId, itemData);
+    } else if (action === 'delete') {
+        deleteItem(docId, itemId);
+    }
 });
 
 document.getElementById('sidebar-context-menu').addEventListener('click', (e) => {
