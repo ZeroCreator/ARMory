@@ -23,6 +23,31 @@ function formatSize(bytes) {
     return (bytes/1024/1024).toFixed(1) + ' MB';
 }
 
+function showToast(message, type = 'success') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        container.style.zIndex = '9999';
+        document.body.appendChild(container);
+    }
+
+    const toastEl = document.createElement('div');
+    toastEl.className = `toast align-items-center text-bg-${type} border-0`;
+    toastEl.setAttribute('role', 'alert');
+    toastEl.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${escapeHtml(message)}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    container.appendChild(toastEl);
+    const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+    toast.show();
+    toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+}
+
 function isLocalhost() {
     const host = window.location.hostname;
     return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0';
@@ -767,6 +792,7 @@ function hideProjectItemContextMenu() {
 function copyProjectItemShareLink(docId, itemId) {
     const url = `${window.location.origin}/projects/${PROJECT_ID}?open_item=${itemId}`;
     copyTextToClipboard(url);
+    showToast('Ссылка скопирована в буфер обмена');
 }
 
 function copyTextToClipboard(text) {
@@ -848,7 +874,7 @@ async function updateSection() {
 }
 
 async function deleteSection(sectionId) {
-    if (!confirm('Удалить раздел? Группы из этого раздела перейдут в "Без раздела".')) return;
+    if (!confirm('Удалить раздел и всё его содержимое? Это действие нельзя отменить.')) return;
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/sections/${sectionId}`, { method: 'DELETE' });
         loadSections(PROJECT_ID);
@@ -1644,6 +1670,11 @@ function hideSidebarContextMenu() {
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#sidebar-context-menu')) hideSidebarContextMenu();
     if (!e.target.closest('#project-item-context-menu')) hideProjectItemContextMenu();
+
+    // Сбросить подсветку строки файла при клике вне строки
+    if (!e.target.closest('.doc-item')) {
+        document.querySelectorAll('.doc-item-highlighted').forEach(el => el.classList.remove('doc-item-highlighted'));
+    }
 });
 document.addEventListener('scroll', (e) => {
     hideSidebarContextMenu();
@@ -1656,28 +1687,33 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-document.getElementById('project-item-context-menu').addEventListener('click', (e) => {
-    const item = e.target.closest('.project-item-context-item');
-    if (!item || !projectItemContextTarget) return;
-    const action = item.dataset.action;
-    const { docId, itemId, item: itemData } = projectItemContextTarget;
-    hideProjectItemContextMenu();
-    if (action === 'copy-link') {
-        copyProjectItemShareLink(docId, itemId);
-    } else if (action === 'preview' && itemData) {
-        openItemPreview(itemData);
-    } else if (action === 'alexandrite' && itemData) {
-        openItemInAlexandrite(itemData);
-    } else if (action === 'download' && itemData) {
-        window.location.href = getItemDownloadUrl(itemData);
-    } else if (action === 'edit') {
-        showEditItemModal(docId, itemData);
-    } else if (action === 'delete') {
-        deleteItem(docId, itemId);
-    }
-});
+const projectItemContextMenu = document.getElementById('project-item-context-menu');
+if (projectItemContextMenu) {
+    projectItemContextMenu.addEventListener('click', (e) => {
+        const item = e.target.closest('.project-item-context-item');
+        if (!item || !projectItemContextTarget) return;
+        const action = item.dataset.action;
+        const { docId, itemId, item: itemData } = projectItemContextTarget;
+        hideProjectItemContextMenu();
+        if (action === 'copy-link') {
+            copyProjectItemShareLink(docId, itemId);
+        } else if (action === 'preview' && itemData) {
+            openItemPreview(itemData);
+        } else if (action === 'alexandrite' && itemData) {
+            openItemInAlexandrite(itemData);
+        } else if (action === 'download' && itemData) {
+            window.location.href = getItemDownloadUrl(itemData);
+        } else if (action === 'edit') {
+            showEditItemModal(docId, itemData);
+        } else if (action === 'delete') {
+            deleteItem(docId, itemId);
+        }
+    });
+}
 
-document.getElementById('sidebar-context-menu').addEventListener('click', (e) => {
+const sidebarContextMenu = document.getElementById('sidebar-context-menu');
+if (sidebarContextMenu) {
+    sidebarContextMenu.addEventListener('click', (e) => {
     const item = e.target.closest('.sidebar-context-item');
     if (!item || !sidebarContextTarget) return;
     const action = item.dataset.action;
@@ -1729,6 +1765,7 @@ document.getElementById('sidebar-context-menu').addEventListener('click', (e) =>
         else deleteSidebarLink(id);
     }
 });
+}
 
 // ── Редактирование блока ──
 
@@ -2227,20 +2264,114 @@ function setBackupStatus(text, isError) {
     }
 }
 
+function setBackupProgress(visible, percent = 0, text = '') {
+    const container = document.getElementById('backup-progress');
+    const bar = document.getElementById('backup-progress-bar');
+    const label = document.getElementById('backup-progress-text');
+    const percentEl = document.getElementById('backup-progress-percent');
+    if (!container) return;
+    container.style.display = visible ? 'block' : 'none';
+    if (!visible) return;
+    const p = Math.max(0, Math.min(100, Math.round(percent)));
+    bar.style.width = p + '%';
+    bar.setAttribute('aria-valuenow', p);
+    if (label) label.textContent = text;
+    if (percentEl) percentEl.textContent = p + '%';
+}
+
+function setAlexandriteBackupProgress(visible, percent = 0, text = '') {
+    const container = document.getElementById('alexandrite-backup-progress');
+    const bar = document.getElementById('alexandrite-backup-progress-bar');
+    const label = document.getElementById('alexandrite-backup-progress-text');
+    const percentEl = document.getElementById('alexandrite-backup-progress-percent');
+    if (!container) return;
+    container.style.display = visible ? 'block' : 'none';
+    if (!visible) return;
+    const p = Math.max(0, Math.min(100, Math.round(percent)));
+    bar.style.width = p + '%';
+    bar.setAttribute('aria-valuenow', p);
+    if (label) label.textContent = text;
+    if (percentEl) percentEl.textContent = p + '%';
+}
+
+function computeBackupPercent(data) {
+    // Процент по количеству файлов, а не по объёму — визуально понятнее
+    if (data.total && data.total > 0) {
+        return Math.round((data.processed / data.total) * 100);
+    }
+    if (data.total_size && data.total_size > 0) {
+        return Math.round((data.processed_size / data.total_size) * 100);
+    }
+    return 0;
+}
+
+function formatBackupProgressText(data, label) {
+    const parts = [label];
+    if (data.processed !== undefined && data.total) {
+        parts.push(`${data.processed} из ${data.total}`);
+    }
+    if (data.current_file) {
+        parts.push(data.current_file);
+    }
+    return parts.join(' · ');
+}
+
+function pollBackupJobStatus(jobId, kind) {
+    const isArchive = kind === 'archive';
+    const setProgress = isArchive ? setBackupProgress : setBackupProgress;
+    const labelBase = isArchive ? 'Создание архива' : 'Синхронизация';
+    const poll = async () => {
+        try {
+            const data = await api(`${API_BASE}/backup/job/${jobId}`);
+            if (data.status === 'starting' || data.status === 'packing') {
+                setBackupProgress(true, 0, data.status === 'packing' ? 'Упаковка файлов...' : 'Подготовка...');
+                setBackupStatus(`${labelBase}: подготовка...`, false);
+                setTimeout(poll, 1000);
+            } else if (data.status === 'running' || data.status === 'uploading') {
+                const percent = computeBackupPercent(data);
+                const current = formatBackupProgressText(data, labelBase);
+                setBackupProgress(true, percent, current);
+                setBackupStatus(`${labelBase}: ${percent}%`, false);
+                setTimeout(poll, 2000);
+            } else if (data.status === 'completed') {
+                setBackupProgress(false);
+                if (isArchive) {
+                    setBackupStatus(`Архив ${data.archive} создан и загружен на Яндекс.Диск.`, false);
+                    loadBackupArchives();
+                } else {
+                    const s = data.stats || {};
+                    setBackupStatus(
+                        `Сохранено на Яндекс.Диск. БД: ${s.db_uploaded ? 'да' : 'нет'}, файлов загружено: ${s.files_uploaded}, пропущено: ${s.files_skipped}.`,
+                        false
+                    );
+                }
+                document.getElementById('sync-export-btn').disabled = false;
+                document.getElementById('backup-create-btn').disabled = false;
+            } else if (data.status === 'error') {
+                setBackupProgress(false);
+                setBackupStatus(`${labelBase}: ошибка — ${data.error || ''}`, true);
+                document.getElementById('sync-export-btn').disabled = false;
+                document.getElementById('backup-create-btn').disabled = false;
+            }
+        } catch (e) {
+            setBackupProgress(false);
+            setBackupStatus(`Ошибка ${labelBase.toLowerCase()}: ` + e.message, true);
+            document.getElementById('sync-export-btn').disabled = false;
+            document.getElementById('backup-create-btn').disabled = false;
+        }
+    };
+    poll();
+}
+
 async function syncExport() {
     const btn = document.getElementById('sync-export-btn');
     btn.disabled = true;
-    setBackupStatus('Сохранение базы данных и файлов на Яндекс.Диск...', false);
+    setBackupStatus('Запуск сохранения на Яндекс.Диск...', false);
     try {
         const res = await api(`${API_BASE}/backup/sync-export`, { method: 'POST' });
-        const s = res.stats;
-        setBackupStatus(
-            `Сохранено на Яндекс.Диск. БД: ${s.db_uploaded ? 'да' : 'нет'}, файлов загружено: ${s.files_uploaded}, пропущено: ${s.files_skipped}.`,
-            false
-        );
+        pollBackupJobStatus(res.job_id, 'export');
     } catch (e) {
-        setBackupStatus('Ошибка синхронизации: ' + e.message, true);
-    } finally {
+        setBackupStatus('Ошибка запуска синхронизации: ' + e.message, true);
         btn.disabled = false;
     }
 }
@@ -2303,15 +2434,15 @@ async function loadBackupArchives() {
 async function createArchive() {
     const btn = document.getElementById('backup-create-btn');
     btn.disabled = true;
+    document.getElementById('sync-export-btn').disabled = true;
     setBackupStatus('Создание архива и загрузка на Яндекс.Диск...', false);
     try {
         const res = await api(`${API_BASE}/backup/create`, { method: 'POST' });
-        setBackupStatus(`Архив ${res.archive} создан и загружен на Яндекс.Диск.`, false);
-        loadBackupArchives();
+        pollBackupJobStatus(res.job_id, 'archive');
     } catch (e) {
         setBackupStatus('Ошибка создания архива: ' + e.message, true);
-    } finally {
         btn.disabled = false;
+        document.getElementById('sync-export-btn').disabled = false;
     }
 }
 
@@ -2378,23 +2509,28 @@ function pollAlexandriteExportStatus(jobId) {
             const data = await api(`${API_BASE}/backup/alexandrite/export-status/${jobId}`);
             if (data.status === 'starting') {
                 setBackupStatus('Подготовка к загрузке папки Alexandrite...', false);
+                setAlexandriteBackupProgress(true, 0, 'Подготовка...');
                 setTimeout(poll, 1000);
             } else if (data.status === 'running') {
-                const percent = data.total ? Math.round((data.processed / data.total) * 100) : 0;
-                const current = data.current_file ? ` (${data.current_file})` : '';
-                setBackupStatus(`Загрузка Alexandrite: ${data.processed} из ${data.total} (${percent}%)${current}`, false);
+                const percent = computeBackupPercent(data);
+                const current = formatBackupProgressText(data, 'Загрузка Alexandrite');
+                setBackupStatus(`Загрузка Alexandrite: ${percent}%`, false);
+                setAlexandriteBackupProgress(true, percent, current);
                 setTimeout(poll, 2000);
             } else if (data.status === 'completed') {
                 const failedText = data.failed ? `, не удалось: ${data.failed}` : '';
                 setBackupStatus(`Готово. Загружено: ${data.uploaded}${failedText}.`, false);
+                setAlexandriteBackupProgress(false);
                 loadAlexandriteBackupStats();
                 if (btn) btn.disabled = false;
             } else if (data.status === 'error') {
                 setBackupStatus('Ошибка загрузки Alexandrite: ' + (data.error || ''), true);
+                setAlexandriteBackupProgress(false);
                 if (btn) btn.disabled = false;
             }
         } catch (e) {
             setBackupStatus('Ошибка получения статуса загрузки Alexandrite: ' + e.message, true);
+            setAlexandriteBackupProgress(false);
             if (btn) btn.disabled = false;
         }
     };
@@ -2405,11 +2541,13 @@ async function syncAlexandriteExport() {
     const btn = document.getElementById('alexandrite-sync-export-btn');
     btn.disabled = true;
     setBackupStatus('Запуск загрузки папки Alexandrite на Яндекс.Диск...', false);
+    setAlexandriteBackupProgress(true, 0, 'Запуск...');
     try {
         const res = await api(`${API_BASE}/backup/alexandrite/export-async`, { method: 'POST' });
         pollAlexandriteExportStatus(res.job_id);
     } catch (e) {
         setBackupStatus('Ошибка запуска синхронизации Alexandrite: ' + e.message, true);
+        setAlexandriteBackupProgress(false);
         btn.disabled = false;
     }
 }

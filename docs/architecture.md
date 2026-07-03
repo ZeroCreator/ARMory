@@ -26,11 +26,14 @@ ARMory/
 │   ├── static/             # CSS, JS, изображения
 │   └── routers/            # Модули API и страниц
 │       ├── projects.py
-│       ├── items.py
-│       ├── backups.py
+│       ├── documents.py
+│       ├── backup.py
 │       ├── scheduler.py
 │       ├── calendar.py
 │       ├── alexandrite.py
+│       ├── glossary.py
+│       ├── wopi.py
+│       ├── collabora.py
 │       └── ...
 ├── data/                   # Данные приложения
 │   ├── projectdocs.db      # База данных
@@ -57,10 +60,11 @@ ARMory/
 ```
 Project
 ├── Section
-│   ├── Group
-│   │   ├── Item (file, note, link)
-│   │   └── ItemFile
-│   └── Task (scheduler)
+│   └── Document (group)
+│       └── DocumentItem (file, note, link)
+├── Document (group without section)
+│   └── DocumentItem
+├── Task (scheduler)
 └── CalendarEvent
 ```
 
@@ -68,11 +72,12 @@ Project
 
 - **Project** — верхний уровень, соответствует реальному проекту или продукту.
 - **Section** — раздел внутри проекта.
-- **Group** — группа элементов внутри раздела. Поддерживает ручную сортировку перетаскиванием.
-- **Item** — элемент группы: файл, заметка или ссылка. Элементы тоже можно сортировать внутри группы.
-- **ItemFile** — история загруженных файлов для элемента, позволяет заменять файл с сохранением названия.
+- **Document** — группа элементов (ранее называлась «документ»). Может находиться внутри раздела или без раздела. Поддерживает ручную сортировку перетаскиванием.
+- **DocumentItem** — элемент группы: файл, заметка или ссылка. Элементы тоже можно сортировать внутри группы. Файл можно заменять, сохраняя название и историю.
 - **Task** — задача планировщика с датами, повторениями и напоминаниями.
 - **CalendarEvent** — событие календаря.
+- **SidebarBlock / SidebarLink** — боковые панели с пользовательскими ссылками.
+- **GlossaryTopic / GlossarySubtopic / GlossaryTerm** — глоссарий терминов с темами и подтемами.
 
 ## Хранилище файлов
 
@@ -111,7 +116,11 @@ yandex_disk_path: str = "ARMory/data"
 yandex_disk_backups_path: str = "ARMory/backups"
 yandex_disk_alexandrite_path: str = "ARMory/alexandrite"
 scheduler_enabled: bool = True
+armory_public_url: str = "https://armory.team-73.ru"
+collabora_enabled: bool = False
 ```
+
+Полный список переменных окружения см. в `.env.example`.
 
 ## Жизненный цикл запроса
 
@@ -124,7 +133,7 @@ scheduler_enabled: bool = True
 
 - Все операции с БД выполняются через `AsyncSession`.
 - IO-bound операции (S3, Яндекс.Диск) выполняются асинхронно.
-- Долгие операции экспорта Alexandrite запускаются в фоновых `asyncio.create_task`.
+- Долгие операции экспорта/архивирования и синхронизации с Яндекс.Диском запускаются в фоновых `asyncio.create_task` и отслеживаются по `job_id`.
 
 ## Масштабируемость
 

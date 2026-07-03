@@ -85,17 +85,24 @@ class YandexDiskStorage:
                 return False
         return True
 
-    def upload_file(self, local_path: str | Path, remote_path: str, overwrite: bool = True) -> bool:
-        """Загружает локальный файл на Яндекс.Диск."""
+    def upload_file_with_progress(
+        self,
+        local_path: str | Path,
+        remote_path: str,
+        overwrite: bool = True,
+        progress_callback=None,
+    ) -> bool:
+        """Загружает файл с вызовом progress_callback(bytes_uploaded, total_bytes)."""
         local_path = Path(local_path)
         if not local_path.exists():
             self._log(f"❌ Локальный файл не найден: {local_path}")
             return False
 
-        # Создаём все промежуточные папки перед загрузкой файла
         if not self.ensure_folders(remote_path):
             self._log(f"❌ Не удалось создать папки для {remote_path}")
             return False
+
+        total_size = local_path.stat().st_size
 
         try:
             resp = requests.get(
@@ -112,8 +119,23 @@ class YandexDiskStorage:
             if not upload_url:
                 return False
 
+            uploaded = 0
             with open(local_path, "rb") as f:
-                upload_resp = requests.put(upload_url, data=f, timeout=60)
+                if progress_callback:
+
+                    def _generator():
+                        nonlocal uploaded
+                        while True:
+                            chunk = f.read(8192)
+                            if not chunk:
+                                break
+                            uploaded += len(chunk)
+                            progress_callback(uploaded, total_size)
+                            yield chunk
+
+                    upload_resp = requests.put(upload_url, data=_generator(), timeout=120)
+                else:
+                    upload_resp = requests.put(upload_url, data=f, timeout=120)
 
             if upload_resp.status_code in (200, 201, 202):
                 return True
@@ -123,6 +145,10 @@ class YandexDiskStorage:
         except requests.exceptions.RequestException as e:
             self._log(f"❌ Ошибка сети при загрузке: {e}")
             return False
+
+    def upload_file(self, local_path: str | Path, remote_path: str, overwrite: bool = True) -> bool:
+        """Загружает локальный файл на Яндекс.Диск (без колбека прогресса)."""
+        return self.upload_file_with_progress(local_path, remote_path, overwrite, progress_callback=None)
 
     def download_file(self, remote_path: str, local_path: str | Path) -> bool:
         """Скачивает файл с Яндекс.Диска."""

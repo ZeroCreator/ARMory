@@ -2019,6 +2019,29 @@ footer {
     border-radius: 10px;
     min-height: 2.5rem;
 }
+.backup-status:empty {
+    display: none;
+}
+.backup-progress {
+    margin-top: 0.6rem;
+}
+.backup-progress .progress {
+    height: 0.7rem;
+    background: rgba(167, 139, 250, 0.15);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.backup-progress .progress-bar {
+    background: var(--purple-accent);
+    transition: width 0.3s ease;
+}
+.backup-progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--sand-muted);
+    margin-bottom: 0.3rem;
+}
 .backup-status.success {
     background: rgba(25, 135, 84, 0.08);
     color: #146c43;

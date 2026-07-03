@@ -14,16 +14,24 @@ nano .env
 
 В `.env` укажи:
 ```env
-APP_NAME="Your App Name"
 DATABASE_URL="sqlite+aiosqlite:///./data/projectdocs.db"
 LOCAL_STORAGE_PATH=./data/uploads
 STORAGE_TYPE=local
+ARMORY_PUBLIC_URL=https://armory.team-73.ru
 
 # Yandex Disk (опционально)
 YANDEX_DISK_TOKEN=your_oauth_token
 YANDEX_DISK_PATH=ARMory/data
 YANDEX_DISK_BACKUPS_PATH=ARMory/backups
+YANDEX_DISK_ALEXANDRITE_PATH=ARMory/alexandrite
 TIMEZONE=Europe/Moscow
+
+# Alexandrite
+ALEXANDRITE_VAULT_PATH=./data/alexandrite
+ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
+
+# Планировщик
+SCHEDULER_ENABLED=true
 ```
 
 ```bash

@@ -18,7 +18,7 @@
 | POST | `/api/projects/{id}/sections` | Создать раздел |
 | PATCH | `/api/projects/{id}/sections/reorder` | Изменить порядок разделов |
 | PATCH | `/api/projects/{id}/sections/{sec_id}` | Переименовать / обновить раздел |
-| DELETE | `/api/projects/{id}/sections/{sec_id}` | Удалить раздел (группы переходят в "Без раздела") |
+| DELETE | `/api/projects/{id}/sections/{sec_id}` | Удалить раздел вместе со всеми группами, элементами и файлами |
 
 ## Документы и файлы
 
@@ -33,6 +33,7 @@
 | DELETE | `/api/projects/{id}/documents/{doc_id}/items/{item_id}` | Удалить item (+ файл из хранилища) |
 | GET | `/api/projects/{id}/documents/{doc_id}/items/{item_id}/download` | Скачать файл |
 | GET | `/api/projects/{id}/documents/{doc_id}/items/{item_id}/preview` | Предпросмотр файла |
+| GET | `/api/projects/{id}/documents/{doc_id}/items/{item_id}/collabora` | URL iframe для редактирования в Collabora Online |
 | POST | `/api/projects/{id}/documents/{doc_id}/items/{item_id}/open` | Открыть файл в системном приложении (localhost only) |
 
 ## Сайдбар
@@ -106,9 +107,18 @@
 | Метод | Путь | Описание |
 |-------|------|----------|
 | GET | `/api/backup/stats` | Статистика локальных данных и статус Яндекс.Диска |
-| POST | `/api/backup/sync-export` | Синхронизация на Яндекс.Диск (DB + uploads) |
+| POST | `/api/backup/sync-export` | Синхронизация на Яндекс.Диск (DB + uploads); возвращает `job_id` |
 | POST | `/api/backup/sync-import` | Синхронизация с Яндекс.Диска (DB + uploads) |
+| GET | `/api/backup/job/{job_id}` | Статус фоновой задачи синхронизации или архива |
 | GET | `/api/backup/archives` | Список архивных бэкапов на Яндекс.Диске |
-| POST | `/api/backup/create` | Создать архив `.tar.gz` и загрузить на Яндекс.Диск |
+| POST | `/api/backup/create` | Создать архив `.tar.gz` и загрузить на Яндекс.Диск; возвращает `job_id` |
 | POST | `/api/backup/restore` | Восстановить данные из архива на Яндекс.Диске |
 | POST | `/api/backup/delete` | Удалить архив с Яндекс.Диска |
+| GET | `/api/backup/alexandrite/stats` | Статистика локальной папки Alexandrite |
+| POST | `/api/backup/alexandrite/export` | Синхронная загрузка Alexandrite на Яндекс.Диск |
+| POST | `/api/backup/alexandrite/export-async` | Асинхронная загрузка Alexandrite; возвращает `job_id` |
+| GET | `/api/backup/alexandrite/export-status/{job_id}` | Статус фоновой загрузки Alexandrite |
+| POST | `/api/backup/alexandrite/import` | Загрузить Alexandrite с Яндекс.Диска |
+| POST | `/api/backup/alexandrite/archive` | Создать архив Alexandrite на Яндекс.Диске |
+| GET | `/api/backup/alexandrite/archives` | Список архивов Alexandrite |
+| POST | `/api/backup/alexandrite/restore` | Восстановить Alexandrite из архива |

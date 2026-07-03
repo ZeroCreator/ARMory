@@ -36,19 +36,21 @@ REMOTE_BACKUPS = settings.yandex_disk_backups_path.strip("/")
 REMOTE_ALEXANDRITE = settings.yandex_disk_alexandrite_path.strip("/")
 REMOTE_ALEXANDRITE_BACKUPS = f"{REMOTE_BACKUPS}/alexandrite"
 
-# Хранилище фоновых задач экспорта Alexandrite (job_id -> status)
+# Хранилище фоновых задач экспорта/архивирования (job_id -> status)
+_backup_jobs: Dict[str, dict] = {}
 _alexandrite_export_jobs: Dict[str, dict] = {}
 
 
-def _cleanup_old_export_jobs() -> None:
-    """Удаляет задачи экспорта старше 24 часов, чтобы не текла память."""
+def _cleanup_old_backup_jobs() -> None:
+    """Удаляет задачи старше 24 часов, чтобы не текла память."""
     cutoff = datetime.now() - timedelta(hours=24)
-    expired = [
-        job_id for job_id, job in _alexandrite_export_jobs.items()
-        if datetime.fromisoformat(job.get("created_at", "2000-01-01T00:00:00")) < cutoff
-    ]
-    for job_id in expired:
-        del _alexandrite_export_jobs[job_id]
+    for store in (_backup_jobs, _alexandrite_export_jobs):
+        expired = [
+            job_id for job_id, job in store.items()
+            if datetime.fromisoformat(job.get("created_at", "2000-01-01T00:00:00")) < cutoff
+        ]
+        for job_id in expired:
+            del store[job_id]
 
 
 def _get_yandex() -> YandexDiskStorage | None:
@@ -105,7 +107,12 @@ async def _gather_stats(session: AsyncSession) -> dict:
 
 # ── хелперы для загрузки/скачивания с Яндекс.Диска ────────────────────────
 
-def _upload_uploads(yandex: YandexDiskStorage, uploads_src: Path, remote_uploads: str) -> dict:
+def _upload_uploads(
+    yandex: YandexDiskStorage,
+    uploads_src: Path,
+    remote_uploads: str,
+    job_id: str | None = None,
+) -> dict:
     """Синхронная загрузка всех файлов из uploads. Возвращает {uploaded, skipped}."""
     uploaded = 0
     skipped = 0
@@ -115,21 +122,42 @@ def _upload_uploads(yandex: YandexDiskStorage, uploads_src: Path, remote_uploads
 
     files = list(uploads_src.rglob("*"))
     file_list = [f for f in files if f.is_file()]
-    print(f"[BACKUP] Found {len(file_list)} files to upload")
+    total_size = sum(f.stat().st_size for f in file_list)
+    processed_size = 0
 
-    for local_file in file_list:
+    if job_id and job_id in _backup_jobs:
+        _backup_jobs[job_id]["total"] = len(file_list)
+        _backup_jobs[job_id]["total_size"] = total_size
+        _backup_jobs[job_id]["status"] = "running"
+
+    for idx, local_file in enumerate(file_list, start=1):
         rel = local_file.relative_to(uploads_src)
         remote_path = f"{remote_uploads}/{rel.as_posix()}"
-        print(f"[BACKUP] Uploading {rel} ...")
-        ok = yandex.upload_file(str(local_file), remote_path)
+        file_size = local_file.stat().st_size
+
+        if job_id and job_id in _backup_jobs:
+            _backup_jobs[job_id]["current_file"] = rel.as_posix()
+            _backup_jobs[job_id]["processed"] = idx - 1
+            _backup_jobs[job_id]["processed_size"] = processed_size
+
+        def _progress(done, total):
+            if job_id and job_id in _backup_jobs:
+                _backup_jobs[job_id]["processed_size"] = processed_size + done
+                _backup_jobs[job_id]["current_file_size"] = total
+
+        ok = yandex.upload_file_with_progress(str(local_file), remote_path, progress_callback=_progress)
         if ok:
             uploaded += 1
-            print(f"[BACKUP] OK {rel}")
+            processed_size += file_size
         else:
             print(f"[BACKUP] FAILED {rel}")
 
-    print(f"[BACKUP] total uploaded={uploaded}, skipped={skipped}")
-    return {"uploaded": uploaded, "skipped": skipped}
+        if job_id and job_id in _backup_jobs:
+            _backup_jobs[job_id]["uploaded"] = uploaded
+            _backup_jobs[job_id]["processed"] = idx
+            _backup_jobs[job_id]["processed_size"] = processed_size
+
+    return {"uploaded": uploaded, "skipped": skipped, "total_size": total_size}
 
 
 def _download_uploads(yandex: YandexDiskStorage, remote_uploads: str, uploads_dst: Path) -> dict:
@@ -278,15 +306,34 @@ def _local_auto_backup(db_path: Path, uploads_src: Path) -> Path:
     return auto_dir
 
 
-def _create_tarball(db_path: Path, uploads_src: Path, dest_path: Path) -> None:
-    """Создаёт tar.gz с БД и uploads."""
+def _create_tarball(db_path: Path, uploads_src: Path, dest_path: Path, job_id: str | None = None) -> None:
+    """Создаёт tar.gz с БД и uploads, обновляя прогресс в задаче."""
+    files_to_add = [(db_path, "projectdocs.db")]
+    if uploads_src.exists():
+        for fp in uploads_src.rglob("*"):
+            if fp.is_file():
+                arcname = "uploads/" + fp.relative_to(uploads_src).as_posix()
+                files_to_add.append((fp, arcname))
+
+    total_size = sum(fp.stat().st_size for fp, _ in files_to_add)
+    processed_size = 0
+
+    if job_id and job_id in _backup_jobs:
+        _backup_jobs[job_id]["total"] = len(files_to_add)
+        _backup_jobs[job_id]["total_size"] = total_size
+        _backup_jobs[job_id]["status"] = "packing"
+
     with tarfile.open(dest_path, "w:gz") as tar:
-        tar.add(db_path, arcname="projectdocs.db")
-        if uploads_src.exists():
-            for fp in uploads_src.rglob("*"):
-                if fp.is_file():
-                    arcname = "uploads/" + fp.relative_to(uploads_src).as_posix()
-                    tar.add(fp, arcname=arcname)
+        for idx, (fp, arcname) in enumerate(files_to_add, start=1):
+            tar.add(fp, arcname=arcname)
+            processed_size += fp.stat().st_size
+            if job_id and job_id in _backup_jobs:
+                _backup_jobs[job_id]["processed"] = idx
+                _backup_jobs[job_id]["processed_size"] = processed_size
+                _backup_jobs[job_id]["current_file"] = arcname
+
+    if job_id and job_id in _backup_jobs:
+        _backup_jobs[job_id]["status"] = "running"
 
 
 def _extract_tarball(tar_path: Path, db_dest: Path, uploads_dest: Path) -> None:
@@ -369,21 +416,32 @@ def _upload_alexandrite(
         return {"uploaded": 0, "failed": 0}
 
     files = [f for f in local_src.rglob("*") if f.is_file() and not _is_hidden_path(f, local_src)]
+    total_size = sum(f.stat().st_size for f in files)
+    processed_size = 0
 
     if job_id and job_id in _alexandrite_export_jobs:
         _alexandrite_export_jobs[job_id]["total"] = len(files)
+        _alexandrite_export_jobs[job_id]["total_size"] = total_size
         _alexandrite_export_jobs[job_id]["status"] = "running"
 
     for idx, local_file in enumerate(files, start=1):
         rel = local_file.relative_to(local_src)
         remote_path = f"{remote_base}/{rel.as_posix()}"
+        file_size = local_file.stat().st_size
 
         if job_id and job_id in _alexandrite_export_jobs:
             _alexandrite_export_jobs[job_id]["current_file"] = rel.as_posix()
             _alexandrite_export_jobs[job_id]["processed"] = idx - 1
+            _alexandrite_export_jobs[job_id]["processed_size"] = processed_size
 
-        if yandex.upload_file(str(local_file), remote_path):
+        def _progress(done, total):
+            if job_id and job_id in _alexandrite_export_jobs:
+                _alexandrite_export_jobs[job_id]["processed_size"] = processed_size + done
+                _alexandrite_export_jobs[job_id]["current_file_size"] = total
+
+        if yandex.upload_file_with_progress(str(local_file), remote_path, progress_callback=_progress):
             uploaded += 1
+            processed_size += file_size
         else:
             failed += 1
             print(f"[ALEXANDRITE BACKUP] FAILED {rel}")
@@ -392,6 +450,7 @@ def _upload_alexandrite(
             _alexandrite_export_jobs[job_id]["uploaded"] = uploaded
             _alexandrite_export_jobs[job_id]["failed"] = failed
             _alexandrite_export_jobs[job_id]["processed"] = idx
+            _alexandrite_export_jobs[job_id]["processed_size"] = processed_size
 
     return {"uploaded": uploaded, "failed": failed}
 
@@ -500,37 +559,65 @@ async def sync_export():
     if not yandex:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
+    _cleanup_old_backup_jobs()
+
     db_path = Path(settings.database_url.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")).resolve()
     uploads_src = Path(settings.local_storage_path).resolve()
 
-    # Автоматический локальный бэкап перед destructive операцией
-    auto_backup = await asyncio.to_thread(_local_auto_backup, db_path, uploads_src)
-
-    # Создаём папки на Я.Диске
-    await asyncio.to_thread(yandex.create_folder, _YANDEX_BASE)
-    await asyncio.to_thread(yandex.create_folder, REMOTE_UPLOADS)
-
-    # Загружаем БД
-    db_uploaded = await asyncio.to_thread(yandex.upload_file, str(db_path), REMOTE_DB)
-    if not db_uploaded:
-        raise HTTPException(status_code=502, detail="Не удалось загрузить projectdocs.db на Яндекс.Диск")
-
-    # Загружаем uploads
-    upload_stats = await asyncio.to_thread(_upload_uploads, yandex, uploads_src, REMOTE_UPLOADS)
-
-    async with AsyncSessionLocal() as session:
-        stats = await _gather_stats(session)
-
-    return {
-        "success": True,
-        "stats": {
-            **stats,
-            "db_uploaded": db_uploaded,
-            "files_uploaded": upload_stats["uploaded"],
-            "files_skipped": upload_stats["skipped"],
-            "auto_backup": str(auto_backup),
-        },
+    job_id = str(uuid.uuid4())
+    _backup_jobs[job_id] = {
+        "status": "starting",
+        "total": 0,
+        "uploaded": 0,
+        "skipped": 0,
+        "processed": 0,
+        "total_size": 0,
+        "processed_size": 0,
+        "current_file": "",
+        "created_at": datetime.now().isoformat(),
     }
+    asyncio.create_task(_run_sync_export_async(yandex, db_path, uploads_src, job_id))
+    return {"job_id": job_id}
+
+
+async def _run_sync_export_async(
+    yandex: YandexDiskStorage, db_path: Path, uploads_src: Path, job_id: str
+) -> None:
+    """Фоновая задача экспорта основных данных с обновлением прогресса."""
+    try:
+        auto_backup = await asyncio.to_thread(_local_auto_backup, db_path, uploads_src)
+
+        if job_id in _backup_jobs:
+            _backup_jobs[job_id]["status"] = "running"
+            _backup_jobs[job_id]["current_file"] = "projectdocs.db"
+
+        await asyncio.to_thread(yandex.create_folder, _YANDEX_BASE)
+        await asyncio.to_thread(yandex.create_folder, REMOTE_UPLOADS)
+
+        db_uploaded = await asyncio.to_thread(yandex.upload_file, str(db_path), REMOTE_DB)
+        if not db_uploaded:
+            raise RuntimeError("Не удалось загрузить projectdocs.db на Яндекс.Диск")
+
+        upload_stats = await asyncio.to_thread(_upload_uploads, yandex, uploads_src, REMOTE_UPLOADS, job_id)
+
+        async with AsyncSessionLocal() as session:
+            stats = await _gather_stats(session)
+
+        if job_id in _backup_jobs:
+            _backup_jobs[job_id]["status"] = "completed"
+            _backup_jobs[job_id]["stats"] = {
+                **{k: v for k, v in stats.items()},
+                "db_uploaded": db_uploaded,
+                "files_uploaded": upload_stats["uploaded"],
+                "files_skipped": upload_stats["skipped"],
+                "auto_backup": str(auto_backup),
+            }
+            _backup_jobs[job_id]["current_file"] = ""
+    except Exception as e:
+        if job_id in _backup_jobs:
+            _backup_jobs[job_id]["status"] = "error"
+            _backup_jobs[job_id]["error"] = str(e)
+            _backup_jobs[job_id]["current_file"] = ""
 
 
 @router.post("/sync-import")
@@ -597,24 +684,84 @@ async def create_archive():
     if not yandex:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
+    _cleanup_old_backup_jobs()
+
     db_path = Path(settings.database_url.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")).resolve()
     uploads_src = Path(settings.local_storage_path).resolve()
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    archive_name = f"armory_backup_{ts}.tar.gz"
+    job_id = str(uuid.uuid4())
+    archive_name = f"armory_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.tar.gz"
     local_archive = Path(os.environ.get("TMPDIR", "/tmp")) / archive_name
 
+    _backup_jobs[job_id] = {
+        "status": "starting",
+        "archive_name": archive_name,
+        "total": 0,
+        "processed": 0,
+        "total_size": 0,
+        "processed_size": 0,
+        "current_file": "",
+        "created_at": datetime.now().isoformat(),
+    }
+    asyncio.create_task(_run_create_archive_async(yandex, db_path, uploads_src, local_archive, archive_name, job_id))
+    return {"job_id": job_id}
+
+
+async def _run_create_archive_async(
+    yandex: YandexDiskStorage,
+    db_path: Path,
+    uploads_src: Path,
+    local_archive: Path,
+    archive_name: str,
+    job_id: str,
+) -> None:
+    """Фоновая задача создания архива и загрузки на Яндекс.Диск с прогрессом."""
     try:
-        await asyncio.to_thread(_create_tarball, db_path, uploads_src, local_archive)
+        await asyncio.to_thread(_create_tarball, db_path, uploads_src, local_archive, job_id)
+
+        if job_id in _backup_jobs:
+            _backup_jobs[job_id]["current_file"] = archive_name
+            _backup_jobs[job_id]["status"] = "uploading"
+
         remote_path = f"{REMOTE_BACKUPS}/{archive_name}"
         await asyncio.to_thread(yandex.ensure_folders, remote_path)
-        uploaded = await asyncio.to_thread(yandex.upload_file, str(local_archive), remote_path)
+
+        def _upload_progress(done, total):
+            if job_id in _backup_jobs:
+                _backup_jobs[job_id]["processed_size"] = done
+                _backup_jobs[job_id]["total_size"] = total
+                _backup_jobs[job_id]["current_file_size"] = total
+
+        uploaded = await asyncio.to_thread(
+            yandex.upload_file_with_progress,
+            str(local_archive),
+            remote_path,
+            True,
+            _upload_progress,
+        )
         if not uploaded:
-            raise HTTPException(status_code=502, detail="Не удалось загрузить архив на Яндекс.Диск")
-        return {"success": True, "archive": archive_name}
+            raise RuntimeError("Не удалось загрузить архив на Яндекс.Диск")
+
+        if job_id in _backup_jobs:
+            _backup_jobs[job_id]["status"] = "completed"
+            _backup_jobs[job_id]["archive"] = archive_name
+            _backup_jobs[job_id]["current_file"] = ""
+    except Exception as e:
+        if job_id in _backup_jobs:
+            _backup_jobs[job_id]["status"] = "error"
+            _backup_jobs[job_id]["error"] = str(e)
+            _backup_jobs[job_id]["current_file"] = ""
     finally:
         if local_archive.exists():
             local_archive.unlink()
+
+
+@router.get("/job/{job_id}")
+async def backup_job_status(job_id: str):
+    job = _backup_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+    return job
 
 
 @router.post("/restore")
@@ -750,7 +897,7 @@ async def alexandrite_export_async():
     if not yandex:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
-    _cleanup_old_export_jobs()
+    _cleanup_old_backup_jobs()
 
     local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
     job_id = str(uuid.uuid4())

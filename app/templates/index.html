@@ -125,6 +125,16 @@
                                 </button>
                             </div>
 
+                            <div class="backup-progress" id="backup-progress" style="display:none;">
+                                <div class="backup-progress-label">
+                                    <span id="backup-progress-text"></span>
+                                    <span id="backup-progress-percent">0%</span>
+                                </div>
+                                <div class="progress">
+                                    <div id="backup-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+
                             <h6 class="backup-subsection-title"><i class="bi bi-archive me-2"></i>Архивные бэкапы</h6>
                             <div class="backup-actions mb-3">
                                 <button id="backup-create-btn" class="scheduler-btn scheduler-btn-purple" onclick="createArchive()">
@@ -173,6 +183,16 @@
                                 <button id="alexandrite-sync-import-btn" class="scheduler-btn scheduler-btn-brown" onclick="syncAlexandriteImport()">
                                     <i class="bi bi-cloud-download me-1"></i> Загрузить с Яндекс.Диска
                                 </button>
+                            </div>
+
+                            <div class="backup-progress" id="alexandrite-backup-progress" style="display:none;">
+                                <div class="backup-progress-label">
+                                    <span id="alexandrite-backup-progress-text"></span>
+                                    <span id="alexandrite-backup-progress-percent">0%</span>
+                                </div>
+                                <div class="progress">
+                                    <div id="alexandrite-backup-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
                             </div>
 
                             <h6 class="backup-subsection-title"><i class="bi bi-archive me-2"></i>Архивные бэкапы</h6>

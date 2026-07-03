@@ -5,8 +5,9 @@ from urllib.parse import urlparse
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 from typing import Optional
 
 from app.database import get_db
@@ -665,18 +666,26 @@ async def delete_section(
     project_id: int,
     sec_id: int,
     db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
 ):
-    result = await db.execute(select(Section).where(Section.id == sec_id, Section.project_id == project_id))
+    result = await db.execute(
+        select(Section)
+        .where(Section.id == sec_id, Section.project_id == project_id)
+        .options(selectinload(Section.documents).selectinload(Document.items))
+    )
     section = result.scalar_one_or_none()
     if not section:
         raise HTTPException(status_code=404, detail="Section not found")
 
-    # Очистить section_id у документов в этом разделе
+    # Удалить документы раздела вместе с файлами
     for doc in section.documents:
-        doc.section_id = None
-    await db.commit()
+        for item in doc.items:
+            if item.item_type == DocType.file and item.file_path:
+                await storage.delete(item.file_path)
+        await db.execute(delete(DocumentItem).where(DocumentItem.document_id == doc.id))
+        await db.execute(delete(Document).where(Document.id == doc.id))
 
-    await db.delete(section)
+    await db.execute(delete(Section).where(Section.id == sec_id))
     await db.commit()
     return None
 

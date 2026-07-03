@@ -31,18 +31,18 @@ tar -xzvf backup_<timestamp>.tar.gz
 ### Синхронизация с Яндекс.Диском
 
 #### Сохранить на Яндекс.Диск
-Загружает `projectdocs.db` и все файлы из `data/uploads/` на Яндекс.Диск в папку `YANDEX_DISK_PATH` (по умолчанию `ARMory/data/`). Файлы, уже имеющиеся на диске, пропускаются.
+Загружает `projectdocs.db` и все файлы из `data/uploads/` на Яндекс.Диск в папку `YANDEX_DISK_PATH` (по умолчанию `ARMory/data/`). Файлы, уже имеющиеся на диске, пропускаются. Операция выполняется в фоне; интерфейс показывает прогресс по `job_id`.
 
 #### Загрузить с Яндекс.Диска
-Скачивает `projectdocs.db` и папку `uploads/` с Яндекс.Диска и восстанавливает локально. Перед операцией автоматически создаётся локальная резервная копия в `data/backups/auto_<timestamp>/`.
+Скачивает `projectdocs.db` и папку `uploads/` с Яндекс.Диска и восстанавливает локально. Перед операцией автоматически создаётся локальная резервная копия в `data/backups/auto_<timestamp>/`. Выполняется синхронно.
 
 ### Архивные бэкапы ARMory
 
 Отдельный функционал для создания снапшотов в виде `.tar.gz`:
 
-- **Создать архив** — упаковывает `projectdocs.db` + `data/uploads/` в `armory_backup_<timestamp>.tar.gz` и загружает в папку `YANDEX_DISK_BACKUPS_PATH` (по умолчанию `ARMory/backups/`)
-- **Восстановить** — скачивает выбранный архив и распаковывает его
-- **Удалить** — удаляет архив с Яндекс.Диска
+- **Создать архив** — упаковывает `projectdocs.db` + `data/uploads/` в `armory_backup_<timestamp>.tar.gz` и загружает в папку `YANDEX_DISK_BACKUPS_PATH` (по умолчанию `ARMory/backups/`). Выполняется в фоне с отображением прогресса.
+- **Восстановить** — скачивает выбранный архив и распаковывает его.
+- **Удалить** — удаляет архив с Яндекс.Диска.
 
 Архивы хранятся на диске и не зависят от прямой синхронизации.
 
@@ -50,7 +50,7 @@ tar -xzvf backup_<timestamp>.tar.gz
 
 Папка `ALEXANDRITE_VAULT_PATH` (по умолчанию `data/alexandrite`) синхронизируется с Яндекс.Диском отдельно от основных данных ARMory:
 
-- **Сохранить на Яндекс.Диск** — фоновая загрузка папки Alexandrite с отображением прогресса.
+- **Сохранить на Яндекс.Диск** — фоновая загрузка папки Alexandrite с отображением прогресса (`job_id`).
 - **Загрузить с Яндекс.Диска** — замена локальной папки Alexandrite версией с диска. Перед операцией создаётся локальная резервная копия.
 - **Архивные бэкапы** — создание архива `alexandrite_backup_<timestamp>.tar.gz` только с содержимым папки Alexandrite, восстановление и удаление архивов.
 
@@ -63,6 +63,7 @@ YANDEX_DISK_TOKEN=your_oauth_token
 YANDEX_DISK_PATH=ARMory/data
 YANDEX_DISK_BACKUPS_PATH=ARMory/backups
 YANDEX_DISK_ALEXANDRITE_PATH=ARMory/alexandrite
+ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
 TIMEZONE=Europe/Moscow
 ```
 
