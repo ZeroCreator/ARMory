@@ -370,6 +370,7 @@ async def update_item(
     else:
         if file:
             # Заменить файл: удалить старый, сохранить новый
+            old_file_name = item.file_name
             if item.file_path:
                 await storage.delete(item.file_path)
             file_name = file.filename
@@ -390,6 +391,9 @@ async def update_item(
             item.category = detect_category(DocType.file, None, file_name, mime_type)
             if meta.get("url"):
                 item.url = meta["url"]
+            # Обновить заголовок, если он совпадал со старым именем файла или не задан
+            if not item.title or item.title == old_file_name:
+                item.title = file_name
 
     await db.commit()
     await db.refresh(item)

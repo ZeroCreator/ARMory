@@ -1186,6 +1186,7 @@ async function updateItem() {
         });
         bootstrap.Modal.getInstance(document.getElementById('editItemModal')).hide();
         loadSections(PROJECT_ID);
+        showToast('Изменения сохранены');
     } catch (e) {
         alert('Ошибка: ' + e.message);
     }
