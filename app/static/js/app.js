@@ -2076,13 +2076,24 @@ async function loadCalendarEvents() {
 function renderCalendarEventsList() {
     const container = document.getElementById('calendar-events-container');
     if (!container) return;
-    const sorted = [...calendarEventsCache].sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
-    if (!sorted.length) {
-        container.innerHTML = `<div class="text-muted small text-center py-3">Нет событий</div>`;
+    const now = new Date();
+    const upcoming = [...calendarEventsCache]
+        .filter(e => {
+            if (!e.start_date) return false;
+            const start = new Date(e.start_date);
+            if (e.all_day) {
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+                return startDay >= today;
+            }
+            return start >= now;
+        })
+        .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+    if (!upcoming.length) {
+        container.innerHTML = `<div class="text-muted small text-center py-3">Нет предстоящих событий</div>`;
         return;
     }
-    const now = new Date();
-    container.innerHTML = sorted.map(e => {
+    container.innerHTML = upcoming.map(e => {
         const start = new Date(e.start_date);
         const isPast = start < now;
         const dateStr = start.toLocaleDateString('ru-RU');
