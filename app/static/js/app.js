@@ -2062,7 +2062,7 @@ async function loadCalendarEvents() {
                     end: e.end_date,
                     allDay: e.all_day,
                     color: e.color,
-                    extendedProps: { description: e.description, note: e.note }
+                    extendedProps: { description: e.description, note: e.note, reminder_minutes: e.reminder_minutes }
                 });
             });
         }
@@ -2087,12 +2087,13 @@ function renderCalendarEventsList() {
         const isPast = start < now;
         const dateStr = start.toLocaleDateString('ru-RU');
         const timeStr = e.all_day ? 'весь день' : start.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+        const reminderStr = e.reminder_minutes != null ? ` · <i class="bi bi-bell"></i> за ${e.reminder_minutes} мин` : '';
         return `
         <div class="calendar-event-item ${isPast ? 'past' : ''}" onclick="editCalendarEvent(${e.id})">
             <div class="calendar-event-bar" style="background:${escapeHtml(e.color || '#a78bfa')}"></div>
             <div class="calendar-event-info">
                 <div class="calendar-event-title">${escapeHtml(e.title)}</div>
-                <div class="calendar-event-meta">${dateStr} · ${timeStr}</div>
+                <div class="calendar-event-meta">${dateStr} · ${timeStr}${reminderStr}</div>
             </div>
         </div>`;
     }).join('');
@@ -2138,11 +2139,13 @@ function showCalendarEventModal(eventId, dateStr) {
         document.getElementById('calendar-event-end').value = event.end_date ? event.end_date.slice(0, 16) : '';
         document.getElementById('calendar-event-color').value = event.color || '#a78bfa';
         document.getElementById('calendar-event-all-day').checked = event.all_day || false;
+        document.getElementById('calendar-event-reminder').value = event.reminder_minutes != null ? event.reminder_minutes : '';
         deleteBtn.style.display = 'inline-block';
     } else {
         titleEl.textContent = 'Новое событие';
         document.getElementById('calendar-event-id').value = '';
         document.getElementById('calendar-event-color').value = '#a78bfa';
+        document.getElementById('calendar-event-reminder').value = '';
         if (dateStr) {
             document.getElementById('calendar-event-start').value = dateStr + 'T09:00';
         }
@@ -2163,11 +2166,13 @@ async function saveCalendarEvent() {
     const end = document.getElementById('calendar-event-end').value;
     const color = document.getElementById('calendar-event-color').value;
     const allDay = document.getElementById('calendar-event-all-day').checked;
+    const reminderRaw = document.getElementById('calendar-event-reminder').value;
+    const reminderMinutes = reminderRaw === '' ? null : parseInt(reminderRaw, 10);
     if (!title.trim() || !start) {
         alert('Введите название и дату начала');
         return;
     }
-    const payload = { title, description, start_date: start, end_date: end || null, color, all_day: allDay };
+    const payload = { title, description, start_date: start, end_date: end || null, color, all_day: allDay, reminder_minutes: reminderMinutes };
     try {
         if (id) {
             await api(`${API_BASE}/calendar/events/${id}`, {

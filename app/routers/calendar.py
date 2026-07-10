@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import CalendarEvent
+from app.telegram import send_telegram_message
+from app.config import get_settings
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar"])
 
@@ -18,6 +20,7 @@ class EventCreate(BaseModel):
     end_date: str | None = None
     all_day: bool = False
     color: str | None = None
+    reminder_minutes: int | None = None
 
 
 class EventUpdate(BaseModel):
@@ -28,6 +31,7 @@ class EventUpdate(BaseModel):
     end_date: str | None = None
     all_day: bool | None = None
     color: str | None = None
+    reminder_minutes: int | None = None
 
 
 def _parse_iso(dt_str: str | None) -> datetime.datetime | None:
@@ -53,6 +57,8 @@ async def list_events(db: AsyncSession = Depends(get_db)):
             "end_date": e.end_date.isoformat() if e.end_date else None,
             "all_day": e.all_day,
             "color": e.color,
+            "reminder_minutes": e.reminder_minutes,
+            "notified_at": e.notified_at.isoformat() if e.notified_at else None,
         }
         for e in events
     ]
@@ -72,6 +78,8 @@ async def create_event(data: EventCreate, db: AsyncSession = Depends(get_db)):
         end_date=end,
         all_day=data.all_day,
         color=data.color or "#a78bfa",
+        reminder_minutes=data.reminder_minutes,
+        notified_at=None,
     )
     db.add(event)
     await db.commit()
@@ -86,6 +94,7 @@ async def update_event(event_id: int, data: EventUpdate, db: AsyncSession = Depe
     if not event:
         raise HTTPException(status_code=404, detail="Событие не найдено")
 
+    reset_notification = False
     if data.title is not None:
         event.title = data.title
     if data.description is not None:
@@ -94,12 +103,19 @@ async def update_event(event_id: int, data: EventUpdate, db: AsyncSession = Depe
         event.note = data.note
     if data.start_date is not None:
         event.start_date = _parse_iso(data.start_date)
+        reset_notification = True
     if data.end_date is not None:
         event.end_date = _parse_iso(data.end_date)
     if data.all_day is not None:
         event.all_day = data.all_day
     if data.color is not None:
         event.color = data.color
+    if "reminder_minutes" in data.model_fields_set:
+        event.reminder_minutes = data.reminder_minutes
+        reset_notification = True
+
+    if reset_notification:
+        event.notified_at = None
 
     await db.commit()
     await db.refresh(event)
@@ -115,3 +131,30 @@ async def delete_event(event_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(event)
     await db.commit()
     return {"message": "Событие удалено"}
+
+
+@router.get("/telegram-config")
+async def telegram_config():
+    """Проверить, что Telegram-настройки прочитаны приложением."""
+    settings = get_settings()
+    return {
+        "reminder_enabled": settings.telegram_reminder_enabled,
+        "bot_token_configured": bool(settings.telegram_bot_token),
+        "chat_id": settings.telegram_chat_id,
+    }
+
+
+@router.post("/test-telegram-reminder")
+async def test_telegram_reminder():
+    """Отправить тестовое сообщение в Telegram для проверки настроек."""
+    text = "<b>🔔 Тестовое напоминание</b>\n\nЕсли вы видите это сообщение, Telegram-уведомления настроены правильно."
+    success, error = await send_telegram_message(text)
+    if success:
+        return {"message": "Тестовое сообщение отправлено"}
+    raise HTTPException(
+        status_code=500,
+        detail={
+            "error": "Не удалось отправить сообщение в Telegram",
+            "telegram_response": error,
+        },
+    )

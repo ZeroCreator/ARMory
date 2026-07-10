@@ -3,6 +3,8 @@ ProJectDocsHub — веб-приложение для сбора и управл
 
 Author: Shkola Olga
 """
+import asyncio
+import logging
 import os
 from pathlib import Path
 from fastapi import FastAPI, Request
@@ -12,11 +14,23 @@ from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 from sqlalchemy import text
 
-from app.database import engine, Base
+from app.database import engine, Base, AsyncSessionLocal
 from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora
 from app.config import get_settings
+from app.telegram import check_and_send_calendar_reminders
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+
+async def _reminder_loop():
+    while True:
+        try:
+            async with AsyncSessionLocal() as session:
+                await check_and_send_calendar_reminders(session)
+        except Exception:
+            logger.exception("Ошибка в цикле напоминаний календаря")
+        await asyncio.sleep(60)
 
 
 @asynccontextmanager
@@ -195,9 +209,20 @@ async def lifespan(app: FastAPI):
                     end_date TIMESTAMP,
                     all_day BOOLEAN DEFAULT 0,
                     color VARCHAR(7) DEFAULT '#a78bfa',
+                    reminder_minutes INTEGER,
+                    notified_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
+
+        # Миграция: добавить поля напоминаний в существующую таблицу calendar_events
+        if "calendar_events" in table_names:
+            calendar_cols = await conn.execute(text("PRAGMA table_info(calendar_events)"))
+            calendar_col_names = [r[1] for r in calendar_cols.fetchall()]
+            if "reminder_minutes" not in calendar_col_names:
+                await conn.execute(text("ALTER TABLE calendar_events ADD COLUMN reminder_minutes INTEGER"))
+            if "notified_at" not in calendar_col_names:
+                await conn.execute(text("ALTER TABLE calendar_events ADD COLUMN notified_at TIMESTAMP"))
 
         # Миграция: таблица glossary_terms
         if "glossary_terms" not in table_names:
@@ -219,7 +244,19 @@ async def lifespan(app: FastAPI):
         Path(settings.alexandrite_vault_path).expanduser().mkdir(parents=True, exist_ok=True)
         Path("data/backups").mkdir(parents=True, exist_ok=True)
 
+    reminder_task = None
+    if settings.telegram_reminder_enabled:
+        reminder_task = asyncio.create_task(_reminder_loop())
+
     yield
+
+    if reminder_task:
+        reminder_task.cancel()
+        try:
+            await reminder_task
+        except asyncio.CancelledError:
+            pass
+
     await engine.dispose()
 
 

@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # Отключение планировщика (вкладка не отображается на главной странице)
     scheduler_enabled: bool = True
 
+    # Telegram-уведомления о событиях календаря
+    telegram_reminder_enabled: bool = False
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
     # Публичный URL ARMory (используется для WOPI / Collabora)
     armory_public_url: str = "https://armory.team-73.ru"
 
