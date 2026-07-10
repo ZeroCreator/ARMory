@@ -1,4 +1,6 @@
 import datetime
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, desc
@@ -158,3 +160,41 @@ async def test_telegram_reminder():
             "telegram_response": error,
         },
     )
+
+
+@router.get("/active-reminders")
+async def active_reminders(db: AsyncSession = Depends(get_db)):
+    """Вернуть события, время напоминания о которых уже наступило, но событие ещё не началось.
+
+    Независимо от отправки в Telegram — показываем в приложении, как только
+    наступил момент start_date - reminder_minutes.
+    """
+    settings = get_settings()
+    now = datetime.datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
+    result = await db.execute(
+        select(CalendarEvent)
+        .where(
+            CalendarEvent.reminder_minutes.isnot(None),
+            CalendarEvent.start_date > now,
+        )
+        .order_by(CalendarEvent.start_date)
+    )
+    events = result.scalars().all()
+    active = []
+    for event in events:
+        reminder_moment = event.start_date - datetime.timedelta(minutes=event.reminder_minutes)
+        if now >= reminder_moment:
+            active.append(event)
+    return [
+        {
+            "id": e.id,
+            "title": e.title,
+            "description": e.description,
+            "start_date": e.start_date.isoformat() if e.start_date else None,
+            "end_date": e.end_date.isoformat() if e.end_date else None,
+            "all_day": e.all_day,
+            "color": e.color,
+            "reminder_minutes": e.reminder_minutes,
+        }
+        for e in active
+    ]

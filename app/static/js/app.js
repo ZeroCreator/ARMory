@@ -2677,3 +2677,71 @@ function truncate(str, len) {
     if (!str) return '';
     return str.length > len ? str.slice(0, len) + '…' : str;
 }
+
+// ═══════════════════════════════════════════════════
+// АКТИВНЫЕ НАПОМИНАНИЯ КАЛЕНДАРЯ
+// ═══════════════════════════════════════════════════
+
+function formatReminderTime(reminder) {
+    if (!reminder.start_date) return '';
+    const start = new Date(reminder.start_date);
+    const dateStr = start.toLocaleDateString('ru-RU');
+    if (reminder.all_day) return dateStr + ' (весь день)';
+    const timeStr = start.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+    return `${dateStr} ${timeStr}`;
+}
+
+function renderActiveReminders(reminders) {
+    const container = document.getElementById('active-reminders-container');
+    if (!container) return;
+    console.log('[reminders] render count:', (reminders || []).length);
+
+    const existing = new Set((reminders || []).map(r => r.id));
+    container.querySelectorAll('.active-reminder-card').forEach(card => {
+        const id = parseInt(card.dataset.id, 10);
+        if (!existing.has(id)) {
+            card.remove();
+        }
+    });
+
+    (reminders || []).forEach(reminder => {
+        let card = container.querySelector(`.active-reminder-card[data-id="${reminder.id}"]`);
+        if (card) return;
+
+        card = document.createElement('div');
+        card.className = 'active-reminder-card';
+        card.dataset.id = reminder.id;
+        card.innerHTML = `
+            <button class="active-reminder-close" onclick="dismissActiveReminder(${reminder.id})" aria-label="Закрыть">×</button>
+            <div class="active-reminder-title"><i class="bi bi-bell-fill"></i> ${escapeHtml(reminder.title)}</div>
+            <div class="active-reminder-time">🕐 Начало: ${formatReminderTime(reminder)}</div>
+            ${reminder.description ? `<div class="active-reminder-desc">${escapeHtml(reminder.description)}</div>` : ''}
+        `;
+        container.appendChild(card);
+    });
+}
+
+async function loadActiveReminders() {
+    const container = document.getElementById('active-reminders-container');
+    if (!container) {
+        console.log('[reminders] container not found');
+        return;
+    }
+    try {
+        const reminders = await api(`${API_BASE}/calendar/active-reminders`);
+        console.log('[reminders] loaded:', reminders);
+        renderActiveReminders(reminders);
+    } catch (e) {
+        console.error('[reminders] load error:', e);
+    }
+}
+
+function dismissActiveReminder(id) {
+    const card = document.querySelector(`.active-reminder-card[data-id="${id}"]`);
+    if (card) card.remove();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadActiveReminders();
+    setInterval(loadActiveReminders, 60000);
+});
