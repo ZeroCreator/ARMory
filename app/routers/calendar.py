@@ -164,19 +164,18 @@ async def test_telegram_reminder():
 
 @router.get("/active-reminders")
 async def active_reminders(db: AsyncSession = Depends(get_db)):
-    """Вернуть события, время напоминания о которых уже наступило, но событие ещё не началось.
+    """Вернуть события, время напоминания о которых уже наступило.
 
     Независимо от отправки в Telegram — показываем в приложении, как только
-    наступил момент start_date - reminder_minutes.
+    наступил момент start_date - reminder_minutes. Событие продолжает
+    отображаться после начала (в режиме просрочки), пока пользователь
+    не закроет его вручную.
     """
     settings = get_settings()
     now = datetime.datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
     result = await db.execute(
         select(CalendarEvent)
-        .where(
-            CalendarEvent.reminder_minutes.isnot(None),
-            CalendarEvent.start_date > now,
-        )
+        .where(CalendarEvent.reminder_minutes.isnot(None))
         .order_by(CalendarEvent.start_date)
     )
     events = result.scalars().all()

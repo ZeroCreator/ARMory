@@ -1990,6 +1990,7 @@ function initScheduler() {
 
 let calendarInstance = null;
 let calendarEventsCache = [];
+let activeReminderIds = new Set();
 
 function initSchedulerTabs() {
     const tabEl = document.querySelectorAll('#schedulerTab button[data-bs-toggle="tab"]');
@@ -2077,30 +2078,43 @@ function renderCalendarEventsList() {
     const container = document.getElementById('calendar-events-container');
     if (!container) return;
     const now = new Date();
-    const upcoming = [...calendarEventsCache]
+
+    let rangeStart, rangeEnd;
+    if (calendarInstance && calendarInstance.getDate) {
+        const d = calendarInstance.getDate();
+        rangeStart = new Date(d.getFullYear(), d.getMonth(), 1);
+        rangeEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    } else {
+        rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    }
+
+    const inRange = [...calendarEventsCache]
         .filter(e => {
             if (!e.start_date) return false;
             const start = new Date(e.start_date);
             if (e.all_day) {
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-                return startDay >= today;
+                return startDay < rangeEnd && startDay >= rangeStart;
             }
-            return start >= now;
+            return start < rangeEnd && start >= rangeStart;
         })
         .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
-    if (!upcoming.length) {
-        container.innerHTML = `<div class="text-muted small text-center py-3">Нет предстоящих событий</div>`;
+
+    if (!inRange.length) {
+        container.innerHTML = `<div class="text-muted small text-center py-3">Нет событий в этом месяце</div>`;
         return;
     }
-    container.innerHTML = upcoming.map(e => {
+
+    container.innerHTML = inRange.map(e => {
         const start = new Date(e.start_date);
         const isPast = start < now;
+        const isOverdue = isPast && activeReminderIds.has(e.id);
         const dateStr = start.toLocaleDateString('ru-RU');
         const timeStr = e.all_day ? 'весь день' : start.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
         const reminderStr = e.reminder_minutes != null ? ` · <i class="bi bi-bell"></i> за ${e.reminder_minutes} мин` : '';
         return `
-        <div class="calendar-event-item ${isPast ? 'past' : ''}" onclick="editCalendarEvent(${e.id})">
+        <div class="calendar-event-item ${isPast ? 'past' : ''} ${isOverdue ? 'overdue' : ''}" onclick="editCalendarEvent(${e.id})">
             <div class="calendar-event-bar" style="background:${escapeHtml(e.color || '#a78bfa')}"></div>
             <div class="calendar-event-info">
                 <div class="calendar-event-title">${escapeHtml(e.title)}</div>
@@ -2128,6 +2142,9 @@ function initCalendar() {
         },
         dateClick: function(info) {
             showCalendarEventModal(null, info.dateStr);
+        },
+        datesSet: function() {
+            renderCalendarEventsList();
         },
         events: []
     });
@@ -2702,25 +2719,48 @@ function formatReminderTime(reminder) {
     return `${dateStr} ${timeStr}`;
 }
 
+const DISMISSED_REMINDERS_KEY = 'dismissed_reminders';
+
+function getDismissedReminders() {
+    try {
+        return new Set(JSON.parse(localStorage.getItem(DISMISSED_REMINDERS_KEY) || '[]'));
+    } catch (e) {
+        return new Set();
+    }
+}
+
+function saveDismissedReminders(ids) {
+    localStorage.setItem(DISMISSED_REMINDERS_KEY, JSON.stringify(Array.from(ids)));
+}
+
 function renderActiveReminders(reminders) {
     const container = document.getElementById('active-reminders-container');
     if (!container) return;
-    console.log('[reminders] render count:', (reminders || []).length);
 
-    const existing = new Set((reminders || []).map(r => r.id));
+    const now = new Date();
+    const dismissed = getDismissedReminders();
+    const visible = (reminders || []).filter(r => !dismissed.has(r.id));
+    activeReminderIds = new Set(visible.map(r => r.id));
+
     container.querySelectorAll('.active-reminder-card').forEach(card => {
         const id = parseInt(card.dataset.id, 10);
-        if (!existing.has(id)) {
+        if (!activeReminderIds.has(id)) {
             card.remove();
         }
     });
 
-    (reminders || []).forEach(reminder => {
+    visible.forEach(reminder => {
         let card = container.querySelector(`.active-reminder-card[data-id="${reminder.id}"]`);
-        if (card) return;
+        const start = reminder.start_date ? new Date(reminder.start_date) : null;
+        const isOverdue = start && start <= now;
+
+        if (card) {
+            card.classList.toggle('overdue', isOverdue);
+            return;
+        }
 
         card = document.createElement('div');
-        card.className = 'active-reminder-card';
+        card.className = 'active-reminder-card' + (isOverdue ? ' overdue' : '');
         card.dataset.id = reminder.id;
         card.innerHTML = `
             <button class="active-reminder-close" onclick="dismissActiveReminder(${reminder.id})" aria-label="Закрыть">×</button>
@@ -2730,6 +2770,10 @@ function renderActiveReminders(reminders) {
         `;
         container.appendChild(card);
     });
+
+    if (calendarEventsCache.length) {
+        renderCalendarEventsList();
+    }
 }
 
 async function loadActiveReminders() {
@@ -2750,6 +2794,11 @@ async function loadActiveReminders() {
 function dismissActiveReminder(id) {
     const card = document.querySelector(`.active-reminder-card[data-id="${id}"]`);
     if (card) card.remove();
+    const dismissed = getDismissedReminders();
+    dismissed.add(id);
+    saveDismissedReminders(dismissed);
+    activeReminderIds.delete(id);
+    renderCalendarEventsList();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
