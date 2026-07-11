@@ -459,6 +459,597 @@ hr { border-color: rgba(139,124,246,0.15); }
     transform: scale(1.03) rotate(1deg);
 }
 
+/* ── Обсуждение проекта (PocketBase) ── */
+.project-comments-section {
+    background: var(--sand-base);
+    border-radius: 16px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--sand-darker);
+}
+
+.project-comments-section h4 {
+    color: var(--sand-text);
+    font-size: 1.15rem;
+}
+
+.project-comments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 150px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.project-comments-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.project-comments-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.project-comments-list::-webkit-scrollbar-thumb {
+    background: var(--sand-darker);
+    border-radius: 3px;
+}
+
+.project-comment-item {
+    position: relative;
+    background: var(--sand-light);
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    padding-right: 2.5rem;
+}
+
+.project-comment-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.project-comment-author {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--sand-text);
+}
+
+.project-comment-date {
+    font-size: 0.75rem;
+    color: var(--sand-muted);
+}
+
+.project-comment-text {
+    font-size: 0.9rem;
+    color: var(--sand-text);
+    line-height: 1.45;
+    word-break: break-word;
+    background: #f1f3f5;
+    border-radius: 10px;
+    padding: 0.55rem 0.75rem;
+    margin-top: 0.2rem;
+}
+
+.project-comment-actions {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+}
+
+.project-comment-action {
+    background: transparent;
+    border: none;
+    color: var(--sand-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.project-comment-action:hover {
+    color: var(--purple-accent);
+    background: rgba(167, 139, 250, 0.10);
+}
+
+.project-comment-action .bi-trash:hover {
+    color: #dc3545;
+}
+
+.project-comment-edit,
+.project-comment-reply {
+    margin-top: 0.5rem;
+}
+
+.project-comment-edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.project-comment-replies {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.project-comment-reply-item {
+    background: var(--sand-dark);
+}
+
+.project-comments-form textarea,
+.project-comments-form .form-control {
+    background: #fff;
+    color: var(--sand-text);
+    border: 1px solid var(--sand-darker);
+    resize: vertical;
+    min-height: 60px;
+}
+
+.project-comments-form textarea:focus,
+.project-comments-form .form-control:focus {
+    background: #fff;
+    color: var(--sand-text);
+    border-color: var(--purple-accent);
+    box-shadow: 0 0 0 0.25rem rgba(167, 139, 250, 0.20);
+}
+
+.project-comments-form textarea::placeholder {
+    color: var(--sand-muted);
+}
+
+/* ── Заметки проекта (PocketBase) ── */
+.project-notes-section {
+    background: var(--sand-base);
+    border-radius: 16px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--sand-darker);
+}
+
+.project-notes-section h4 {
+    color: var(--sand-text);
+    font-size: 1.15rem;
+}
+
+.project-notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.project-notes-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.project-notes-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.project-notes-list::-webkit-scrollbar-thumb {
+    background: var(--sand-darker);
+    border-radius: 3px;
+}
+
+.project-note-item {
+    background: var(--sand-light);
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    position: relative;
+}
+
+.project-note-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.3rem;
+    flex-wrap: wrap;
+}
+
+.project-note-title {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--sand-text);
+}
+
+.project-note-pin {
+    font-size: 0.7rem;
+    color: var(--purple-accent);
+    font-weight: 600;
+}
+
+.project-note-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    font-size: 0.75rem;
+    color: var(--sand-muted);
+}
+
+.project-note-content {
+    font-size: 0.9rem;
+    color: var(--sand-text);
+    line-height: 1.5;
+    word-break: break-word;
+    background: #f1f3f5;
+    border-radius: 10px;
+    padding: 0.55rem 0.75rem;
+}
+
+.project-note-content h1,
+.project-note-content h2,
+.project-note-content h3,
+.project-note-content h4,
+.project-note-content h5,
+.project-note-content h6 {
+    font-size: 1rem;
+    margin-top: 0.5rem;
+    margin-bottom: 0.3rem;
+    color: var(--sand-text);
+}
+
+.project-note-content p {
+    margin-bottom: 0.4rem;
+}
+
+.project-note-content ul,
+.project-note-content ol {
+    padding-left: 1.2rem;
+    margin-bottom: 0.4rem;
+}
+
+.project-note-content code {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+.project-note-actions {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.5rem;
+}
+
+.project-note-action {
+    background: transparent;
+    border: none;
+    color: var(--sand-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.project-note-action:hover {
+    color: var(--purple-accent);
+    background: rgba(167, 139, 250, 0.10);
+}
+
+.project-note-action .bi-trash:hover {
+    color: #dc3545;
+}
+
+/* ── Задачи проекта (PocketBase) ── */
+.project-tasks-section {
+    background: var(--sand-base);
+    border-radius: 16px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--sand-darker);
+}
+
+.project-tasks-section h4 {
+    color: var(--sand-text);
+    font-size: 1.15rem;
+}
+
+.project-tasks-form input,
+.project-tasks-form .form-control {
+    background: #fff;
+    color: var(--sand-text);
+    border: 1px solid var(--sand-darker);
+}
+
+.project-tasks-form input:focus,
+.project-tasks-form .form-control:focus {
+    background: #fff;
+    color: var(--sand-text);
+    border-color: var(--purple-accent);
+    box-shadow: 0 0 0 0.25rem rgba(167, 139, 250, 0.20);
+}
+
+.project-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.project-task-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--sand-light);
+    border-radius: 10px;
+    padding: 0.6rem 0.85rem;
+    transition: background 0.15s ease;
+}
+
+.project-task-item:hover {
+    background: var(--sand-dark);
+}
+
+.project-task-done .project-task-title {
+    text-decoration: line-through;
+    color: var(--sand-muted);
+}
+
+.project-task-drag-handle {
+    color: var(--sand-muted);
+    cursor: grab;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0.1rem;
+}
+
+.project-task-drag-handle:active {
+    cursor: grabbing;
+}
+
+.project-task-check {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.project-task-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.project-task-title {
+    font-size: 0.9rem;
+    color: var(--sand-text);
+    word-break: break-word;
+}
+
+.project-task-meta {
+    font-size: 0.75rem;
+    color: var(--sand-muted);
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 0.15rem;
+}
+
+.project-task-actions {
+    display: flex;
+    gap: 0.2rem;
+    flex-shrink: 0;
+}
+
+.project-task-action {
+    background: transparent;
+    border: none;
+    color: var(--sand-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.project-task-action:hover {
+    color: var(--purple-accent);
+    background: rgba(167, 139, 250, 0.10);
+}
+
+.project-task-action .bi-trash:hover {
+    color: #dc3545;
+}
+
+/* ── Вкладки проекта: Задачи / Заметки / Обсуждение ── */
+.project-tabs-divider {
+    border-top: 1px solid var(--sand-darker);
+    margin: 2rem 0 1.5rem;
+    opacity: 1;
+}
+
+.project-tabs-section {
+    background: linear-gradient(180deg, #e8d5c4 0%, #fdf8f0 25%, #fdf8f0 75%, #f5e6d3 100%);
+    border-radius: 18px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.15),
+                0 0 0 1px rgba(167,139,250,0.06);
+    border: 1px solid rgba(167,139,250,0.10);
+    padding: 1rem 1.25rem 1.25rem;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.project-tabs-section.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.project-tabs {
+    border-bottom: 1px solid var(--sand-darker);
+    margin-bottom: 1rem;
+    gap: 0.25rem;
+}
+
+.project-tabs .nav-link {
+    color: var(--sand-muted);
+    font-weight: 500;
+    border: none;
+    border-radius: 10px 10px 0 0;
+    padding: 0.55rem 1rem;
+    background: transparent;
+}
+
+.project-tabs .nav-link:hover {
+    color: var(--sand-text);
+    background: rgba(255, 255, 255, 0.35);
+}
+
+.project-tabs .nav-link.active {
+    color: var(--sand-text);
+    background: #fdf8f0;
+    border: 1px solid var(--sand-darker);
+    border-bottom-color: #fdf8f0;
+    margin-bottom: -1px;
+}
+
+.project-tabs-content {
+    padding-top: 0.25rem;
+}
+
+.project-tabs-content .project-notes-section,
+.project-tabs-content .project-tasks-section,
+.project-tabs-content .project-comments-section,
+.project-tabs-content .project-activity-section {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+}
+
+.project-activity-section h4 {
+    color: var(--sand-text);
+    font-size: 1.15rem;
+    margin-bottom: 0;
+}
+
+/* ── Лента активности проекта ── */
+.project-activity-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.project-activity-empty {
+    color: var(--sand-muted);
+    font-size: 0.95rem;
+    font-style: italic;
+    padding: 1rem 0;
+}
+
+.project-activity-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.65rem 0.85rem;
+    background: #fff;
+    border: 1px solid var(--sand-darker);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: background-color 0.2s ease;
+}
+
+.project-activity-item:hover {
+    background: var(--sand-light);
+}
+
+.project-activity-icon {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--sand-base);
+    font-size: 0.9rem;
+    color: var(--sand-text);
+    margin-top: 0.1rem;
+}
+
+.project-activity-icon.activity-comment {
+    background: #e9f3ff;
+    color: #2563eb;
+}
+
+.project-activity-icon.activity-note {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.project-activity-icon.activity-task {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.project-activity-icon.activity-task-done {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.project-activity-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.project-activity-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem;
+    font-size: 0.88rem;
+    color: #4a4a4a;
+    margin-bottom: 0.25rem;
+}
+
+.project-activity-user {
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.project-activity-action {
+    color: #4a4a4a;
+}
+
+.project-activity-target {
+    font-weight: 500;
+    color: #1a1a1a;
+}
+
+.project-activity-time {
+    font-size: 0.8rem;
+    color: #4a4a4a;
+    white-space: nowrap;
+}
+
+.project-activity-text {
+    font-size: 0.92rem;
+    color: #1a1a1a;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.project-activity-title {
+    font-size: 0.92rem;
+    color: #1a1a1a;
+    font-weight: 500;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
 /* ── Пагинация проектов ── */
 .projects-pagination {
     display: flex;

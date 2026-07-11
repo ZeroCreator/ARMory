@@ -1,0 +1,13 @@
+[Unit]
+Description=ARMory PocketBase
+After=network.target
+
+[Service]
+User=zerocreator
+Group=zerocreator
+WorkingDirectory=/home/zerocreator/ARMory/
+ExecStart=/home/zerocreator/ARMory/scripts/run_pocketbase.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

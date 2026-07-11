@@ -62,6 +62,18 @@ class Settings(BaseSettings):
     collabora_admin_user: str = "admin"
     collabora_admin_password: str = "changeme"
 
+    # PocketBase — расширение для коллективной работы
+    pocketbase_enabled: bool = False
+    pocketbase_url: str = "http://pocketbase:8090"
+    pocketbase_public_url: str = "http://127.0.0.1:8090"
+    pocketbase_admin_email: str = "admin@example.com"
+    pocketbase_admin_password: str = "changeme"
+    pocketbase_admin_token: str | None = None
+
+    # Локальная разработка без oauth2-proxy: fallback-пользователь для комментариев
+    dev_user_email: str | None = None
+    dev_user_name: str | None = None
+
     class Config:
         env_file = ".env"
         extra = "ignore"

@@ -33,5 +33,24 @@ services:
     networks:
       - armory-net
 
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:0.39.6
+    container_name: armory-pocketbase
+    restart: unless-stopped
+    expose:
+      - "8090"
+    volumes:
+      - ./data/pb_data:/pb/pb_data
+      - ./data/pb_migrations:/pb/pb_migrations
+    # Автоматически создаём/обновляем администратора при старте и явно указываем папку данных.
+    entrypoint: ["/bin/sh"]
+    command:
+      - "-c"
+      - 'pocketbase superuser upsert "$$POCKETBASE_ADMIN_EMAIL" "$$POCKETBASE_ADMIN_PASSWORD" --dir=/pb/pb_data --migrationsDir=/pb/pb_migrations && exec pocketbase serve --http=0.0.0.0:8090 --dir=/pb/pb_data --migrationsDir=/pb/pb_migrations'
+    env_file:
+      - .env
+    networks:
+      - armory-net
+
 networks:
   armory-net:

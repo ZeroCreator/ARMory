@@ -45,6 +45,11 @@ projectdocs.db
 data/uploads/*
 !data/uploads/.gitkeep
 data/alexandrite/
+data/pb_data/
+data/pb_migrations/
+
+# Local PocketBase binary (downloaded, not committed)
+pocketbase/
 
 # Backups
 backups/

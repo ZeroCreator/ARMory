@@ -25,6 +25,7 @@ ___
 - **Планировщик задач** — задачи с датами, повторениями, приоритетами и напоминаниями.
 - **Календарь** — визуальное представление задач и событий по месяцам.
 - **Глоссарий** — база терминов с темами, подтемами, импортом и экспортом в `.xlsx`.
+- **PocketBase** — расширение для коллективной работы: комментарии, задачи и заметки по проектам.
 - **Адаптивный UI** — Bootstrap 5, сворачиваемые сайдбары, сохранение состояния интерфейса.
 
 ___
@@ -33,11 +34,14 @@ ___
 ### Docker (рекомендуется)
 
 ```bash
-# Production
-docker compose up -d
+# Production (ARMory + PocketBase внутри сети)
+docker compose up -d --build
 
 # Production with auth gateway
 docker compose -f compose.yml -f compose.gateway.yml up -d --build
+
+# Production with public PocketBase subdomain (requires DNS and OIDC setup)
+docker compose -f compose.yml -f compose.pocketbase-gateway.yml up -d --build
 
 # Development (с hot-reload)
 docker compose -f compose.yml -f compose.dev.yml up -d
@@ -52,7 +56,12 @@ When the auth gateway (oauth2-proxy) is enabled, the public port is configured b
 Требуется [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
+# 1. Запустить ARMory
 uv run uvicorn app.main:app --host 0.0.0.0 --port <PORT> --reload
+
+# 2. В другом терминале запустить PocketBase (если POCKETBASE_ENABLED=true)
+unzip ~/downloads/pocketbase_*.zip -d ./pocketbase
+./scripts/run_pocketbase.sh
 ```
 
 ### Запуск через systemd
@@ -60,6 +69,17 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port <PORT> --reload
 ```bash
 sudo systemctl enable --now <your-service>.service
 ```
+
+___
+## Документация
+
+Подробнее о настройке PocketBase, автозапуске и продакшен-развёртывании:
+
+- [docs/pocketbase.md](docs/pocketbase.md)
+
+Полная документация проекта доступна на GitHub Pages:
+
+https://zerocreator.github.io/ARMory/
 
 ___
 ## Разработка документации

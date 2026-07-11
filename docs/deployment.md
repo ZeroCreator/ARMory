@@ -67,6 +67,54 @@ OAUTH2_PROXY_COOKIE_SECRET=<openssl rand -base64 32>
 
 Callback URL для Stalwart: `https://armory.team-73.ru/oauth2/callback`.
 
+## PocketBase
+
+Для включения расширения PocketBase (комментарии, задачи, заметки по проектам) добавь в `.env`:
+
+```env
+POCKETBASE_ENABLED=true
+POCKETBASE_URL=http://pocketbase:8090
+POCKETBASE_PUBLIC_URL=http://pocketbase:8090
+POCKETBASE_ADMIN_EMAIL=admin@example.com
+POCKETBASE_ADMIN_PASSWORD=<сложный пароль>
+```
+
+Запусти стек:
+
+```bash
+docker compose up -d --build
+```
+
+PocketBase будет доступен только внутри Docker-сети. ARMory обращается к нему по `http://pocketbase:8090`, пользователи работают через интерфейс ARMory.
+
+### Доступ к админке PocketBase
+
+Админка не открыта из интернета. Для доступа используй SSH-туннель:
+
+```bash
+ssh -L 8090:localhost:8090 user@твой-сервер
+```
+
+Затем открой в браузере:
+
+```text
+http://localhost:8090/_/
+```
+
+### Бэкап PocketBase
+
+Данные PocketBase хранятся в `data/pb_data`, миграции — в `data/pb_migrations`. Добавь их в бэкап:
+
+```bash
+./scripts/backup_pocketbase.sh
+```
+
+Или вручную:
+
+```bash
+tar czf ./data/backups/pocketbase_$(date +%Y%m%d_%H%M%S).tar.gz -C ./data pb_data pb_migrations
+```
+
 ## Collabora Online
 
 Для редактирования офисных документов в Alexandrite добавьте в `.env`:

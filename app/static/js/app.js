@@ -427,6 +427,646 @@ async function deleteProject() {
 }
 
 // ═══════════════════════════════════════════════════
+// ОБСУЖДЕНИЕ ПРОЕКТА (PocketBase)
+// ═══════════════════════════════════════════════════
+
+let projectCommentsCache = [];
+let projectCommentEditingId = null;
+let projectCommentReplyingId = null;
+
+function formatCommentDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+}
+
+function _commentActionsHtml(c) {
+    const isAuthor = CURRENT_USER_EMAIL && c.user_email === CURRENT_USER_EMAIL;
+    const replyBtn = `<button class="project-comment-action" onclick="startReplyProjectComment('${escapeHtml(c.id)}')" title="Ответить"><i class="bi bi-reply"></i></button>`;
+    const editBtn = isAuthor
+        ? `<button class="project-comment-action" onclick="startEditProjectComment('${escapeHtml(c.id)}')" title="Изменить"><i class="bi bi-pencil"></i></button>`
+        : '';
+    const deleteBtn = isAuthor
+        ? `<button class="project-comment-action" onclick="deleteProjectComment('${escapeHtml(c.id)}')" title="Удалить"><i class="bi bi-trash"></i></button>`
+        : '';
+    return `<div class="project-comment-actions">${replyBtn}${editBtn}${deleteBtn}</div>`;
+}
+
+function _commentEditFormHtml(c) {
+    return `
+    <div class="project-comment-edit">
+        <textarea class="form-control" id="comment-edit-text-${escapeHtml(c.id)}" rows="2">${escapeHtml(c.text)}</textarea>
+        <div class="project-comment-edit-actions">
+            <button class="btn btn-primary btn-sm" onclick="saveProjectCommentEdit('${escapeHtml(c.id)}')">Сохранить</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelProjectCommentEdit()">Отмена</button>
+        </div>
+    </div>`;
+}
+
+function _commentReplyFormHtml(c) {
+    return `
+    <div class="project-comment-reply">
+        <textarea class="form-control" id="comment-reply-text-${escapeHtml(c.id)}" rows="2" placeholder="Написать ответ..."></textarea>
+        <div class="project-comment-edit-actions">
+            <button class="btn btn-primary btn-sm" onclick="submitProjectCommentReply('${escapeHtml(c.id)}')">Отправить</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelReplyProjectComment()">Отмена</button>
+        </div>
+    </div>`;
+}
+
+function _renderCommentItem(c, byParent, depth) {
+    const replies = byParent[c.id] || [];
+    const isEditing = projectCommentEditingId === c.id;
+    const isReplying = projectCommentReplyingId === c.id;
+    const body = isEditing ? _commentEditFormHtml(c) : `<div class="project-comment-text">${c.text_html || escapeHtml(c.text).replace(/\n/g, '<br>')}</div>`;
+    const replyForm = isReplying ? _commentReplyFormHtml(c) : '';
+    const nested = replies.map(r => _renderCommentItem(r, byParent, depth + 1)).join('');
+    const indentStyle = depth > 0 ? `style="margin-left:${depth * 1.2}rem;"` : '';
+
+    return `
+    <div class="project-comment-item ${depth > 0 ? 'project-comment-reply-item' : ''}" data-id="${escapeHtml(c.id)}" ${indentStyle}>
+        <div class="project-comment-header">
+            <span class="project-comment-author">${escapeHtml(c.user_name || c.user_email)}</span>
+            <span class="project-comment-date" title="${escapeHtml(c.created || '')}">${formatCommentDate(c.created)}</span>
+        </div>
+        ${body}
+        ${_commentActionsHtml(c)}
+        ${replyForm}
+        ${nested ? `<div class="project-comment-replies">${nested}</div>` : ''}
+    </div>`;
+}
+
+function renderProjectComments(comments) {
+    const section = document.getElementById('project-comments-section');
+    const container = document.getElementById('project-comments-list');
+    const countEl = document.getElementById('project-comments-count');
+    if (!section || !container) return;
+
+    projectCommentsCache = comments || [];
+
+    if (!projectCommentsCache.length) {
+        container.innerHTML = `<div class="text-muted small py-2">Комментариев пока нет. Будьте первым!</div>`;
+    } else {
+        const byParent = {};
+        projectCommentsCache.forEach(c => {
+            const pid = c.parent_id || '';
+            if (!byParent[pid]) byParent[pid] = [];
+            byParent[pid].push(c);
+        });
+        const topLevel = byParent[''] || [];
+        container.innerHTML = topLevel.map(c => _renderCommentItem(c, byParent, 0)).join('');
+    }
+
+    countEl.textContent = `${projectCommentsCache.length} ${declineComments(projectCommentsCache.length)}`;
+    section.style.display = 'block';
+}
+
+function declineComments(n) {
+    const last = n % 10;
+    const last100 = n % 100;
+    if (last100 >= 11 && last100 <= 19) return 'комментариев';
+    if (last === 1) return 'комментарий';
+    if (last >= 2 && last <= 4) return 'комментария';
+    return 'комментариев';
+}
+
+async function loadProjectComments(projectId) {
+    const section = document.getElementById('project-comments-section');
+    if (!section) return;
+    try {
+        projectCommentEditingId = null;
+        projectCommentReplyingId = null;
+        const comments = await api(`${API_BASE}/pocketbase/projects/${projectId}/comments`);
+        renderProjectComments(comments);
+        updateProjectLastUpdated('comments', comments);
+    } catch (e) {
+        console.error('Project comments load error:', e);
+        section.style.display = 'none';
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// ЛЕНТА АКТИВНОСТИ ПРОЕКТА
+// ═══════════════════════════════════════════════════
+
+let projectActivityCache = [];
+let projectPollingInterval = null;
+let projectLastUpdated = { comments: null, notes: null, tasks: null };
+
+function updateProjectLastUpdated(type, items) {
+    if (!items || !items.length) return;
+    let max = projectLastUpdated[type];
+    for (const item of items) {
+        if (item.updated && (!max || item.updated > max)) {
+            max = item.updated;
+        }
+    }
+    projectLastUpdated[type] = max;
+}
+
+function formatActivityDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+}
+
+function renderProjectActivity(items) {
+    const section = document.getElementById('project-activity-section');
+    const container = document.getElementById('project-activity-list');
+    if (!section || !container) return;
+
+    projectActivityCache = items || [];
+
+    if (!projectActivityCache.length) {
+        container.innerHTML = `<div class="text-muted small py-2">История пуста.</div>`;
+    } else {
+        container.innerHTML = projectActivityCache.map(item => {
+            const iconClass = {
+                comment: 'bi-chat-left-text',
+                note: 'bi-journal-text',
+                task: 'bi-check2-square'
+            }[item.entity_type] || 'bi-circle';
+            const actionText = item.description || item.action;
+            return `
+            <div class="project-activity-item">
+                <div class="project-activity-icon"><i class="bi ${iconClass}"></i></div>
+                <div class="project-activity-body">
+                    <div class="project-activity-title">${escapeHtml(item.user_name || item.user_email)} ${escapeHtml(actionText)}</div>
+                    <div class="project-activity-meta">${formatActivityDate(item.created)}</div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    section.style.display = 'block';
+}
+
+async function loadProjectActivity(projectId) {
+    const section = document.getElementById('project-activity-section');
+    if (!section) return;
+    try {
+        const items = await api(`${API_BASE}/pocketbase/projects/${projectId}/activity`);
+        renderProjectActivity(items);
+    } catch (e) {
+        console.error('Project activity load error:', e);
+        section.style.display = 'none';
+    }
+}
+
+async function pollProjectUpdates(projectId) {
+    for (const type of ['comments', 'notes', 'tasks']) {
+        const since = projectLastUpdated[type];
+        if (!since) continue;
+        try {
+            const items = await api(`${API_BASE}/pocketbase/projects/${projectId}/${type}?since=${encodeURIComponent(since)}`);
+            if (items && items.length > 0) {
+                if (type === 'comments') await loadProjectComments(projectId);
+                if (type === 'notes') await loadProjectNotes(projectId);
+                if (type === 'tasks') await loadProjectTasks(projectId);
+                await loadProjectActivity(projectId);
+            }
+        } catch (e) {
+            console.error(`Polling ${type} error:`, e);
+        }
+    }
+}
+
+function startProjectPolling(projectId) {
+    stopProjectPolling();
+    projectPollingInterval = setInterval(() => pollProjectUpdates(projectId), 5000);
+}
+
+function stopProjectPolling() {
+    if (projectPollingInterval) {
+        clearInterval(projectPollingInterval);
+        projectPollingInterval = null;
+    }
+}
+
+window.addEventListener('beforeunload', stopProjectPolling);
+
+async function addProjectComment() {
+    const textarea = document.getElementById('project-comment-text');
+    const text = textarea.value.trim();
+    if (!text) return;
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/comments`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text})
+        });
+        textarea.value = '';
+        loadProjectComments(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function deleteProjectComment(commentId) {
+    if (!confirm('Удалить комментарий?')) return;
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/comments/${commentId}`, { method: 'DELETE' });
+        loadProjectComments(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+function startEditProjectComment(commentId) {
+    projectCommentEditingId = commentId;
+    projectCommentReplyingId = null;
+    renderProjectComments(projectCommentsCache);
+}
+
+function cancelProjectCommentEdit() {
+    projectCommentEditingId = null;
+    renderProjectComments(projectCommentsCache);
+}
+
+async function saveProjectCommentEdit(commentId) {
+    const textarea = document.getElementById(`comment-edit-text-${commentId}`);
+    if (!textarea) return;
+    const text = textarea.value.trim();
+    if (!text) return;
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/comments/${commentId}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text})
+        });
+        projectCommentEditingId = null;
+        loadProjectComments(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+function startReplyProjectComment(commentId) {
+    projectCommentReplyingId = commentId;
+    projectCommentEditingId = null;
+    renderProjectComments(projectCommentsCache);
+}
+
+function cancelReplyProjectComment() {
+    projectCommentReplyingId = null;
+    renderProjectComments(projectCommentsCache);
+}
+
+async function submitProjectCommentReply(parentId) {
+    const textarea = document.getElementById(`comment-reply-text-${parentId}`);
+    if (!textarea) return;
+    const text = textarea.value.trim();
+    if (!text) return;
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/comments`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text, parent_id: parentId})
+        });
+        projectCommentReplyingId = null;
+        loadProjectComments(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// ЗАМЕТКИ ПРОЕКТА (PocketBase)
+// ═══════════════════════════════════════════════════
+
+let projectNotesCache = [];
+let projectNoteModal = null;
+
+function formatNoteDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+}
+
+function renderProjectNotes(notes) {
+    const section = document.getElementById('project-notes-section');
+    const container = document.getElementById('project-notes-list');
+    const countEl = document.getElementById('project-notes-count');
+    if (!section || !container) return;
+
+    projectNotesCache = notes || [];
+
+    if (!projectNotesCache.length) {
+        container.innerHTML = `<div class="text-muted small py-2">Заметок пока нет.</div>`;
+    } else {
+        container.innerHTML = projectNotesCache.map(n => {
+            const isAuthor = CURRENT_USER_EMAIL && n.user_email === CURRENT_USER_EMAIL;
+            const pinIcon = n.pinned ? 'bi-pin-fill' : 'bi-pin';
+            const pinTitle = n.pinned ? 'Открепить' : 'Закрепить';
+            const actions = isAuthor
+                ? `<div class="project-note-actions">
+                    <button class="project-note-action" onclick="toggleProjectNotePin('${escapeHtml(n.id)}', ${!n.pinned})" title="${pinTitle}"><i class="bi ${pinIcon}"></i></button>
+                    <button class="project-note-action" onclick="editProjectNote('${escapeHtml(n.id)}')" title="Изменить"><i class="bi bi-pencil"></i></button>
+                    <button class="project-note-action" onclick="deleteProjectNote('${escapeHtml(n.id)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+                   </div>`
+                : '';
+            const pinnedBadge = n.pinned ? '<span class="project-note-pin"><i class="bi bi-pin-fill me-1"></i>Закреплено</span>' : '';
+            return `
+            <div class="project-note-item" data-id="${escapeHtml(n.id)}">
+                <div class="project-note-header">
+                    <h5 class="project-note-title">${escapeHtml(n.title)}</h5>
+                    ${pinnedBadge}
+                </div>
+                <div class="project-note-meta">
+                    <span class="project-note-author">${escapeHtml(n.user_name || n.user_email)}</span>
+                    <span class="project-note-date" title="${escapeHtml(n.updated || '')}">${formatNoteDate(n.updated)}</span>
+                </div>
+                <div class="project-note-content">${n.content_html}</div>
+                ${actions}
+            </div>`;
+        }).join('');
+    }
+
+    countEl.textContent = `${projectNotesCache.length} ${declineNotes(projectNotesCache.length)}`;
+    section.style.display = 'block';
+}
+
+function declineNotes(n) {
+    if (n % 100 >= 11 && n % 100 <= 19) return 'заметок';
+    const last = n % 10;
+    if (last === 1) return 'заметка';
+    if (last >= 2 && last <= 4) return 'заметки';
+    return 'заметок';
+}
+
+async function loadProjectNotes(projectId) {
+    const section = document.getElementById('project-notes-section');
+    if (!section) return;
+    try {
+        const notes = await api(`${API_BASE}/pocketbase/projects/${projectId}/notes`);
+        renderProjectNotes(notes);
+        updateProjectLastUpdated('notes', notes);
+    } catch (e) {
+        console.error('Project notes load error:', e);
+        section.style.display = 'none';
+    }
+}
+
+function resetProjectNoteForm() {
+    document.getElementById('project-note-id').value = '';
+    document.getElementById('project-note-title').value = '';
+    document.getElementById('project-note-content').value = '';
+    document.getElementById('project-note-pinned').checked = false;
+    document.getElementById('project-note-modal-title').textContent = 'Новая заметка';
+}
+
+function editProjectNote(noteId) {
+    const note = projectNotesCache.find(n => n.id === noteId);
+    if (!note) return;
+    document.getElementById('project-note-id').value = note.id;
+    document.getElementById('project-note-title').value = note.title;
+    document.getElementById('project-note-content').value = note.content;
+    document.getElementById('project-note-pinned').checked = note.pinned;
+    document.getElementById('project-note-modal-title').textContent = 'Редактировать заметку';
+    if (!projectNoteModal) {
+        projectNoteModal = new bootstrap.Modal(document.getElementById('projectNoteModal'));
+    }
+    projectNoteModal.show();
+}
+
+async function saveProjectNote() {
+    const id = document.getElementById('project-note-id').value;
+    const title = document.getElementById('project-note-title').value.trim();
+    const content = document.getElementById('project-note-content').value.trim();
+    const pinned = document.getElementById('project-note-pinned').checked;
+    if (!title) return alert('Название заметки не может быть пустым');
+
+    try {
+        if (id) {
+            await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/notes/${id}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title, content, pinned})
+            });
+        } else {
+            await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/notes`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title, content, pinned})
+            });
+        }
+        if (projectNoteModal) projectNoteModal.hide();
+        resetProjectNoteForm();
+        loadProjectNotes(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function toggleProjectNotePin(noteId, pinned) {
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/notes/${noteId}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pinned})
+        });
+        loadProjectNotes(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function deleteProjectNote(noteId) {
+    if (!confirm('Удалить заметку?')) return;
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/notes/${noteId}`, { method: 'DELETE' });
+        loadProjectNotes(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// ЗАДАЧИ ПРОЕКТА (PocketBase)
+// ═══════════════════════════════════════════════════
+
+let projectTasksCache = [];
+let projectTasksSortable = null;
+let projectTaskModal = null;
+
+function formatTaskDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU');
+}
+
+function renderProjectTasks(tasks) {
+    const section = document.getElementById('project-tasks-section');
+    const container = document.getElementById('project-tasks-list');
+    const countEl = document.getElementById('project-tasks-count');
+    if (!section || !container) return;
+
+    projectTasksCache = tasks || [];
+
+    if (!projectTasksCache.length) {
+        container.innerHTML = `<div class="text-muted small py-2">Задач пока нет.</div>`;
+    } else {
+        container.innerHTML = projectTasksCache.map(t => {
+            const doneClass = t.done ? 'project-task-done' : '';
+            const assignee = t.assignee_email ? `<span class="project-task-assignee" title="Ответственный"><i class="bi bi-person me-1"></i>${escapeHtml(t.assignee_email)}</span>` : '';
+            const due = t.due_date ? `<span class="project-task-due ${t.done ? '' : 'text-muted'}" title="Срок"><i class="bi bi-calendar me-1"></i>${formatTaskDate(t.due_date)}</span>` : '';
+            const meta = [assignee, due].filter(Boolean).join(' · ');
+            return `
+            <div class="project-task-item ${doneClass}" data-id="${escapeHtml(t.id)}">
+                <div class="project-task-drag-handle" title="Перетащить"><i class="bi bi-grip-vertical"></i></div>
+                <input type="checkbox" class="form-check-input project-task-check" ${t.done ? 'checked' : ''} onchange="toggleProjectTaskDone('${escapeHtml(t.id)}', this.checked)">
+                <div class="project-task-info">
+                    <div class="project-task-title">${escapeHtml(t.title)}</div>
+                    ${meta ? `<div class="project-task-meta">${meta}</div>` : ''}
+                </div>
+                <div class="project-task-actions">
+                    <button class="project-task-action" onclick="editProjectTask('${escapeHtml(t.id)}')" title="Изменить"><i class="bi bi-pencil"></i></button>
+                    <button class="project-task-action" onclick="deleteProjectTask('${escapeHtml(t.id)}')" title="Удалить"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    countEl.textContent = `${projectTasksCache.length} ${declineTasks(projectTasksCache.length)}`;
+    section.style.display = 'block';
+
+    initProjectTasksSortable();
+}
+
+function declineTasks(n) {
+    if (n % 100 >= 11 && n % 100 <= 19) return 'задач';
+    const last = n % 10;
+    if (last === 1) return 'задача';
+    if (last >= 2 && last <= 4) return 'задачи';
+    return 'задач';
+}
+
+function initProjectTasksSortable() {
+    const container = document.getElementById('project-tasks-list');
+    if (!container || typeof Sortable === 'undefined') return;
+    if (projectTasksSortable) {
+        projectTasksSortable.destroy();
+    }
+    projectTasksSortable = new Sortable(container, {
+        handle: '.project-task-drag-handle',
+        animation: 150,
+        onEnd: async function () {
+            const ids = Array.from(container.children)
+                .filter(el => el.classList.contains('project-task-item'))
+                .map(el => el.getAttribute('data-id'));
+            try {
+                await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/tasks/reorder`, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({task_ids: ids})
+                });
+                loadProjectTasks(PROJECT_ID);
+            } catch (e) {
+                alert('Ошибка: ' + e.message);
+                loadProjectTasks(PROJECT_ID);
+            }
+        }
+    });
+}
+
+async function loadProjectTasks(projectId) {
+    const section = document.getElementById('project-tasks-section');
+    if (!section) return;
+    try {
+        const tasks = await api(`${API_BASE}/pocketbase/projects/${projectId}/tasks`);
+        renderProjectTasks(tasks);
+        updateProjectLastUpdated('tasks', tasks);
+    } catch (e) {
+        console.error('Project tasks load error:', e);
+        section.style.display = 'none';
+    }
+}
+
+async function addProjectTask() {
+    const titleEl = document.getElementById('project-task-title');
+    const assigneeEl = document.getElementById('project-task-assignee');
+    const dueEl = document.getElementById('project-task-due');
+    const title = titleEl.value.trim();
+    if (!title) return;
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/tasks`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                title,
+                assignee_email: assigneeEl.value.trim() || null,
+                due_date: dueEl.value || null
+            })
+        });
+        titleEl.value = '';
+        assigneeEl.value = '';
+        dueEl.value = '';
+        loadProjectTasks(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function toggleProjectTaskDone(taskId, done) {
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/tasks/${taskId}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({done})
+        });
+        loadProjectTasks(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+function editProjectTask(taskId) {
+    const task = projectTasksCache.find(t => t.id === taskId);
+    if (!task) return;
+    document.getElementById('project-task-id').value = task.id;
+    document.getElementById('project-task-edit-title').value = task.title;
+    document.getElementById('project-task-edit-assignee').value = task.assignee_email || '';
+    document.getElementById('project-task-edit-due').value = task.due_date ? task.due_date.slice(0, 10) : '';
+    if (!projectTaskModal) {
+        projectTaskModal = new bootstrap.Modal(document.getElementById('projectTaskModal'));
+    }
+    projectTaskModal.show();
+}
+
+async function saveProjectTaskEdit() {
+    const id = document.getElementById('project-task-id').value;
+    const title = document.getElementById('project-task-edit-title').value.trim();
+    const assignee = document.getElementById('project-task-edit-assignee').value.trim();
+    const due = document.getElementById('project-task-edit-due').value;
+    if (!id || !title) return;
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/tasks/${id}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                title,
+                assignee_email: assignee || null,
+                due_date: due || null
+            })
+        });
+        if (projectTaskModal) projectTaskModal.hide();
+        loadProjectTasks(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+async function deleteProjectTask(taskId) {
+    if (!confirm('Удалить задачу?')) return;
+    try {
+        await api(`${API_BASE}/pocketbase/projects/${PROJECT_ID}/tasks/${taskId}`, { method: 'DELETE' });
+        loadProjectTasks(PROJECT_ID);
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════
 // РАЗДЕЛЫ
 // ═══════════════════════════════════════════════════
 

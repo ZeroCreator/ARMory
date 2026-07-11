@@ -25,6 +25,111 @@
     <div class="text-center text-muted py-5">Загрузка...</div>
 </div>
 
+<hr class="project-tabs-divider">
+
+<div class="project-tabs-section">
+    <ul class="nav nav-tabs project-tabs" id="projectTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tasks-tab" data-bs-toggle="tab" data-bs-target="#tasks-pane" type="button" role="tab" aria-controls="tasks-pane" aria-selected="true">
+                <i class="bi bi-check2-square me-1"></i>Задачи
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes-pane" type="button" role="tab" aria-controls="notes-pane" aria-selected="false">
+                <i class="bi bi-journal-text me-1"></i>Заметки
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="comments-tab" data-bs-toggle="tab" data-bs-target="#comments-pane" type="button" role="tab" aria-controls="comments-pane" aria-selected="false">
+                <i class="bi bi-chat-left-text me-1"></i>Обсуждение
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-pane" type="button" role="tab" aria-controls="activity-pane" aria-selected="false">
+                <i class="bi bi-clock-history me-1"></i>История
+            </button>
+        </li>
+    </ul>
+    <div class="tab-content project-tabs-content" id="projectTabsContent">
+        <div class="tab-pane fade show active" id="tasks-pane" role="tabpanel" aria-labelledby="tasks-tab">
+            <div class="project-tasks-section" id="project-tasks-section" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class="mb-0"><i class="bi bi-check2-square me-2"></i>Задачи</h4>
+                    <span class="text-muted small" id="project-tasks-count"></span>
+                </div>
+                <div class="project-tasks-form mb-3">
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <input type="text" class="form-control" id="project-task-title" placeholder="Новая задача...">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="email" class="form-control" id="project-task-assignee" placeholder="Ответственный (email)">
+                        </div>
+                        <div class="col-md-2">
+                            <input type="date" class="form-control" id="project-task-due">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100" onclick="addProjectTask()">
+                                <i class="bi bi-plus-lg me-1"></i>Добавить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="project-tasks-list" class="project-tasks-list">
+                    <div class="text-muted small">Загрузка задач...</div>
+                </div>
+            </div>
+        </div>
+        <div class="tab-pane fade" id="notes-pane" role="tabpanel" aria-labelledby="notes-tab">
+            <div class="project-notes-section" id="project-notes-section" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class="mb-0"><i class="bi bi-journal-text me-2"></i>Заметки</h4>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="text-muted small" id="project-notes-count"></span>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#projectNoteModal" onclick="resetProjectNoteForm()">
+                            <i class="bi bi-plus-lg me-1"></i>Добавить
+                        </button>
+                    </div>
+                </div>
+                <div id="project-notes-list" class="project-notes-list">
+                    <div class="text-muted small">Загрузка заметок...</div>
+                </div>
+            </div>
+        </div>
+        <div class="tab-pane fade" id="comments-pane" role="tabpanel" aria-labelledby="comments-tab">
+            <div class="project-comments-section" id="project-comments-section" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class="mb-0"><i class="bi bi-chat-left-text me-2"></i>Обсуждение</h4>
+                    <span class="text-muted small" id="project-comments-count"></span>
+                </div>
+                <div id="project-comments-list" class="project-comments-list">
+                    <div class="text-muted small">Загрузка комментариев...</div>
+                </div>
+                <div class="project-comments-form mt-3">
+                    <div class="mb-2">
+                        <textarea class="form-control" id="project-comment-text" rows="2" placeholder="Написать комментарий..."></textarea>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button class="btn btn-primary btn-sm" onclick="addProjectComment()">
+                            <i class="bi bi-send me-1"></i>Отправить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="tab-pane fade" id="activity-pane" role="tabpanel" aria-labelledby="activity-tab">
+            <div class="project-activity-section" id="project-activity-section" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class="mb-0"><i class="bi bi-clock-history me-2"></i>История</h4>
+                </div>
+                <div id="project-activity-list" class="project-activity-feed">
+                    <div class="text-muted small">Загрузка истории...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Модал создания раздела -->
 <div class="modal fade" id="sectionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -258,6 +363,72 @@
     </div>
 </div>
 
+<!-- Модал заметки проекта -->
+<div class="modal fade" id="projectNoteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="project-note-modal-title">Новая заметка</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="project-note-form">
+                    <input type="hidden" id="project-note-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" id="project-note-title" required placeholder="Название заметки">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Содержимое (Markdown)</label>
+                        <textarea class="form-control" id="project-note-content" rows="8" placeholder="Текст заметки..."></textarea>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="project-note-pinned">
+                        <label class="form-check-label" for="project-note-pinned">Закрепить</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveProjectNote()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модал задачи проекта -->
+<div class="modal fade" id="projectTaskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="project-task-modal-title">Редактировать задачу</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="project-task-form">
+                    <input type="hidden" id="project-task-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" id="project-task-edit-title" required placeholder="Название задачи">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Ответственный (email)</label>
+                        <input type="email" class="form-control" id="project-task-edit-assignee" placeholder="email">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Срок</label>
+                        <input type="date" class="form-control" id="project-task-edit-due">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveProjectTaskEdit()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Модал редактирования проекта -->
 <div class="modal fade" id="editProjectModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -293,9 +464,26 @@
 <script>
     const PROJECT_ID = {{ project_id }};
     const LOCAL_STORAGE_PATH = {{ local_storage_path | tojson }};
-    document.addEventListener('DOMContentLoaded', () => {
-        loadProject(PROJECT_ID);
-        loadSections(PROJECT_ID);
+    const CURRENT_USER_EMAIL = {{ current_user_email | tojson }};
+    const CURRENT_USER_NAME = {{ current_user_name | tojson }};
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Сначала грузим основной контент проекта и блокируем рендер
+        await loadProject(PROJECT_ID);
+        await loadSections(PROJECT_ID);
+
+        // Плавно показываем блок вкладок PocketBase
+        const tabsSection = document.querySelector('.project-tabs-section');
+        if (tabsSection) tabsSection.classList.add('is-visible');
+
+        // PocketBase-данные грузим параллельно после основного контента
+        await Promise.all([
+            loadProjectNotes(PROJECT_ID),
+            loadProjectTasks(PROJECT_ID),
+            loadProjectComments(PROJECT_ID),
+            loadProjectActivity(PROJECT_ID),
+        ]);
+
+        startProjectPolling(PROJECT_ID);
     });
 </script>
 {% endblock %}

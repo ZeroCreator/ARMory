@@ -15,8 +15,9 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.database import engine, Base, AsyncSessionLocal
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora, pocketbase, pocketbase_notes, pocketbase_tasks
 from app.config import get_settings
+from app.pocketbase_client import get_current_user
 from app.telegram import check_and_send_calendar_reminders
 
 settings = get_settings()
@@ -270,6 +271,10 @@ app = FastAPI(
 # Статика и шаблоны
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+templates.env.globals.update({
+    "pocketbase_enabled": settings.pocketbase_enabled,
+    "pocketbase_public_url": settings.pocketbase_public_url,
+})
 
 # Роутеры
 app.include_router(projects.router)
@@ -283,6 +288,9 @@ app.include_router(alexandrite.router)
 app.include_router(glossary.router)
 app.include_router(wopi.router)
 app.include_router(collabora.router)
+app.include_router(pocketbase.router)
+app.include_router(pocketbase_notes.router)
+app.include_router(pocketbase_tasks.router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -299,6 +307,7 @@ async def index(request: Request):
 
 @app.get("/projects/{project_id}", response_class=HTMLResponse)
 async def project_page(request: Request, project_id: int):
+    user = get_current_user(request)
     return templates.TemplateResponse(
         "project.html",
         {
@@ -306,6 +315,8 @@ async def project_page(request: Request, project_id: int):
             "project_id": project_id,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
+            "current_user_email": user["email"],
+            "current_user_name": user["name"],
         },
     )
 

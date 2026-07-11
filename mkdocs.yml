@@ -36,6 +36,7 @@ nav:
   - Планировщик: scheduler.md
   - Бэкапы: backup.md
   - Деплой: deployment.md
+  - PocketBase: pocketbase.md
 
 markdown_extensions:
   - pymdownx.highlight:
