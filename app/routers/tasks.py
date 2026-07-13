@@ -600,6 +600,7 @@ async def export_global_kanban(db: AsyncSession = Depends(get_db)):
 
         tasks_result = await db.execute(
             select(Task)
+            .options(selectinload(Task.attachments))
             .where(Task.project_id == project.id)
             .order_by(Task.sort_order.asc(), Task.created_at.asc())
         )
@@ -628,6 +629,15 @@ async def export_global_kanban(db: AsyncSession = Depends(get_db)):
                     "tags": t.tags,
                     "sort_order": t.sort_order,
                     "status_name": status_map.get(t.status_id, ""),
+                    "attachments": [
+                        {
+                            "attachment_type": a.attachment_type,
+                            "title": a.title,
+                            "url": a.url,
+                            "file_path": a.file_path,
+                        }
+                        for a in t.attachments
+                    ],
                 }
                 for t in tasks
             ],
@@ -733,6 +743,35 @@ async def import_global_kanban(
                 task.assignee_email = task_data.assignee_email
                 task.tags = task_data.tags
                 task.sort_order = task_data.sort_order
+
+            await db.flush()
+            await db.refresh(task)
+
+            attachments_to_import = list(task_data.attachments or [])
+            if attachments_to_import:
+                # Удаляем старые вложения, чтобы при повторном импорте не дублировать
+                old_attachments_result = await db.execute(
+                    select(TaskAttachment).where(TaskAttachment.task_id == task.id)
+                )
+                for old in old_attachments_result.scalars().all():
+                    if old.attachment_type == "file" and old.file_path:
+                        try:
+                            full_path = Path(get_settings().local_storage_path).resolve() / old.file_path
+                            if full_path.exists():
+                                full_path.unlink()
+                        except OSError:
+                            pass
+                    await db.delete(old)
+
+                for attachment_data in attachments_to_import:
+                    attachment = TaskAttachment(
+                        task_id=task.id,
+                        attachment_type=attachment_data.attachment_type,
+                        title=attachment_data.title,
+                        url=attachment_data.url,
+                        file_path=attachment_data.file_path,
+                    )
+                    db.add(attachment)
 
     await db.commit()
     return {

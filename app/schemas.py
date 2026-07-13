@@ -374,6 +374,13 @@ class KanbanTaskStatusUpdate(BaseModel):
     column_name: str
 
 
+class KanbanAttachmentExport(BaseModel):
+    attachment_type: str
+    title: Optional[str] = None
+    url: Optional[str] = None
+    file_path: Optional[str] = None
+
+
 class KanbanTaskExport(BaseModel):
     title: str
     description: Optional[str] = None
@@ -383,6 +390,7 @@ class KanbanTaskExport(BaseModel):
     tags: Optional[str] = None
     sort_order: int = 0
     status_name: str
+    attachments: List[KanbanAttachmentExport] = []
 
 
 class KanbanStatusExport(BaseModel):
