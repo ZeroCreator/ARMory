@@ -122,9 +122,24 @@ async def build_collabora_iframe_url(
     urlsrc_public = _make_collabora_public_url(urlsrc, settings)
 
     separator = "&" if "?" in urlsrc_public else "?"
+
+    # Скрыть правый сайдбар, статусбар и линейки по умолчанию.
+    ui_defaults = (
+        "TextRuler=false;"
+        "TextSidebar=false;"
+        "TextStatusbar=false;"
+        "PresentationSidebar=false;"
+        "PresentationStatusbar=false;"
+        "SpreadsheetSidebar=false;"
+        "SpreadsheetStatusbar=false"
+    )
+
     return (
         f"{urlsrc_public}{separator}WOPISrc={urllib.parse.quote(wopi_src, safe='')}"
         f"&access_token={urllib.parse.quote(token)}"
+        f"&closebutton=1"
+        f"&lang=ru"
+        f"&ui_defaults={urllib.parse.quote(ui_defaults, safe='')}"
     )
 
 

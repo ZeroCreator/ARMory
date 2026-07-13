@@ -1355,6 +1355,7 @@ async function openItemPreview(item) {
 
 async function openItemInCollabora(item) {
     const modalEl = document.getElementById('previewModal');
+    const modalDialog = modalEl.querySelector('.modal-dialog');
     const content = document.getElementById('preview-content');
     const title = document.getElementById('preview-title');
     const downloadBtn = document.getElementById('preview-download');
@@ -1364,6 +1365,7 @@ async function openItemInCollabora(item) {
     downloadBtn.style.display = 'inline-block';
     content.innerHTML = '<div class="text-center p-5"><div class="spinner-border"></div></div>';
 
+    modalDialog.classList.add('modal-fullscreen');
     const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
     modal.show();
 
@@ -2804,4 +2806,11 @@ function dismissActiveReminder(id) {
 document.addEventListener('DOMContentLoaded', () => {
     loadActiveReminders();
     setInterval(loadActiveReminders, 60000);
+
+    const previewModal = document.getElementById('previewModal');
+    if (previewModal) {
+        previewModal.addEventListener('hidden.bs.modal', () => {
+            previewModal.querySelector('.modal-dialog')?.classList.remove('modal-fullscreen');
+        });
+    }
 });
