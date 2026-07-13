@@ -1353,7 +1353,7 @@ async function openItemPreview(item) {
     }
 }
 
-async function openItemInCollabora(item) {
+function openCollaboraInModal(item, url) {
     const modalEl = document.getElementById('previewModal');
     const modalDialog = modalEl.querySelector('.modal-dialog');
     const content = document.getElementById('preview-content');
@@ -1363,16 +1363,30 @@ async function openItemInCollabora(item) {
     title.textContent = item.file_name || item.title || 'Документ';
     downloadBtn.href = getItemDownloadUrl(item);
     downloadBtn.style.display = 'inline-block';
-    content.innerHTML = '<div class="text-center p-5"><div class="spinner-border"></div></div>';
+    content.innerHTML = `<iframe src="${escapeHtml(url)}" class="w-100 border-0" style="height:75vh;" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>`;
 
     modalDialog.classList.add('modal-fullscreen');
     const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
     modal.show();
+}
 
+async function openItemInCollabora(item) {
     try {
         const data = await api(`${API_BASE}/projects/${PROJECT_ID}/documents/${item.document_id}/items/${item.id}/collabora`);
-        content.innerHTML = `<iframe src="${escapeHtml(data.url)}" class="w-100 border-0" style="height:75vh;" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>`;
+        const newWindow = window.open(data.url, '_blank');
+        if (!newWindow) {
+            // Браузер заблокировал popup — открываем в модалке как fallback.
+            openCollaboraInModal(item, data.url);
+        }
     } catch (e) {
+        const modalEl = document.getElementById('previewModal');
+        const content = document.getElementById('preview-content');
+        const title = document.getElementById('preview-title');
+        const downloadBtn = document.getElementById('preview-download');
+
+        title.textContent = item.file_name || item.title || 'Документ';
+        downloadBtn.href = getItemDownloadUrl(item);
+        downloadBtn.style.display = 'inline-block';
         content.innerHTML = `
             <div class="empty-state py-5">
                 <i class="bi bi-exclamation-triangle"></i>
@@ -1381,6 +1395,8 @@ async function openItemInCollabora(item) {
                     <i class="bi bi-download me-1"></i> Скачать файл
                 </a>
             </div>`;
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.show();
     }
 }
 
