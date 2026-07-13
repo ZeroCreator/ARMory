@@ -1,0 +1,83 @@
+<div id="kanban-filters" class="card mb-4 border-0 shadow-sm">
+    <div class="card-header border-0 d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold"><i class="bi bi-funnel me-1"></i> Фильтры</span>
+        <button class="btn btn-sm btn-link text-decoration-none kanban-filter-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#kanban-filters-collapse" aria-expanded="false" aria-controls="kanban-filters-collapse">
+            <i class="bi bi-caret-up-fill"></i>
+        </button>
+    </div>
+    <div id="kanban-filters-collapse" class="collapse">
+        <div class="card-body pt-0">
+            <div class="row g-3 align-items-end">
+                {% if show_project_filter|default(true) %}
+                <div class="col-md-3">
+                    <label class="form-label">Проект</label>
+                    <select class="form-select" id="filter-project" onchange="applyFilters()">
+                        <option value="">Все проекты</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Приоритет</label>
+                    <select class="form-select" id="filter-priority" onchange="applyFilters()">
+                        <option value="">Все</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Ответственный</label>
+                    <select class="form-select" id="filter-assignee" onchange="applyFilters()">
+                        <option value="">Все</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Тег</label>
+                    <select class="form-select" id="filter-tag" onchange="applyFilters()">
+                        <option value="">Все</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Дедлайн</label>
+                    <input type="date" class="form-control" id="filter-due-before" onchange="applyFilters()">
+                </div>
+                {% else %}
+                <div class="col-md-3">
+                    <label class="form-label">Приоритет</label>
+                    <select class="form-select" id="filter-priority" onchange="applyFilters()">
+                        <option value="">Все</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Ответственный</label>
+                    <select class="form-select" id="filter-assignee" onchange="applyFilters()">
+                        <option value="">Все</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Тег</label>
+                    <select class="form-select" id="filter-tag" onchange="applyFilters()">
+                        <option value="">Все</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Дедлайн</label>
+                    <input type="date" class="form-control" id="filter-due-before" onchange="applyFilters()">
+                </div>
+                {% endif %}
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-3">
+                    <label class="form-label">Создано с</label>
+                    <input type="date" class="form-control" id="filter-created-after" onchange="applyFilters()">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Создано до</label>
+                    <input type="date" class="form-control" id="filter-created-before" onchange="applyFilters()">
+                </div>
+                <div class="col-md-2 offset-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-outline-gray w-100" onclick="resetFilters()" title="Сбросить фильтры">
+                        <i class="bi bi-x-lg"></i> Сбросить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

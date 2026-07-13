@@ -24,6 +24,11 @@
     </div>
 </div>
 
+<!-- Фильтры -->
+{% with show_project_filter=false %}
+{% include 'partials/kanban_filters.html' %}
+{% endwith %}
+
 <div id="kanban-board" class="kanban-board">
     <div class="text-center text-muted py-5">Загрузка...</div>
 </div>
@@ -69,6 +74,38 @@
                     <div class="mb-3">
                         <label class="form-label">Теги (через запятую)</label>
                         <input type="text" class="form-control" name="tags" placeholder="backend, urgent">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Вложения</label>
+                        <div id="task-attachments-list" class="mb-2">
+                            <!-- JS заполнит -->
+                        </div>
+                        <div class="dropdown">
+                            <button id="task-add-attachment-btn" class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-plus-lg"></i> Добавить вложение
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('link'); return false;"><i class="bi bi-link-45deg me-2"></i> Ссылка</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('git'); return false;"><i class="bi bi-git me-2"></i> Git-репозиторий</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('file'); return false;"><i class="bi bi-paperclip me-2"></i> Файл</a></li>
+                            </ul>
+                        </div>
+                        <div id="task-attachment-form" class="kanban-attachment-form mt-2" style="display:none;">
+                            <input type="hidden" id="attachment-form-type">
+                            <div class="mb-2">
+                                <input type="text" class="form-control form-control-sm" id="attachment-form-title" placeholder="Название (необязательно)">
+                            </div>
+                            <div class="mb-2" id="attachment-form-url-wrap">
+                                <input type="text" class="form-control form-control-sm" id="attachment-form-url" placeholder="URL">
+                            </div>
+                            <div class="mb-2" id="attachment-form-file-wrap" style="display:none;">
+                                <input type="file" class="form-control form-control-sm" id="attachment-form-file" onchange="submitAttachmentFile(this)">
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-primary" onclick="submitAttachmentForm()">Добавить</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="hideAttachmentForm()">Отмена</button>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -117,5 +154,5 @@
 <script>
     const PROJECT_ID = {{ project_id }};
 </script>
-<script src="/static/js/kanban.js?v=6"></script>
+<script src="/static/js/kanban.js?v=16"></script>
 {% endblock %}

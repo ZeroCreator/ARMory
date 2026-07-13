@@ -195,3 +195,18 @@ class Task(Base):
 
     project = relationship("Project", back_populates="tasks", lazy="selectin")
     status = relationship("TaskStatus", back_populates="tasks", lazy="selectin")
+    attachments = relationship("TaskAttachment", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskAttachment.created_at.asc()")
+
+
+class TaskAttachment(Base):
+    __tablename__ = "task_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    attachment_type = Column(String(20), nullable=False)  # file, link, git
+    title = Column(String(255), nullable=True)
+    url = Column(String(1000), nullable=True)
+    file_path = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    task = relationship("Task", back_populates="attachments")

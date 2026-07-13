@@ -287,6 +287,24 @@ class TaskStatusReorderRequest(BaseModel):
     status_ids: List[int]
 
 
+class TaskAttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    task_id: int
+    attachment_type: str
+    title: Optional[str] = None
+    url: Optional[str] = None
+    file_path: Optional[str] = None
+    created_at: datetime
+
+
+class TaskAttachmentCreate(BaseModel):
+    attachment_type: str
+    title: Optional[str] = None
+    url: Optional[str] = None
+    file_path: Optional[str] = None
+
+
 class TaskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -302,6 +320,7 @@ class TaskOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     status: Optional[TaskStatusOut] = None
+    attachments: List[TaskAttachmentOut] = []
 
 
 class TaskCreate(BaseModel):

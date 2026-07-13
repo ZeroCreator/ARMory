@@ -162,6 +162,8 @@ function renderTaskCard(task) {
           ).join('')
         : '';
 
+    const attachmentsHtml = renderCardAttachments(task.attachments);
+
     return `
         <div class="kanban-card" data-id="${task.id}" onclick="openTaskModal(${task.id})">
             <div class="d-flex justify-content-between align-items-start mb-2">
@@ -176,12 +178,55 @@ function renderTaskCard(task) {
                 ${dueDate}
                 ${assignee}
             </div>
+            ${attachmentsHtml}
             <div class="kanban-card-footer">
-                ${tags ? `<div class="kanban-tags">${tags}</div>` : '<div></div>'}
+                <div class="d-flex align-items-center gap-2">
+                    ${tags ? `<div class="kanban-tags">${tags}</div>` : ''}
+                </div>
                 <span class="kanban-created-at" title="Создано"><i class="bi bi-calendar"></i> ${formatDateTime(task.created_at)}</span>
             </div>
         </div>
     `;
+}
+
+function renderCardAttachments(attachments) {
+    if (!attachments || attachments.length === 0) return '';
+
+    const visible = attachments.slice(0, 3);
+    const restCount = attachments.length - visible.length;
+
+    const items = visible.map(a => {
+        let icon = 'bi-paperclip';
+        let href = '#';
+        let title = escapeHtml(a.title || '');
+        if (a.attachment_type === 'link') {
+            icon = 'bi-link-45deg';
+            href = escapeHtml(a.url || '#');
+            if (!title) title = 'Ссылка';
+        } else if (a.attachment_type === 'git') {
+            icon = 'bi-git';
+            href = escapeHtml(a.url || '#');
+            if (!title) title = 'Git';
+        } else if (a.attachment_type === 'file') {
+            icon = 'bi-file-earmark';
+            href = `/uploads/${escapeHtml(a.file_path || '')}`;
+            if (!title) title = 'Файл';
+        }
+        return `<a href="${href}" target="_blank" rel="noopener" class="kanban-card-attachment" title="${title}" onclick="event.stopPropagation()"><i class="bi ${icon}"></i></a>`;
+    }).join('');
+
+    const more = restCount > 0
+        ? `<span class="kanban-card-attachment" title="Ещё ${restCount} вложение(й)">+${restCount}</span>`
+        : '';
+
+    return `<div class="kanban-card-attachments mb-2">${items}${more}</div>`;
+}
+
+function updateTaskCardInBoard(task) {
+    const card = document.querySelector(`.kanban-card[data-id="${task.id}"]`);
+    if (card) {
+        card.outerHTML = renderTaskCard(task);
+    }
 }
 
 function initKanbanSortable() {
@@ -191,9 +236,11 @@ function initKanbanSortable() {
     document.querySelectorAll('.kanban-column-body').forEach(body => {
         const sortable = Sortable.create(body, {
             group: 'kanban-global-tasks',
-            animation: 150,
+            animation: 80,
             delay: 100,
             delayOnTouchOnly: true,
+            scroll: false,
+            swapThreshold: 0.65,
             ghostClass: 'sortable-ghost',
             dragClass: 'sortable-drag',
             onEnd: function (evt) {
@@ -208,13 +255,15 @@ function initKanbanSortable() {
 
 async function updateTaskColumn(taskId, columnName) {
     try {
-        await api(`${API_BASE}/kanban/tasks/${taskId}/status`, {
+        const updatedTask = await api(`${API_BASE}/kanban/tasks/${taskId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ column_name: columnName }),
         });
-        loadKanbanBoard();
-        await loadFilters();
+        const idx = kanbanData.tasks.findIndex(t => t.id === taskId);
+        if (idx !== -1) {
+            kanbanData.tasks[idx] = updatedTask;
+        }
     } catch (e) {
         alert('Ошибка перемещения задачи: ' + e.message);
         loadKanbanBoard();
@@ -231,6 +280,9 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
     const form = document.getElementById('task-form');
     const titleEl = document.getElementById('task-modal-title');
     const deleteBtn = document.getElementById('task-delete-btn');
+    const addAttachBtn = document.getElementById('task-add-attachment-btn');
+    if (addAttachBtn) addAttachBtn.disabled = !currentTaskId;
+    hideAttachmentForm();
 
     form.reset();
     document.getElementById('task-id').value = '';
@@ -252,10 +304,12 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
         form.assignee_email.value = task.assignee_email || '';
         form.tags.value = task.tags || '';
         deleteBtn.style.display = 'inline-block';
+        renderTaskAttachments(task.attachments || []);
     } else {
         titleEl.textContent = 'Новая задача';
         form.priority.value = 'medium';
         deleteBtn.style.display = 'none';
+        renderTaskAttachments([]);
         if (defaultColumnName) {
             // Подобрать первый проект, у которого есть такой статус
             for (const project of filterOptions.projects) {
@@ -350,6 +404,179 @@ async function deleteTaskFromModal() {
         loadKanbanBoard();
     } catch (e) {
         alert('Ошибка удаления задачи: ' + e.message);
+    }
+}
+
+function getCurrentTaskProjectId() {
+    if (!currentTaskId) return null;
+    const task = kanbanData.tasks.find(t => t.id === currentTaskId);
+    return task ? task.project_id : null;
+}
+
+function renderTaskAttachments(attachments) {
+    const container = document.getElementById('task-attachments-list');
+    if (!container) return;
+    if (!currentTaskId) {
+        container.innerHTML = '<span class="text-muted small">Сохраните задачу, чтобы добавить вложения</span>';
+        return;
+    }
+    if (!attachments || attachments.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
+        return;
+    }
+    container.innerHTML = attachments.map(a => {
+        let icon = 'bi-paperclip';
+        let display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
+        let href = '';
+        if (a.attachment_type === 'link') {
+            icon = 'bi-link-45deg';
+            href = escapeHtml(a.url || '#');
+        } else if (a.attachment_type === 'git') {
+            icon = 'bi-git';
+            href = escapeHtml(a.url || '#');
+        } else if (a.attachment_type === 'file') {
+            icon = 'bi-file-earmark';
+            href = `/uploads/${escapeHtml(a.file_path || '')}`;
+        }
+        const link = href
+            ? `<a href="${href}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`
+            : `<span>${display}</span>`;
+        return `
+            <div class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded mb-1">
+                <div class="text-truncate">
+                    <i class="bi ${icon} me-1"></i> ${link}
+                </div>
+                <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="deleteTaskAttachment(${a.id})" title="Удалить">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+function showAttachmentForm(type) {
+    if (!currentTaskId) {
+        alert('Сначала сохраните задачу, чтобы добавить вложение');
+        return;
+    }
+    const form = document.getElementById('task-attachment-form');
+    const typeInput = document.getElementById('attachment-form-type');
+    const titleInput = document.getElementById('attachment-form-title');
+    const urlWrap = document.getElementById('attachment-form-url-wrap');
+    const urlInput = document.getElementById('attachment-form-url');
+    const fileWrap = document.getElementById('attachment-form-file-wrap');
+    const fileInput = document.getElementById('attachment-form-file');
+
+    if (!form || !typeInput) return;
+
+    typeInput.value = type;
+    titleInput.value = '';
+    urlInput.value = '';
+    fileInput.value = '';
+
+    if (type === 'file') {
+        urlWrap.style.display = 'none';
+        fileWrap.style.display = 'block';
+    } else {
+        urlWrap.style.display = 'block';
+        fileWrap.style.display = 'none';
+        urlInput.placeholder = type === 'git' ? 'URL репозитория' : 'URL';
+    }
+    form.style.display = 'block';
+}
+
+function hideAttachmentForm() {
+    const form = document.getElementById('task-attachment-form');
+    if (form) form.style.display = 'none';
+}
+
+async function submitAttachmentForm() {
+    if (!currentTaskId) return;
+    const projectId = getCurrentTaskProjectId();
+    if (!projectId) return;
+
+    const type = document.getElementById('attachment-form-type').value;
+    const title = document.getElementById('attachment-form-title').value.trim() || null;
+    const url = document.getElementById('attachment-form-url').value.trim();
+
+    if (type !== 'file' && !url) {
+        alert('Введите URL');
+        return;
+    }
+
+    try {
+        await api(`${API_BASE}/projects/${projectId}/tasks/${currentTaskId}/attachments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachment_type: type, title, url }),
+        });
+        hideAttachmentForm();
+        await reloadCurrentTask();
+    } catch (e) {
+        alert('Ошибка добавления вложения: ' + e.message);
+    }
+}
+
+async function submitAttachmentFile(input) {
+    if (!currentTaskId) {
+        alert('Сначала сохраните задачу, чтобы добавить вложение');
+        input.value = '';
+        return;
+    }
+    const projectId = getCurrentTaskProjectId();
+    if (!projectId) {
+        input.value = '';
+        return;
+    }
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        await api(`${API_BASE}/projects/${projectId}/tasks/${currentTaskId}/attachments/upload`, {
+            method: 'POST',
+            body: formData,
+        });
+        hideAttachmentForm();
+        await reloadCurrentTask();
+    } catch (e) {
+        alert('Ошибка загрузки файла: ' + e.message);
+    }
+}
+
+async function deleteTaskAttachment(attachmentId) {
+    if (!currentTaskId) return;
+    const projectId = getCurrentTaskProjectId();
+    if (!projectId) return;
+    if (!confirm('Удалить вложение?')) return;
+
+    try {
+        await api(`${API_BASE}/projects/${projectId}/tasks/${currentTaskId}/attachments/${attachmentId}`, {
+            method: 'DELETE',
+        });
+        await reloadCurrentTask();
+    } catch (e) {
+        alert('Ошибка удаления вложения: ' + e.message);
+    }
+}
+
+async function reloadCurrentTask() {
+    if (!currentTaskId) return;
+    const projectId = getCurrentTaskProjectId();
+    if (!projectId) return;
+    try {
+        const task = await api(`${API_BASE}/projects/${projectId}/tasks/${currentTaskId}`);
+        renderTaskAttachments(task.attachments || []);
+        const idx = kanbanData.tasks.findIndex(t => t.id === currentTaskId);
+        if (idx !== -1) {
+            kanbanData.tasks[idx] = task;
+        }
+        updateTaskCardInBoard(task);
+    } catch (e) {
+        console.error('Failed to reload task:', e);
     }
 }
 
@@ -495,9 +722,19 @@ function priorityLabel(priority) {
     }[priority] || priority;
 }
 
-function formatDateTime(isoString) {
+function parseServerDate(isoString) {
+    if (!isoString) return null;
+    // Сервер отдаёт naive-UTC даты без Z; интерпретируем их как UTC
+    if (!isoString.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(isoString)) {
+        isoString += 'Z';
+    }
     const date = new Date(isoString);
-    if (isNaN(date.getTime())) return isoString;
+    return isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateTime(isoString) {
+    const date = parseServerDate(isoString);
+    if (!date) return isoString;
     return date.toLocaleString('ru-RU', {
         day: '2-digit',
         month: '2-digit',
@@ -508,8 +745,8 @@ function formatDateTime(isoString) {
 }
 
 function formatDateTimeLocal(isoString) {
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return '';
+    const date = parseServerDate(isoString);
+    if (!date) return '';
     const pad = n => String(n).padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

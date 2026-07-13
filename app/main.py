@@ -271,6 +271,19 @@ async def lifespan(app: FastAPI):
                     FOREIGN KEY (status_id) REFERENCES task_statuses(id) ON DELETE CASCADE
                 )
             """))
+        if "task_attachments" not in table_names:
+            await conn.execute(text("""
+                CREATE TABLE task_attachments (
+                    id INTEGER PRIMARY KEY,
+                    task_id INTEGER NOT NULL,
+                    attachment_type VARCHAR(20) NOT NULL,
+                    title VARCHAR(255),
+                    url VARCHAR(1000),
+                    file_path VARCHAR(500),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+                )
+            """))
 
         # Исправить NULL created_at в task_statuses (могли появиться из-за SQLAlchemy default без server_default)
         if "task_statuses" in table_names:
@@ -358,6 +371,7 @@ app = FastAPI(
 
 # Статика и шаблоны
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/uploads", StaticFiles(directory=settings.local_storage_path), name="uploads")
 templates = Jinja2Templates(directory="app/templates")
 
 # Роутеры

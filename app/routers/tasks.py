@@ -1,13 +1,20 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select, update, delete, func, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import get_settings
 from app.database import get_db
-from app.models import Project, Task, TaskStatus
+from app.models import Project, Task, TaskAttachment, TaskStatus
 from app.schemas import (
     KanbanBoardOut,
     KanbanColumnOut,
@@ -16,6 +23,8 @@ from app.schemas import (
     KanbanGlobalOut,
     KanbanImportIn,
     KanbanTaskStatusUpdate,
+    TaskAttachmentCreate,
+    TaskAttachmentOut,
     TaskCreate,
     TaskOut,
     TaskReorderRequest,
@@ -50,7 +59,9 @@ async def _get_status(project_id: int, status_id: int, db: AsyncSession) -> Task
 
 async def _get_task(project_id: int, task_id: int, db: AsyncSession) -> Task:
     result = await db.execute(
-        select(Task).where(Task.id == task_id, Task.project_id == project_id)
+        select(Task)
+        .options(selectinload(Task.status), selectinload(Task.attachments))
+        .where(Task.id == task_id, Task.project_id == project_id)
     )
     task = result.scalar_one_or_none()
     if not task:
@@ -155,6 +166,7 @@ async def list_tasks(project_id: int, db: AsyncSession = Depends(get_db)):
     await _get_project(project_id, db)
     result = await db.execute(
         select(Task)
+        .options(selectinload(Task.status), selectinload(Task.attachments))
         .where(Task.project_id == project_id)
         .order_by(Task.sort_order.asc(), Task.created_at.asc())
     )
@@ -162,7 +174,17 @@ async def list_tasks(project_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/tasks/board", response_model=KanbanBoardOut)
-async def get_kanban_board(project_id: int, db: AsyncSession = Depends(get_db)):
+async def get_kanban_board(
+    project_id: int,
+    priority: Optional[str] = None,
+    assignee_email: Optional[str] = None,
+    tags: Optional[str] = None,
+    created_after: Optional[datetime] = None,
+    created_before: Optional[datetime] = None,
+    due_after: Optional[datetime] = None,
+    due_before: Optional[datetime] = None,
+    db: AsyncSession = Depends(get_db),
+):
     await _get_project(project_id, db)
     statuses_result = await db.execute(
         select(TaskStatus)
@@ -171,14 +193,67 @@ async def get_kanban_board(project_id: int, db: AsyncSession = Depends(get_db)):
     )
     statuses = statuses_result.scalars().all()
 
-    tasks_result = await db.execute(
+    tasks_query = (
         select(Task)
+        .options(selectinload(Task.status), selectinload(Task.attachments))
         .where(Task.project_id == project_id)
-        .order_by(Task.sort_order.asc(), Task.created_at.asc())
+    )
+    if priority is not None:
+        tasks_query = tasks_query.where(Task.priority == priority)
+    if assignee_email is not None:
+        tasks_query = tasks_query.where(Task.assignee_email.ilike(f"%{assignee_email}%"))
+    if tags is not None:
+        tasks_query = tasks_query.where(Task.tags.ilike(f"%{tags}%"))
+    if created_after is not None:
+        tasks_query = tasks_query.where(Task.created_at >= created_after)
+    if created_before is not None:
+        tasks_query = tasks_query.where(Task.created_at <= created_before)
+    if due_after is not None:
+        tasks_query = tasks_query.where(Task.due_date >= due_after)
+    if due_before is not None:
+        tasks_query = tasks_query.where(Task.due_date <= due_before)
+
+    tasks_result = await db.execute(
+        tasks_query.order_by(Task.sort_order.asc(), Task.created_at.asc())
     )
     tasks = tasks_result.scalars().all()
 
     return KanbanBoardOut(statuses=statuses, tasks=tasks)
+
+
+@router.get("/kanban/filters", response_model=KanbanFiltersOut)
+async def project_kanban_filters(project_id: int, db: AsyncSession = Depends(get_db)):
+    """Доступные значения фильтров для канбана проекта."""
+    await _get_project(project_id, db)
+
+    priorities_result = await db.execute(
+        select(distinct(Task.priority))
+        .where(Task.priority.isnot(None), Task.project_id == project_id)
+    )
+    priorities = [p[0] for p in priorities_result.fetchall() if p[0]]
+
+    assignees_result = await db.execute(
+        select(distinct(Task.assignee_email))
+        .where(Task.assignee_email.isnot(None), Task.project_id == project_id)
+    )
+    assignees = [a[0] for a in assignees_result.fetchall() if a[0]]
+
+    tags_result = await db.execute(
+        select(Task.tags).where(Task.tags.isnot(None), Task.project_id == project_id)
+    )
+    tag_set = set()
+    for (tags_str,) in tags_result.fetchall():
+        for tag in tags_str.split(","):
+            tag = tag.strip()
+            if tag:
+                tag_set.add(tag)
+
+    return KanbanFiltersOut(
+        projects=[],
+        priorities=sorted(priorities),
+        assignees=sorted(assignees),
+        tags=sorted(tag_set),
+    )
 
 
 @router.post("/tasks", response_model=TaskOut, status_code=201)
@@ -284,6 +359,105 @@ async def delete_task(
 
 
 # ═══════════════════════════════════════════════════
+# Вложения к задачам (файлы, ссылки, git)
+# ═══════════════════════════════════════════════════
+
+
+def _task_uploads_dir() -> Path:
+    settings = get_settings()
+    base = Path(settings.local_storage_path).resolve()
+    uploads = base / "tasks"
+    uploads.mkdir(parents=True, exist_ok=True)
+    return uploads
+
+
+@router.post("/tasks/{task_id}/attachments", response_model=TaskAttachmentOut, status_code=201)
+async def add_task_attachment(
+    project_id: int,
+    task_id: int,
+    data: TaskAttachmentCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    task = await _get_task(project_id, task_id, db)
+    attachment = TaskAttachment(
+        task_id=task.id,
+        attachment_type=data.attachment_type,
+        title=data.title,
+        url=data.url,
+        file_path=data.file_path,
+    )
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+    return attachment
+
+
+@router.post("/tasks/{task_id}/attachments/upload", response_model=TaskAttachmentOut, status_code=201)
+async def upload_task_attachment_file(
+    project_id: int,
+    task_id: int,
+    title: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    task = await _get_task(project_id, task_id, db)
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File name is required")
+
+    uploads_dir = _task_uploads_dir()
+    ext = Path(file.filename).suffix
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = uploads_dir / unique_name
+
+    contents = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    rel_path = f"tasks/{unique_name}"
+    attachment = TaskAttachment(
+        task_id=task.id,
+        attachment_type="file",
+        title=title or file.filename,
+        file_path=rel_path,
+    )
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+    return attachment
+
+
+@router.delete("/tasks/{task_id}/attachments/{attachment_id}", status_code=204)
+async def delete_task_attachment(
+    project_id: int,
+    task_id: int,
+    attachment_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    task = await _get_task(project_id, task_id, db)
+    result = await db.execute(
+        select(TaskAttachment).where(
+            TaskAttachment.id == attachment_id,
+            TaskAttachment.task_id == task.id,
+        )
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    if attachment.attachment_type == "file" and attachment.file_path:
+        try:
+            full_path = Path(get_settings().local_storage_path).resolve() / attachment.file_path
+            if full_path.exists():
+                full_path.unlink()
+        except OSError:
+            pass
+
+    await db.delete(attachment)
+    await db.commit()
+    return None
+
+
+# ═══════════════════════════════════════════════════
 # Общий канбан
 # ═══════════════════════════════════════════════════
 
@@ -303,7 +477,7 @@ async def global_kanban(
     db: AsyncSession = Depends(get_db),
 ):
     """Все задачи всех проектов с фильтрами для общего канбана."""
-    query = select(Task).options(selectinload(Task.status))
+    query = select(Task).options(selectinload(Task.status), selectinload(Task.attachments))
 
     if project_id is not None:
         query = query.where(Task.project_id == project_id)
@@ -380,7 +554,11 @@ async def update_task_status_by_column_name(
     db: AsyncSession = Depends(get_db),
 ):
     """Обновить статус задачи, найдя статус проекта по названию колонки."""
-    result = await db.execute(select(Task).where(Task.id == task_id))
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.status), selectinload(Task.attachments))
+        .where(Task.id == task_id)
+    )
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
