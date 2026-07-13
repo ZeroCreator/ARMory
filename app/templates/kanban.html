@@ -1,0 +1,121 @@
+{% extends "base_project.html" %}
+
+{% block content %}
+<div class="mb-3 d-flex align-items-center gap-2">
+    <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
+    <a href="/projects/{{ project_id }}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-folder"></i> К проекту
+    </a>
+</div>
+
+<div id="kanban-header" class="mb-4">
+    <h2 class="text-muted">Загрузка...</h2>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0"><i class="bi bi-kanban"></i> Канбан</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-brown" onclick="openStatusModal()">
+            <i class="bi bi-plus-lg me-1"></i> Колонка
+        </button>
+        <button class="btn btn-success" onclick="openTaskModal()">
+            <i class="bi bi-plus-lg me-1"></i> Задача
+        </button>
+    </div>
+</div>
+
+<div id="kanban-board" class="kanban-board">
+    <div class="text-center text-muted py-5">Загрузка...</div>
+</div>
+
+<!-- Модал задачи -->
+<div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="task-modal-title">Новая задача</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="task-form">
+                    <input type="hidden" name="task_id" id="task-id">
+                    <input type="hidden" name="status_id" id="task-status-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" name="title" required placeholder="Название задачи">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" name="description" rows="3" placeholder="Описание..."></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Приоритет</label>
+                            <select class="form-select" name="priority">
+                                <option value="low">Низкий</option>
+                                <option value="medium" selected>Средний</option>
+                                <option value="high">Высокий</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Дедлайн</label>
+                            <input type="datetime-local" class="form-control" name="due_date">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Ответственный (email)</label>
+                            <input type="email" class="form-control" name="assignee_email" placeholder="user@example.com">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Теги (через запятую)</label>
+                        <input type="text" class="form-control" name="tags" placeholder="backend, urgent">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger me-auto" id="task-delete-btn" onclick="deleteTaskFromModal()" style="display:none;">Удалить</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveTask()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модал колонки -->
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="status-modal-title">Новая колонка</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="status-form">
+                    <input type="hidden" name="status_id" id="status-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" name="name" required placeholder="Например: На review">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Цвет</label>
+                        <input type="color" class="form-control form-control-color" name="color" value="#a78bfa">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger me-auto" id="status-delete-btn" onclick="deleteStatusFromModal()" style="display:none;">Удалить</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveStatus()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+    const PROJECT_ID = {{ project_id }};
+</script>
+<script src="/static/js/kanban.js?v=6"></script>
+{% endblock %}

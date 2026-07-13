@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum, Boolean, text
 from sqlalchemy.orm import relationship
 import enum
 from app.database import Base
@@ -23,6 +23,8 @@ class Project(Base):
 
     sections = relationship("Section", back_populates="project", cascade="all, delete-orphan", lazy="selectin", order_by="Section.sort_order")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan", lazy="selectin", order_by="Document.sort_order")
+    task_statuses = relationship("TaskStatus", back_populates="project", cascade="all, delete-orphan", lazy="selectin", order_by="TaskStatus.sort_order")
+    tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan", lazy="selectin", order_by="Task.sort_order")
 
 
 class Section(Base):
@@ -159,3 +161,37 @@ class GlossaryTerm(Base):
 
     topic = relationship("GlossaryTopic", back_populates="terms")
     subtopic = relationship("GlossarySubtopic", back_populates="terms")
+
+
+class TaskStatus(Base):
+    __tablename__ = "task_statuses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    color = Column(String(7), nullable=False, default="#a78bfa")
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, server_default=text("CURRENT_TIMESTAMP"))
+
+    project = relationship("Project", back_populates="task_statuses")
+    tasks = relationship("Task", back_populates="status", cascade="all, delete-orphan", lazy="selectin", order_by="Task.sort_order")
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    status_id = Column(Integer, ForeignKey("task_statuses.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    priority = Column(String(20), nullable=False, default="medium")
+    due_date = Column(DateTime, nullable=True)
+    assignee_email = Column(String(255), nullable=True)
+    tags = Column(String(500), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    project = relationship("Project", back_populates="tasks", lazy="selectin")
+    status = relationship("TaskStatus", back_populates="tasks", lazy="selectin")

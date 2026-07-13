@@ -257,3 +257,135 @@ class GlossaryTermUpdate(BaseModel):
     definition: Optional[str] = None
     topic_id: Optional[int] = None
     subtopic_id: Optional[int] = None
+
+
+# ═══════════════════════════════════════════════════
+# Канбан
+# ═══════════════════════════════════════════════════
+
+class TaskStatusOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    name: str
+    color: str = "#a78bfa"
+    sort_order: int = 0
+    created_at: datetime
+
+
+class TaskStatusCreate(BaseModel):
+    name: str
+    color: Optional[str] = "#a78bfa"
+
+
+class TaskStatusUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+
+
+class TaskStatusReorderRequest(BaseModel):
+    status_ids: List[int]
+
+
+class TaskOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    status_id: int
+    title: str
+    description: Optional[str] = None
+    priority: str = "medium"
+    due_date: Optional[datetime] = None
+    assignee_email: Optional[str] = None
+    tags: Optional[str] = None
+    sort_order: int = 0
+    created_at: datetime
+    updated_at: datetime
+    status: Optional[TaskStatusOut] = None
+
+
+class TaskCreate(BaseModel):
+    status_id: int
+    title: str
+    description: Optional[str] = None
+    priority: Optional[str] = "medium"
+    due_date: Optional[datetime] = None
+    assignee_email: Optional[str] = None
+    tags: Optional[str] = None
+
+
+class TaskUpdate(BaseModel):
+    status_id: Optional[int] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[datetime] = None
+    assignee_email: Optional[str] = None
+    tags: Optional[str] = None
+
+
+class TaskReorderRequest(BaseModel):
+    status_id: int
+    task_ids: List[int]
+
+
+class KanbanBoardOut(BaseModel):
+    statuses: List[TaskStatusOut]
+    tasks: List[TaskOut]
+
+
+class KanbanColumnOut(BaseModel):
+    name: str
+    color: str
+
+
+class KanbanFiltersOut(BaseModel):
+    projects: List[ProjectOut]
+    priorities: List[str]
+    assignees: List[str]
+    tags: List[str]
+
+
+class KanbanGlobalOut(BaseModel):
+    columns: List[KanbanColumnOut]
+    tasks: List[TaskOut]
+
+
+class KanbanTaskStatusUpdate(BaseModel):
+    column_name: str
+
+
+class KanbanTaskExport(BaseModel):
+    title: str
+    description: Optional[str] = None
+    priority: str = "medium"
+    due_date: Optional[datetime] = None
+    assignee_email: Optional[str] = None
+    tags: Optional[str] = None
+    sort_order: int = 0
+    status_name: str
+
+
+class KanbanStatusExport(BaseModel):
+    name: str
+    color: str = "#a78bfa"
+    sort_order: int = 0
+
+
+class KanbanProjectExport(BaseModel):
+    name: str
+    description: Optional[str] = None
+    statuses: List[KanbanStatusExport]
+    tasks: List[KanbanTaskExport]
+
+
+class KanbanExportOut(BaseModel):
+    version: int = 1
+    exported_at: datetime
+    projects: List[KanbanProjectExport]
+
+
+class KanbanImportIn(BaseModel):
+    version: int
+    exported_at: Optional[datetime] = None
+    projects: List[KanbanProjectExport]

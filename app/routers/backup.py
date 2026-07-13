@@ -22,6 +22,8 @@ from app.models import (
     Section,
     SidebarBlock,
     SidebarLink,
+    Task,
+    TaskStatus,
 )
 from app.yandex_disk import YandexDiskStorage
 
@@ -68,6 +70,8 @@ async def _gather_stats(session: AsyncSession) -> dict:
     blocks = await session.execute(select(SidebarBlock))
     links = await session.execute(select(SidebarLink))
     events = await session.execute(select(CalendarEvent))
+    task_statuses = await session.execute(select(TaskStatus))
+    tasks = await session.execute(select(Task))
 
     proj_list = projects.scalars().all()
     sec_list = sections.scalars().all()
@@ -76,6 +80,8 @@ async def _gather_stats(session: AsyncSession) -> dict:
     block_list = blocks.scalars().all()
     link_list = links.scalars().all()
     event_list = events.scalars().all()
+    status_list = task_statuses.scalars().all()
+    task_list = tasks.scalars().all()
 
     links_count = sum(1 for i in item_list if i.item_type.value == "link")
     files_count = sum(1 for i in item_list if i.item_type.value == "file")
@@ -101,6 +107,8 @@ async def _gather_stats(session: AsyncSession) -> dict:
         "sidebar_links": len(link_list),
         "sidebar_link_notes": sidebar_link_notes,
         "calendar_events": len(event_list),
+        "task_statuses": len(status_list),
+        "tasks": len(task_list),
         "total_files_size": total_size,
     }
 
@@ -203,6 +211,8 @@ def _read_sqlite_dump(db_path: Path) -> Dict[str, Any]:
         "sidebar_blocks",
         "sidebar_links",
         "calendar_events",
+        "task_statuses",
+        "tasks",
     ]
 
     dump = {"version": 1}
@@ -223,11 +233,15 @@ async def _restore_dump(dump: dict, session: AsyncSession) -> dict:
     await session.execute(delete(DocumentItem))
     await session.execute(delete(Document))
     await session.execute(delete(Section))
+    await session.execute(delete(Task))
+    await session.execute(delete(TaskStatus))
     await session.execute(delete(Project))
     await session.commit()
 
     tables_order = [
         (Project, "projects"),
+        (TaskStatus, "task_statuses"),
+        (Task, "tasks"),
         (Section, "sections"),
         (Document, "documents"),
         (DocumentItem, "document_items"),
@@ -248,7 +262,7 @@ async def _restore_dump(dump: dict, session: AsyncSession) -> dict:
                     val = row.get(col.name)
                     if val is None:
                         out[col.name] = None
-                    elif col.name in ("created_at", "updated_at", "start_date", "end_date") and isinstance(val, str):
+                    elif col.name in ("created_at", "updated_at", "start_date", "end_date", "due_date") and isinstance(val, str):
                         out[col.name] = datetime.fromisoformat(val)
                     elif col.name == "item_type" and isinstance(val, str):
                         out[col.name] = val

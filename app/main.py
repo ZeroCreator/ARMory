@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.database import engine, Base, AsyncSessionLocal
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora, tasks
 from app.config import get_settings
 from app.telegram import check_and_send_calendar_reminders
 
@@ -239,6 +239,95 @@ async def lifespan(app: FastAPI):
                 )
             """))
 
+        # Миграция: канбан (колонки и задачи)
+        if "task_statuses" not in table_names:
+            await conn.execute(text("""
+                CREATE TABLE task_statuses (
+                    id INTEGER PRIMARY KEY,
+                    project_id INTEGER NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    color VARCHAR(7) NOT NULL DEFAULT '#a78bfa',
+                    sort_order INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+                )
+            """))
+        if "tasks" not in table_names:
+            await conn.execute(text("""
+                CREATE TABLE tasks (
+                    id INTEGER PRIMARY KEY,
+                    project_id INTEGER NOT NULL,
+                    status_id INTEGER NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    priority VARCHAR(20) DEFAULT 'medium',
+                    due_date TIMESTAMP,
+                    assignee_email VARCHAR(255),
+                    tags VARCHAR(500),
+                    sort_order INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    FOREIGN KEY (status_id) REFERENCES task_statuses(id) ON DELETE CASCADE
+                )
+            """))
+
+        # Исправить NULL created_at в task_statuses (могли появиться из-за SQLAlchemy default без server_default)
+        if "task_statuses" in table_names:
+            await conn.execute(
+                text("UPDATE task_statuses SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
+            )
+
+        # Для существующих проектов без колонок создать дефолтные статусы канбана
+        if "task_statuses" in table_names and "projects" in table_names:
+            project_rows = await conn.execute(text("SELECT id FROM projects"))
+            for (proj_id,) in project_rows.fetchall():
+                existing = await conn.execute(
+                    text("SELECT 1 FROM task_statuses WHERE project_id = :pid LIMIT 1"),
+                    {"pid": proj_id},
+                )
+                if not existing.fetchone():
+                    await conn.execute(
+                        text("""
+                            INSERT INTO task_statuses (project_id, name, color, sort_order, created_at)
+                            VALUES
+                                (:pid, 'К выполнению', '#a78bfa', 0, CURRENT_TIMESTAMP),
+                                (:pid, 'В работе', '#f6ad55', 1, CURRENT_TIMESTAMP),
+                                (:pid, 'Тестирование', '#63b3ed', 2, CURRENT_TIMESTAMP),
+                                (:pid, 'Готово', '#68d391', 3, CURRENT_TIMESTAMP)
+                        """),
+                        {"pid": proj_id},
+                    )
+
+        # Добавить колонку "Тестирование" перед "Готово" в проектах, где её ещё нет
+        if "task_statuses" in table_names and "projects" in table_names:
+            project_rows = await conn.execute(text("SELECT id FROM projects"))
+            for (proj_id,) in project_rows.fetchall():
+                has_testing = await conn.execute(
+                    text("SELECT 1 FROM task_statuses WHERE project_id = :pid AND name = 'Тестирование' LIMIT 1"),
+                    {"pid": proj_id},
+                )
+                if has_testing.fetchone():
+                    continue
+                done_row = await conn.execute(
+                    text("SELECT id, sort_order FROM task_statuses WHERE project_id = :pid AND name = 'Готово' LIMIT 1"),
+                    {"pid": proj_id},
+                )
+                done = done_row.fetchone()
+                if done:
+                    done_order = done[1]
+                    await conn.execute(
+                        text("UPDATE task_statuses SET sort_order = sort_order + 1 WHERE project_id = :pid AND sort_order >= :done_order"),
+                        {"pid": proj_id, "done_order": done_order},
+                    )
+                    await conn.execute(
+                        text("""
+                            INSERT INTO task_statuses (project_id, name, color, sort_order, created_at)
+                            VALUES (:pid, 'Тестирование', '#63b3ed', :done_order, CURRENT_TIMESTAMP)
+                        """),
+                        {"pid": proj_id, "done_order": done_order},
+                    )
+
         # Создаём data-директории, если их нет
         Path(settings.local_storage_path).expanduser().mkdir(parents=True, exist_ok=True)
         Path(settings.alexandrite_vault_path).expanduser().mkdir(parents=True, exist_ok=True)
@@ -283,6 +372,8 @@ app.include_router(alexandrite.router)
 app.include_router(glossary.router)
 app.include_router(wopi.router)
 app.include_router(collabora.router)
+app.include_router(tasks.router)
+app.include_router(tasks.global_router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -306,6 +397,29 @@ async def project_page(request: Request, project_id: int):
             "project_id": project_id,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
+        },
+    )
+
+
+@app.get("/projects/{project_id}/kanban", response_class=HTMLResponse)
+async def kanban_page(request: Request, project_id: int):
+    return templates.TemplateResponse(
+        "kanban.html",
+        {
+            "request": request,
+            "project_id": project_id,
+            "title": settings.app_name,
+        },
+    )
+
+
+@app.get("/kanban", response_class=HTMLResponse)
+async def global_kanban_page(request: Request):
+    return templates.TemplateResponse(
+        "kanban_global.html",
+        {
+            "request": request,
+            "title": settings.app_name,
         },
     )
 
