@@ -461,6 +461,7 @@ async def kanban_page(request: Request, project_id: int):
             "request": request,
             "project_id": project_id,
             "title": settings.app_name,
+            "local_storage_path": settings.local_storage_path,
             "pocketbase_url": settings.pocketbase_public_url,
         },
     )
@@ -473,6 +474,7 @@ async def global_kanban_page(request: Request):
         {
             "request": request,
             "title": settings.app_name,
+            "local_storage_path": settings.local_storage_path,
             "pocketbase_url": settings.pocketbase_public_url,
         },
     )

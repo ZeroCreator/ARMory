@@ -9,6 +9,7 @@ let kanbanSortables = [];
 let currentTaskId = null;
 let currentStatusId = null;
 let projectName = '';
+window.kanbanAttachments = window.kanbanAttachments || {};
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof PROJECT_ID === 'undefined') return;
@@ -218,22 +219,15 @@ function renderTaskCard(task) {
 function renderCardAttachments(attachments) {
     if (!attachments || attachments.length === 0) return '';
 
-    const typeIcons = {
-        file: 'bi-file-earmark',
-        git: 'bi-git',
-        link: 'bi-link-45deg',
-    };
-    const typeLabels = {
-        file: 'Файл',
-        git: 'Git-репозиторий',
-        link: 'Ссылка',
-    };
+    attachments.forEach(a => {
+        window.kanbanAttachments[a.id] = { ...a, project_id: PROJECT_ID };
+    });
 
-    const types = [...new Set(attachments.map(a => a.attachment_type))];
-    const icons = types.map(type => {
-        const icon = typeIcons[type] || 'bi-paperclip';
-        const label = typeLabels[type] || 'Вложение';
-        return `<span class="kanban-card-attachment-type" title="${label}"><i class="bi ${icon}"></i></span>`;
+    const icons = attachments.map(a => {
+        const cat = detectCategoryFromAttachment(a);
+        const icon = getCategoryIcon(cat);
+        const label = a.title || a.url || a.file_path || 'Вложение';
+        return `<span class="kanban-card-attachment-type" style="cursor:pointer" title="${escapeHtml(label)}" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})"><i class="bi ${icon}"></i></span>`;
     }).join('');
 
     return `
@@ -459,23 +453,26 @@ function renderTaskAttachments(attachments) {
         container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
         return;
     }
+    const projectId = getCurrentTaskProjectId();
+    attachments.forEach(a => {
+        window.kanbanAttachments[a.id] = { ...a, project_id: projectId, task_id: currentTaskId };
+    });
     container.innerHTML = attachments.map(a => {
         let icon = 'bi-paperclip';
         let display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
-        let href = '';
+        let link = '';
         if (a.attachment_type === 'link') {
             icon = 'bi-link-45deg';
-            href = escapeHtml(a.url || '#');
+            link = `<a href="${escapeHtml(a.url || '#')}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
         } else if (a.attachment_type === 'git') {
             icon = 'bi-git';
-            href = escapeHtml(a.url || '#');
+            link = `<a href="${escapeHtml(a.url || '#')}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
         } else if (a.attachment_type === 'file') {
             icon = 'bi-file-earmark';
-            href = `/uploads/${escapeHtml(a.file_path || '')}`;
+            link = `<span class="text-decoration-none" style="cursor:pointer" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})">${display}</span>`;
+        } else {
+            link = `<span>${display}</span>`;
         }
-        const link = href
-            ? `<a href="${href}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`
-            : `<span>${display}</span>`;
         return `
             <div class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded mb-1">
                 <div class="text-truncate">

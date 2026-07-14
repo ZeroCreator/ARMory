@@ -3584,6 +3584,12 @@ footer {
     background: rgba(91, 33, 182, 0.1);
     color: #5b21b6;
     font-size: 0.75rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.kanban-card-attachment-type:hover {
+    background: rgba(91, 33, 182, 0.2);
 }
 
 .kanban-card-attachment-count {

@@ -1421,6 +1421,187 @@ function previewError() {
 }
 
 // ═══════════════════════════════════════════════════
+// ПРЕДПРОСМОТР ВЛОЖЕНИЙ ЗАДАЧ КАНБАНА
+// ═══════════════════════════════════════════════════
+
+window.kanbanAttachments = window.kanbanAttachments || {};
+
+function detectCategoryFromAttachment(attachment) {
+    if (attachment.attachment_type === 'link' || attachment.attachment_type === 'git') {
+        return detectCategoryFromItem({ item_type: 'link', url: attachment.url });
+    }
+    const fileName = (attachment.title || attachment.file_path || '').toLowerCase();
+    return detectCategoryFromItem({ item_type: 'file', file_name: fileName });
+}
+
+function getTaskAttachmentFileUrl(attachment) {
+    if (!attachment.file_path) return '';
+    return `/uploads/${encodeURIComponent(attachment.file_path)}`;
+}
+
+function getTaskAttachmentDownloadUrl(attachment) {
+    return getTaskAttachmentFileUrl(attachment);
+}
+
+async function openTaskAttachmentPreview(attachmentId) {
+    const attachment = window.kanbanAttachments?.[attachmentId];
+    if (!attachment) return;
+
+    const cat = detectCategoryFromAttachment(attachment);
+
+    if (attachment.attachment_type === 'link' || attachment.attachment_type === 'git') {
+        if (attachment.url) window.open(attachment.url, '_blank');
+        return;
+    }
+
+    const officeCategories = ['word', 'spreadsheet', 'presentation'];
+    if (officeCategories.includes(cat)) {
+        if (isLocalhost()) {
+            return openTaskAttachmentLocally(attachment);
+        }
+    }
+
+    const modalEl = document.getElementById('previewModal');
+    if (!modalEl) return;
+    const content = document.getElementById('preview-content');
+    const title = document.getElementById('preview-title');
+    const downloadBtn = document.getElementById('preview-download');
+    const modalDialog = modalEl.querySelector('.modal-dialog');
+
+    title.textContent = attachment.title || attachment.file_path || 'Просмотр';
+    downloadBtn.href = getTaskAttachmentDownloadUrl(attachment);
+    downloadBtn.style.display = 'inline-block';
+    modalDialog?.classList.remove('modal-fullscreen');
+    content.innerHTML = '<div class="text-center p-5"><div class="spinner-border"></div></div>';
+
+    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    modal.show();
+
+    switch (cat) {
+        case 'image': {
+            content.innerHTML = `<div class="text-center p-3"><img src="${getTaskAttachmentFileUrl(attachment)}" class="img-fluid rounded" style="max-height:75vh;" onerror="previewError()"></div>`;
+            break;
+        }
+        case 'video': {
+            content.innerHTML = `<div class="p-3"><video controls class="w-100 rounded" style="max-height:75vh;"><source src="${getTaskAttachmentFileUrl(attachment)}">Ваш браузер не поддерживает видео.</video></div>`;
+            break;
+        }
+        case 'audio': {
+            content.innerHTML = `<div class="p-5 text-center"><audio controls class="w-100"><source src="${getTaskAttachmentFileUrl(attachment)}">Ваш браузер не поддерживает аудио.</audio></div>`;
+            break;
+        }
+        case 'pdf': {
+            content.innerHTML = `<iframe src="${getTaskAttachmentFileUrl(attachment)}" class="w-100 border-0" style="height:75vh;"></iframe>`;
+            break;
+        }
+        case 'word':
+        case 'spreadsheet':
+        case 'presentation': {
+            if (attachment.project_id && attachment.task_id) {
+                await openTaskAttachmentInCollabora(attachment);
+            } else {
+                content.innerHTML = `
+                    <div class="empty-state py-5">
+                        <i class="bi bi-file-earmark-x"></i>
+                        <p>Предпросмотр office-файлов доступен только внутри проекта</p>
+                        <a href="${getTaskAttachmentDownloadUrl(attachment)}" class="btn btn-success">
+                            <i class="bi bi-download me-1"></i> Скачать файл
+                        </a>
+                    </div>`;
+            }
+            return;
+        }
+        case 'text':
+        case 'code': {
+            if (isMarkdownFile(attachment.title || attachment.file_path)) {
+                try {
+                    const resp = await fetch(getTaskAttachmentFileUrl(attachment));
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const text = await resp.text();
+                    const html = typeof marked !== 'undefined'
+                        ? marked.parse(text)
+                        : escapeHtml(text).replace(/\n/g, '<br>');
+                    content.innerHTML = `<div class="markdown-preview">${html}</div>`;
+                } catch (e) {
+                    previewError();
+                }
+            } else {
+                try {
+                    const resp = await fetch(getTaskAttachmentFileUrl(attachment));
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const text = await resp.text();
+                    content.innerHTML = `<div class="p-3"><pre class="preview-code"><code>${escapeHtml(text)}</code></pre></div>`;
+                } catch (e) {
+                    previewError();
+                }
+            }
+            break;
+        }
+        default: {
+            content.innerHTML = `
+                <div class="empty-state py-5">
+                    <i class="bi bi-file-earmark-x"></i>
+                    <p>Предпросмотр недоступен для этого формата</p>
+                    <a href="${getTaskAttachmentDownloadUrl(attachment)}" class="btn btn-success">
+                        <i class="bi bi-download me-1"></i> Скачать файл
+                    </a>
+                </div>`;
+        }
+    }
+}
+
+async function openTaskAttachmentInCollabora(attachment) {
+    const modalEl = document.getElementById('previewModal');
+    const content = document.getElementById('preview-content');
+    const title = document.getElementById('preview-title');
+    const downloadBtn = document.getElementById('preview-download');
+    const modalDialog = modalEl.querySelector('.modal-dialog');
+
+    try {
+        const data = await api(`${API_BASE}/projects/${attachment.project_id}/tasks/${attachment.task_id}/attachments/${attachment.id}/collabora`);
+        title.textContent = attachment.title || attachment.file_path || 'Документ';
+        downloadBtn.href = getTaskAttachmentDownloadUrl(attachment);
+        downloadBtn.style.display = 'inline-block';
+        content.innerHTML = `<iframe src="${escapeHtml(data.url)}" class="w-100 border-0" style="height:75vh;" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>`;
+        modalDialog?.classList.add('modal-fullscreen');
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.show();
+    } catch (e) {
+        title.textContent = attachment.title || attachment.file_path || 'Документ';
+        downloadBtn.href = getTaskAttachmentDownloadUrl(attachment);
+        downloadBtn.style.display = 'inline-block';
+        modalDialog?.classList.remove('modal-fullscreen');
+        content.innerHTML = `
+            <div class="empty-state py-5">
+                <i class="bi bi-exclamation-triangle"></i>
+                <p>Не удалось открыть в Collabora: ${escapeHtml(e.message)}</p>
+                <a href="${getTaskAttachmentDownloadUrl(attachment)}" class="btn btn-success">
+                    <i class="bi bi-download me-1"></i> Скачать файл
+                </a>
+            </div>`;
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+}
+
+async function openTaskAttachmentLocally(attachment) {
+    if (!attachment.file_path) {
+        showToast('Файл не найден', 'warning');
+        return;
+    }
+    if (!attachment.project_id || !attachment.task_id) {
+        showToast('Не удалось определить задачу', 'warning');
+        return;
+    }
+    try {
+        await api(`${API_BASE}/projects/${attachment.project_id}/tasks/${attachment.task_id}/attachments/${attachment.id}/open`, { method: 'POST' });
+        showToast('Файл открыт в приложении');
+    } catch (e) {
+        showToast(`Не удалось открыть файл: ${e.message}`, 'warning');
+    }
+}
+
+// ═══════════════════════════════════════════════════
 // БОКОВЫЕ ПАНЕЛИ
 // ═══════════════════════════════════════════════════
 

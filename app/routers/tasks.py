@@ -2,19 +2,24 @@ from datetime import datetime
 from typing import Optional
 
 import os
+import platform
+import subprocess
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import select, update, delete, func, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.database import get_db
 from app.models import Assignee, Project, Task, TaskAttachment, TaskStatus
+from app.routers.collabora import build_collabora_iframe_url
+from app.routers.wopi import OFFICE_EXTENSIONS, encode_file_id
+from app.storage import StorageBackend, get_storage
 from app.schemas import (
     GlobalKanbanColumnCreate,
     GlobalKanbanColumnUpdate,
@@ -456,6 +461,167 @@ async def delete_task_attachment(
     await db.delete(attachment)
     await db.commit()
     return None
+
+
+@router.get("/tasks/{task_id}/attachments/{attachment_id}/collabora")
+async def collabora_task_attachment(
+    project_id: int,
+    task_id: int,
+    attachment_id: int,
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
+):
+    """Вернуть URL iframe для редактирования вложения задачи в Collabora Online."""
+    if not settings.collabora_enabled:
+        raise HTTPException(status_code=503, detail="Collabora Online is not enabled")
+
+    task = await _get_task(project_id, task_id, db)
+    result = await db.execute(
+        select(TaskAttachment).where(
+            TaskAttachment.id == attachment_id,
+            TaskAttachment.task_id == task.id,
+        )
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    if attachment.attachment_type != "file" or not attachment.file_path:
+        raise HTTPException(status_code=400, detail="Not a file attachment")
+
+    ext = Path(attachment.title or attachment.file_path).suffix.lower()
+    if ext not in OFFICE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Unsupported file type for Collabora")
+
+    local_path = await storage.get_local_path(attachment.file_path)
+    if not local_path or not os.path.exists(local_path):
+        raise HTTPException(status_code=400, detail="File is not available locally")
+
+    file_id = encode_file_id(project_file_path=attachment.file_path)
+    iframe_url = await build_collabora_iframe_url(file_id, ext, settings)
+    return {
+        "url": iframe_url,
+        "wopi_src": f"{settings.collabora_wopi_internal_url.rstrip('/')}/wopi/files/{file_id}",
+    }
+
+
+@router.post("/tasks/{task_id}/attachments/{attachment_id}/open")
+async def open_task_attachment(
+    request: Request,
+    project_id: int,
+    task_id: int,
+    attachment_id: int,
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+):
+    """Открыть файл-вложение задачи в системном приложении. Только localhost."""
+    task = await _get_task(project_id, task_id, db)
+    result = await db.execute(
+        select(TaskAttachment).where(
+            TaskAttachment.id == attachment_id,
+            TaskAttachment.task_id == task.id,
+        )
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    if attachment.attachment_type != "file" or not attachment.file_path:
+        raise HTTPException(status_code=400, detail="Not a file attachment")
+
+    client_host = request.client.host if request.client else None
+    if client_host not in ("127.0.0.1", "::1", "localhost"):
+        raise HTTPException(status_code=403, detail="Remote open not allowed")
+
+    local_path = await storage.get_local_path(attachment.file_path)
+    if not local_path or not os.path.exists(local_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    def _get_gui_env():
+        env = os.environ.copy()
+        uid = str(os.getuid())
+        runtime_dir = f"/run/user/{uid}"
+        env["XDG_RUNTIME_DIR"] = runtime_dir
+        env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={runtime_dir}/bus"
+        display = None
+        try:
+            result = subprocess.run(
+                ["pgrep", "-a", "-u", uid, "-f", "Xwayland|Xorg"],
+                capture_output=True, text=True, timeout=5
+            )
+            for line in result.stdout.strip().split("\n"):
+                if not line:
+                    continue
+                parts = line.split()
+                for i, part in enumerate(parts):
+                    if part in ("Xwayland", "Xorg") and i + 1 < len(parts):
+                        candidate = parts[i + 1]
+                        if candidate.startswith(":"):
+                            display = candidate
+                            break
+                if display:
+                    break
+        except Exception:
+            pass
+        if not display:
+            try:
+                result = subprocess.run(
+                    ["ps", "e", "-u", uid],
+                    capture_output=True, text=True, timeout=5
+                )
+                for line in result.stdout.split("\n"):
+                    if "DISPLAY=:" in line:
+                        for part in line.split():
+                            if part.startswith("DISPLAY=:"):
+                                display = part.split("=", 1)[1]
+                                break
+                    if display:
+                        break
+            except Exception:
+                pass
+        if display:
+            env["DISPLAY"] = display
+
+        xauthority = None
+        try:
+            result = subprocess.run(
+                ["ps", "e", "-u", uid],
+                capture_output=True, text=True, timeout=5
+            )
+            for line in result.stdout.split("\n"):
+                if "XAUTHORITY=" in line:
+                    for part in line.split():
+                        if part.startswith("XAUTHORITY="):
+                            xauthority = part.split("=", 1)[1]
+                            break
+                if xauthority:
+                    break
+        except Exception:
+            pass
+        if xauthority:
+            env["XAUTHORITY"] = xauthority
+
+        return env
+
+    system = platform.system()
+    try:
+        if system == "Windows":
+            os.startfile(local_path)
+        elif system == "Darwin":
+            subprocess.Popen(["open", local_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            gui_env = _get_gui_env()
+            subprocess.Popen(
+                ["xdg-open", local_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=gui_env,
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
+
+    return {"status": "opened", "path": local_path}
 
 
 # ═══════════════════════════════════════════════════
