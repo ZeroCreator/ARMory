@@ -28,14 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showTaskContextMenu(e, taskId);
             }
         });
-        board.addEventListener('click', (e) => {
-            const card = e.target.closest('.kanban-card');
-            if (card) {
-                document.querySelectorAll('.kanban-card-highlighted').forEach(c => {
-                    c.classList.remove('kanban-card-highlighted');
-                });
-            }
-        });
+
     }
 });
 async function loadProjectHeader(projectId) {
@@ -201,7 +194,7 @@ function renderTaskCard(task) {
     const attachmentsHtml = renderCardAttachments(task.attachments);
 
     return `
-        <div class="kanban-card" data-id="${task.id}" data-status-id="${task.status_id}" onclick="openTaskModal(${task.id})">
+        <div class="kanban-card" data-id="${task.id}" data-status-id="${task.status_id}" onclick="handleCardClick(${task.id}, this)">
             <div class="d-flex justify-content-between align-items-start mb-2">
                 <span class="kanban-card-title">${escapeHtml(task.title)}</span>
                 <span class="badge ${priorityClass} priority-badge">${priorityLabel}</span>
@@ -256,6 +249,16 @@ function updateTaskCardInBoard(task) {
     if (card) {
         card.outerHTML = renderTaskCard(task);
     }
+}
+
+function handleCardClick(taskId, card) {
+    // Если карточка подсвечена (например, после перехода по ссылке),
+    // клик только снимает подсветку, не открывая задачу повторно.
+    if (card.classList.contains('kanban-card-highlighted')) {
+        card.classList.remove('kanban-card-highlighted');
+        return;
+    }
+    openTaskModal(taskId);
 }
 
 function initKanbanSortable() {

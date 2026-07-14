@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     collabora_admin_user: str = "admin"
     collabora_admin_password: str = "changeme"
 
+    # PocketBase — встроенный инструмент для управления схемами данных
+    pocketbase_internal_url: str = "http://pocketbase:8090"
+    pocketbase_public_path: str = "/pocketbase/"
+
+    @property
+    def pocketbase_public_url(self) -> str:
+        return self.pocketbase_public_path + "_/"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

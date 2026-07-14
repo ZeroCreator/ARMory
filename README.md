@@ -22,9 +22,11 @@ ___
   - Редактирование офисных документов через Collabora Online.
 - **Яндекс.Диск** — синхронизация базы данных, загруженных файлов и Alexandrite с облаком с отображением прогресса операций.
 - **Архивные бэкапы** — создание и восстановление архивов `.tar.gz` для ARMory и Alexandrite.
+- **Канбан** — доски задач внутри проектов с колонками, приоритетами, ответственными, дедлайнами и вложениями. Поддерживается drag-and-drop и прямые ссылки на задачи.
 - **Планировщик задач** — задачи с датами, повторениями, приоритетами и напоминаниями.
 - **Календарь** — визуальное представление задач и событий по месяцам.
 - **Глоссарий** — база терминов с темами, подтемами, импортом и экспортом в `.xlsx`.
+- **PocketBase** — встроенный инструмент для управления схемами данных проектов. Каждый проект может иметь свой изолированный PocketBase-инстанс, доступный из меню ARMory.
 - **Адаптивный UI** — Bootstrap 5, сворачиваемые сайдбары, сохранение состояния интерфейса.
 
 ___
@@ -49,11 +51,18 @@ When the auth gateway (oauth2-proxy) is enabled, the public port is configured b
 
 ### Локальный запуск (без Docker)
 
-Требуется [uv](https://docs.astral.sh/uv/getting-started/installation/):
+Требуется [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
-```bash
-uv run uvicorn app.main:app --host 0.0.0.0 --port <PORT> --reload
-```
+1. Запустить PocketBase (если используется):
+   ```bash
+   ./pocketbase/run-pocketbase.sh
+   ```
+
+2. В другом терминале запустить ARMory:
+   ```bash
+   export POCKETBASE_INTERNAL_URL=http://127.0.0.1:8090
+   uv run uvicorn app.main:app --host 0.0.0.0 --port <PORT> --reload
+   ```
 
 ### Запуск через systemd
 

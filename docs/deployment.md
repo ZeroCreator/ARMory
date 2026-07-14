@@ -32,6 +32,13 @@ ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
 
 # Планировщик
 SCHEDULER_ENABLED=true
+
+# PocketBase
+POCKETBASE_PROJECTS=intraservice,armory
+POCKETBASE_DEFAULT_PROJECT=intraservice
+POCKETBASE_BASE_PORT=8091
+POCKETBASE_ADMIN_EMAIL=admin@example.com
+POCKETBASE_ADMIN_PASSWORD=<сложный пароль>
 ```
 
 ```bash
@@ -43,7 +50,11 @@ mkdir -p data/uploads
 # mv projectdocs.db data/
 # mv uploads/* data/uploads/
 
-# 5. Запуск
+# 5. Если используется PocketBase — скопируй данные проектов:
+# rsync -av source/data/pb_data/ data/pb_data/
+# rsync -av source/data/pb_migrations/ data/pb_migrations/
+
+# 6. Запуск
 docker compose up -d --build
 ```
 

@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.database import engine, Base, AsyncSessionLocal
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora, tasks, assignees
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora, tasks, assignees, pocketbase_proxy
 from app.config import get_settings
 from app.telegram import check_and_send_calendar_reminders
 
@@ -423,6 +423,7 @@ app.include_router(collabora.router)
 app.include_router(tasks.router)
 app.include_router(tasks.global_router)
 app.include_router(assignees.router)
+app.include_router(pocketbase_proxy.router, prefix="/pocketbase")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -433,6 +434,7 @@ async def index(request: Request):
             "request": request,
             "title": settings.app_name,
             "scheduler_enabled": settings.scheduler_enabled,
+            "pocketbase_url": settings.pocketbase_public_url,
         },
     )
 
@@ -446,6 +448,7 @@ async def project_page(request: Request, project_id: int):
             "project_id": project_id,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
+            "pocketbase_url": settings.pocketbase_public_url,
         },
     )
 
@@ -458,6 +461,7 @@ async def kanban_page(request: Request, project_id: int):
             "request": request,
             "project_id": project_id,
             "title": settings.app_name,
+            "pocketbase_url": settings.pocketbase_public_url,
         },
     )
 
@@ -469,18 +473,25 @@ async def global_kanban_page(request: Request):
         {
             "request": request,
             "title": settings.app_name,
+            "pocketbase_url": settings.pocketbase_public_url,
         },
     )
 
 
 @app.get("/alexandrite", response_class=HTMLResponse)
 async def alexandrite_page(request: Request):
-    return templates.TemplateResponse("alexandrite.html", {"request": request, "title": settings.app_name})
+    return templates.TemplateResponse(
+        "alexandrite.html",
+        {"request": request, "title": settings.app_name, "pocketbase_url": settings.pocketbase_public_url},
+    )
 
 
 @app.get("/glossary", response_class=HTMLResponse)
 async def glossary_page(request: Request):
-    return templates.TemplateResponse("glossary.html", {"request": request, "title": settings.app_name})
+    return templates.TemplateResponse(
+        "glossary.html",
+        {"request": request, "title": settings.app_name, "pocketbase_url": settings.pocketbase_public_url},
+    )
 
 
 # Документация ARMory (MkDocs site)

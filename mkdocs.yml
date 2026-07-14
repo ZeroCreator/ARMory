@@ -35,6 +35,8 @@ nav:
   - Календарь: calendar.md
   - Планировщик: scheduler.md
   - Бэкапы: backup.md
+  - Канбан: kanban.md
+  - PocketBase: pocketbase.md
   - Деплой: deployment.md
 
 markdown_extensions:

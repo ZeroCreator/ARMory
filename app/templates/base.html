@@ -23,6 +23,7 @@
             <div class="header-nav mx-auto">
                 <a href="/alexandrite" class="header-nav-link">Alexandrite</a>
                 <a href="/kanban" class="header-nav-link">Канбан</a>
+                <a href="{{ pocketbase_url }}" class="header-nav-link" target="_blank" rel="noopener">PocketBase</a>
                 <a href="/glossary" class="header-nav-link">Глоссарий</a>
                 <a href="/docs/" class="header-nav-link" target="_blank" rel="noopener">Документация</a>
             </div>
@@ -49,7 +50,7 @@
         {% endblock %}
 
         <!-- Основной контент -->
-        <main class="main-content">
+        <main class="{% block main_class %}main-content{% endblock %}">
             {% block content %}{% endblock %}
         </main>
 
@@ -217,6 +218,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="/static/js/fullcalendar.min.js"></script>
     <script src="/static/js/fullcalendar-ru.min.js"></script>
     <script src="/static/js/app.js?v=57"></script>
