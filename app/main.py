@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.database import engine, Base, AsyncSessionLocal
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora, tasks
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora, tasks, assignees
 from app.config import get_settings
 from app.telegram import check_and_send_calendar_reminders
 
@@ -239,6 +239,40 @@ async def lifespan(app: FastAPI):
                 )
             """))
 
+        # Миграция: ответственные (assignees)
+        if "assignees" not in table_names:
+            await conn.execute(text("""
+                CREATE TABLE assignees (
+                    id INTEGER PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) NOT NULL UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+
+        # Миграция: заполнить assignees из существующих assignee_email задач
+        if "tasks" in table_names and "assignees" in table_names:
+            emails_result = await conn.execute(
+                text("SELECT DISTINCT assignee_email FROM tasks WHERE assignee_email IS NOT NULL")
+            )
+            for (email,) in emails_result.fetchall():
+                if not email:
+                    continue
+                existing = await conn.execute(
+                    text("SELECT 1 FROM assignees WHERE email = :email"),
+                    {"email": email},
+                )
+                if existing.fetchone():
+                    continue
+                name = email.split("@")[0]
+                await conn.execute(
+                    text("""
+                        INSERT INTO assignees (name, email, created_at)
+                        VALUES (:name, :email, CURRENT_TIMESTAMP)
+                    """),
+                    {"name": name, "email": email},
+                )
+
         # Миграция: канбан (колонки и задачи)
         if "task_statuses" not in table_names:
             await conn.execute(text("""
@@ -388,6 +422,7 @@ app.include_router(wopi.router)
 app.include_router(collabora.router)
 app.include_router(tasks.router)
 app.include_router(tasks.global_router)
+app.include_router(assignees.router)
 
 
 @app.get("/", response_class=HTMLResponse)

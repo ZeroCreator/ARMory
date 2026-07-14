@@ -21,6 +21,13 @@
         <button class="btn btn-success" onclick="openTaskModal()">
             <i class="bi bi-plus-lg me-1"></i> Задача
         </button>
+        <button class="btn btn-outline-secondary" onclick="exportProjectKanban()" title="Экспортировать канбан проекта">
+            <i class="bi bi-download"></i>
+        </button>
+        <button class="btn btn-outline-secondary" onclick="document.getElementById('kanban-import-input').click()" title="Импортировать канбан проекта">
+            <i class="bi bi-upload"></i>
+        </button>
+        <input type="file" id="kanban-import-input" accept=".json" style="display:none" onchange="importProjectKanban(this)">
     </div>
 </div>
 
@@ -67,8 +74,15 @@
                             <input type="datetime-local" class="form-control" name="due_date">
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Ответственный (email)</label>
-                            <input type="email" class="form-control" name="assignee_email" placeholder="user@example.com">
+                            <label class="form-label">Ответственный</label>
+                            <div class="input-group">
+                                <select class="form-select kanban-assignee-select" name="assignee_email" id="task-assignee-email">
+                                    <option value="">Не назначен</option>
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary" onclick="openAssigneeModal()" title="Добавить ответственного">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -147,6 +161,34 @@
         </div>
     </div>
 </div>
+
+<!-- Модал ответственного -->
+<div class="modal fade" id="assigneeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="assignee-modal-title">Новый ответственный</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="assignee-form">
+                    <div class="mb-3">
+                        <label class="form-label">Имя <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name" required placeholder="Иван Иванов">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" name="email" required placeholder="user@example.com">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveAssignee()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -154,5 +196,5 @@
 <script>
     const PROJECT_ID = {{ project_id }};
 </script>
-<script src="/static/js/kanban.js?v=16"></script>
+<script src="/static/js/kanban.js?v=27"></script>
 {% endblock %}

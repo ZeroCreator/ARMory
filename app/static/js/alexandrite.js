@@ -882,13 +882,18 @@ function showToast(message, type = 'success') {
     if (!container) {
         container = document.createElement('div');
         container.id = 'toast-container';
-        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        container.className = 'toast-container p-3';
+        container.style.position = 'fixed';
+        container.style.bottom = '1rem';
+        container.style.right = '1rem';
+        container.style.left = 'auto';
+        container.style.top = 'auto';
         container.style.zIndex = '9999';
         document.body.appendChild(container);
     }
 
     const toastEl = document.createElement('div');
-    toastEl.className = `toast align-items-center text-bg-${type} border-0`;
+    toastEl.className = `toast align-items-center text-bg-${type} border-0 rounded-pill`;
     toastEl.setAttribute('role', 'alert');
     toastEl.innerHTML = `
         <div class="d-flex">

@@ -62,7 +62,7 @@
                 </div>
                 {% endif %}
             </div>
-            <div class="row g-3 mt-1">
+            <div class="row g-3 mt-1 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label">Создано с</label>
                     <input type="date" class="form-control" id="filter-created-after" onchange="applyFilters()">
@@ -71,9 +71,9 @@
                     <label class="form-label">Создано до</label>
                     <input type="date" class="form-control" id="filter-created-before" onchange="applyFilters()">
                 </div>
-                <div class="col-md-2 offset-md-4">
+                <div class="col-auto offset-md-4">
                     <label class="form-label">&nbsp;</label>
-                    <button class="btn btn-outline-gray w-100" onclick="resetFilters()" title="Сбросить фильтры">
+                    <button class="btn btn-outline-gray kanban-reset-btn" onclick="resetFilters()" title="Сбросить фильтры">
                         <i class="bi bi-x-lg"></i> Сбросить
                     </button>
                 </div>

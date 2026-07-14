@@ -14,14 +14,17 @@ from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import Project, Task, TaskAttachment, TaskStatus
+from app.models import Assignee, Project, Task, TaskAttachment, TaskStatus
 from app.schemas import (
+    GlobalKanbanColumnCreate,
+    GlobalKanbanColumnUpdate,
     KanbanBoardOut,
     KanbanColumnOut,
     KanbanExportOut,
     KanbanFiltersOut,
     KanbanGlobalOut,
     KanbanImportIn,
+    KanbanProjectExport,
     KanbanTaskStatusUpdate,
     TaskAttachmentCreate,
     TaskAttachmentOut,
@@ -232,11 +235,8 @@ async def project_kanban_filters(project_id: int, db: AsyncSession = Depends(get
     )
     priorities = [p[0] for p in priorities_result.fetchall() if p[0]]
 
-    assignees_result = await db.execute(
-        select(distinct(Task.assignee_email))
-        .where(Task.assignee_email.isnot(None), Task.project_id == project_id)
-    )
-    assignees = [a[0] for a in assignees_result.fetchall() if a[0]]
+    assignees_result = await db.execute(select(Assignee).order_by(Assignee.name.asc()))
+    assignees = assignees_result.scalars().all()
 
     tags_result = await db.execute(
         select(Task.tags).where(Task.tags.isnot(None), Task.project_id == project_id)
@@ -251,7 +251,7 @@ async def project_kanban_filters(project_id: int, db: AsyncSession = Depends(get
     return KanbanFiltersOut(
         projects=[],
         priorities=sorted(priorities),
-        assignees=sorted(assignees),
+        assignees=assignees,
         tags=sorted(tag_set),
     )
 
@@ -325,21 +325,22 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
 ):
     task = await _get_task(project_id, task_id, db)
-    if data.status_id is not None:
-        await _get_status(project_id, data.status_id, db)
-        task.status_id = data.status_id
-    if data.title is not None:
-        task.title = data.title
-    if data.description is not None:
-        task.description = data.description
-    if data.priority is not None:
-        task.priority = data.priority
-    if data.due_date is not None:
-        task.due_date = data.due_date
-    if data.assignee_email is not None:
-        task.assignee_email = data.assignee_email
-    if data.tags is not None:
-        task.tags = data.tags
+    update_data = data.model_dump(exclude_unset=True)
+    if "status_id" in update_data:
+        await _get_status(project_id, update_data["status_id"], db)
+        task.status_id = update_data["status_id"]
+    if "title" in update_data:
+        task.title = update_data["title"]
+    if "priority" in update_data:
+        task.priority = update_data["priority"]
+    if "description" in update_data:
+        task.description = update_data["description"]
+    if "due_date" in update_data:
+        task.due_date = update_data["due_date"]
+    if "assignee_email" in update_data:
+        task.assignee_email = update_data["assignee_email"]
+    if "tags" in update_data:
+        task.tags = update_data["tags"]
     task.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(task)
@@ -458,11 +459,214 @@ async def delete_task_attachment(
 
 
 # ═══════════════════════════════════════════════════
-# Общий канбан
+# Экспорт / импорт канбана проекта
 # ═══════════════════════════════════════════════════
 
-COLUMN_ORDER = ["К выполнению", "В работе", "Тестирование", "Готово"]
+async def _build_project_export(project_id: int, db: AsyncSession) -> dict:
+    """Собрать данные для экспорта одного проекта."""
+    project = await _get_project(project_id, db)
 
+    statuses_result = await db.execute(
+        select(TaskStatus)
+        .where(TaskStatus.project_id == project_id)
+        .order_by(TaskStatus.sort_order.asc(), TaskStatus.created_at.asc())
+    )
+    statuses = statuses_result.scalars().all()
+
+    tasks_result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.attachments))
+        .where(Task.project_id == project_id)
+        .order_by(Task.sort_order.asc(), Task.created_at.asc())
+    )
+    tasks = tasks_result.scalars().all()
+
+    status_map = {s.id: s.name for s in statuses}
+
+    return {
+        "name": project.name,
+        "description": project.description,
+        "statuses": [
+            {
+                "name": s.name,
+                "color": s.color,
+                "sort_order": s.sort_order,
+            }
+            for s in statuses
+        ],
+        "tasks": [
+            {
+                "title": t.title,
+                "description": t.description,
+                "priority": t.priority,
+                "due_date": t.due_date,
+                "assignee_email": t.assignee_email,
+                "tags": t.tags,
+                "sort_order": t.sort_order,
+                "status_name": status_map.get(t.status_id, ""),
+                "attachments": [
+                    {
+                        "attachment_type": a.attachment_type,
+                        "title": a.title,
+                        "url": a.url,
+                        "file_path": a.file_path,
+                    }
+                    for a in t.attachments
+                ],
+            }
+            for t in tasks
+        ],
+    }
+
+
+async def _import_project_data(
+    project_id: int,
+    project_data: KanbanProjectExport,
+    db: AsyncSession,
+) -> tuple[int, int]:
+    """Импортировать статусы и задачи в указанный проект."""
+    imported_statuses = 0
+    imported_tasks = 0
+
+    status_name_to_id = {}
+    for status_data in project_data.statuses:
+        status_result = await db.execute(
+            select(TaskStatus).where(
+                TaskStatus.project_id == project_id,
+                TaskStatus.name == status_data.name,
+            )
+        )
+        status = status_result.scalar_one_or_none()
+        if not status:
+            status = TaskStatus(
+                project_id=project_id,
+                name=status_data.name,
+                color=status_data.color,
+                sort_order=status_data.sort_order,
+            )
+            db.add(status)
+            await db.flush()
+            await db.refresh(status)
+            imported_statuses += 1
+        else:
+            status.color = status_data.color
+            status.sort_order = status_data.sort_order
+        status_name_to_id[status.name] = status.id
+
+    for task_data in project_data.tasks:
+        status_id = status_name_to_id.get(task_data.status_name)
+        if not status_id:
+            status_result = await db.execute(
+                select(TaskStatus).where(
+                    TaskStatus.project_id == project_id,
+                    TaskStatus.name == task_data.status_name,
+                )
+            )
+            status = status_result.scalar_one_or_none()
+            if not status:
+                continue
+            status_id = status.id
+
+        task_result = await db.execute(
+            select(Task).where(
+                Task.project_id == project_id,
+                Task.title == task_data.title,
+                Task.status_id == status_id,
+            )
+        )
+        task = task_result.scalar_one_or_none()
+        if not task:
+            task = Task(
+                project_id=project_id,
+                status_id=status_id,
+                title=task_data.title,
+                description=task_data.description,
+                priority=task_data.priority,
+                due_date=task_data.due_date,
+                assignee_email=task_data.assignee_email,
+                tags=task_data.tags,
+                sort_order=task_data.sort_order,
+            )
+            db.add(task)
+            imported_tasks += 1
+        else:
+            task.description = task_data.description
+            task.priority = task_data.priority
+            task.due_date = task_data.due_date
+            task.assignee_email = task_data.assignee_email
+            task.tags = task_data.tags
+            task.sort_order = task_data.sort_order
+
+        await db.flush()
+        await db.refresh(task)
+
+        attachments_to_import = list(task_data.attachments or [])
+        if attachments_to_import:
+            old_attachments_result = await db.execute(
+                select(TaskAttachment).where(TaskAttachment.task_id == task.id)
+            )
+            for old in old_attachments_result.scalars().all():
+                if old.attachment_type == "file" and old.file_path:
+                    try:
+                        full_path = Path(get_settings().local_storage_path).resolve() / old.file_path
+                        if full_path.exists():
+                            full_path.unlink()
+                    except OSError:
+                        pass
+                await db.delete(old)
+
+            for attachment_data in attachments_to_import:
+                attachment = TaskAttachment(
+                    task_id=task.id,
+                    attachment_type=attachment_data.attachment_type,
+                    title=attachment_data.title,
+                    url=attachment_data.url,
+                    file_path=attachment_data.file_path,
+                )
+                db.add(attachment)
+
+    return imported_statuses, imported_tasks
+
+
+@router.get("/kanban/export", response_model=KanbanExportOut)
+async def export_project_kanban(project_id: int, db: AsyncSession = Depends(get_db)):
+    """Экспорт колонок и задач канбана конкретного проекта."""
+    project_export = await _build_project_export(project_id, db)
+    return {
+        "version": 1,
+        "exported_at": datetime.utcnow(),
+        "projects": [project_export],
+    }
+
+
+@router.post("/kanban/import")
+async def import_project_kanban(
+    project_id: int,
+    data: KanbanImportIn,
+    db: AsyncSession = Depends(get_db),
+):
+    """Импорт колонок и задач канбана в конкретный проект."""
+    await _get_project(project_id, db)
+
+    imported_statuses = 0
+    imported_tasks = 0
+
+    for project_data in data.projects:
+        statuses, tasks = await _import_project_data(project_id, project_data, db)
+        imported_statuses += statuses
+        imported_tasks += tasks
+
+    await db.commit()
+    return {
+        "success": True,
+        "imported_statuses": imported_statuses,
+        "imported_tasks": imported_tasks,
+    }
+
+
+# ═══════════════════════════════════════════════════
+# Общий канбан
+# ═══════════════════════════════════════════════════
 
 @global_router.get("/kanban", response_model=KanbanGlobalOut)
 async def global_kanban(
@@ -500,21 +704,27 @@ async def global_kanban(
     tasks = result.scalars().all()
 
     # Колонки — уникальные названия статусов с приоритетным цветом (самый частый)
-    status_query = select(TaskStatus.name, TaskStatus.color, func.count(TaskStatus.id).label("cnt"))
+    color_query = select(TaskStatus.name, TaskStatus.color, func.count(TaskStatus.id).label("cnt"))
     if project_id is not None:
-        status_query = status_query.where(TaskStatus.project_id == project_id)
-    status_query = status_query.group_by(TaskStatus.name, TaskStatus.color).order_by(func.count(TaskStatus.id).desc())
-    status_result = await db.execute(status_query)
-    status_rows = status_result.fetchall()
+        color_query = color_query.where(TaskStatus.project_id == project_id)
+    color_query = color_query.group_by(TaskStatus.name, TaskStatus.color)
+    color_result = await db.execute(color_query)
 
-    # Для каждого уникального имени берём цвет с наибольшим count
     column_colors = {}
-    for name, color, _ in status_rows:
-        if name not in column_colors:
-            column_colors[name] = color
+    for name, color, cnt in color_result.fetchall():
+        if name not in column_colors or cnt > column_colors[name]["cnt"]:
+            column_colors[name] = {"color": color, "cnt": cnt}
 
-    columns = [KanbanColumnOut(name=name, color=color) for name, color in column_colors.items()]
-    columns.sort(key=lambda c: COLUMN_ORDER.index(c.name) if c.name in COLUMN_ORDER else 999)
+    # Порядок колонок определяется минимальным sort_order среди статусов с таким именем
+    order_query = select(TaskStatus.name, func.min(TaskStatus.sort_order).label("min_order"))
+    if project_id is not None:
+        order_query = order_query.where(TaskStatus.project_id == project_id)
+    order_query = order_query.group_by(TaskStatus.name)
+    order_result = await db.execute(order_query)
+    column_order = {name: min_order for name, min_order in order_result.fetchall()}
+
+    columns = [KanbanColumnOut(name=name, color=data["color"]) for name, data in column_colors.items()]
+    columns.sort(key=lambda c: (column_order.get(c.name, 0), c.name))
 
     return KanbanGlobalOut(columns=columns, tasks=tasks)
 
@@ -528,8 +738,8 @@ async def global_kanban_filters(db: AsyncSession = Depends(get_db)):
     priorities_result = await db.execute(select(distinct(Task.priority)).where(Task.priority.isnot(None)))
     priorities = [p[0] for p in priorities_result.fetchall() if p[0]]
 
-    assignees_result = await db.execute(select(distinct(Task.assignee_email)).where(Task.assignee_email.isnot(None)))
-    assignees = [a[0] for a in assignees_result.fetchall() if a[0]]
+    assignees_result = await db.execute(select(Assignee).order_by(Assignee.name.asc()))
+    assignees = assignees_result.scalars().all()
 
     tags_result = await db.execute(select(Task.tags).where(Task.tags.isnot(None)))
     tag_set = set()
@@ -542,9 +752,138 @@ async def global_kanban_filters(db: AsyncSession = Depends(get_db)):
     return KanbanFiltersOut(
         projects=projects,
         priorities=sorted(priorities),
-        assignees=sorted(assignees),
+        assignees=assignees,
         tags=sorted(tag_set),
     )
+
+
+@global_router.get("/kanban/columns", response_model=list[KanbanColumnOut])
+async def list_global_kanban_columns(db: AsyncSession = Depends(get_db)):
+    """Уникальные колонки общего канбана с самым частым цветом."""
+    color_query = select(TaskStatus.name, TaskStatus.color, func.count(TaskStatus.id).label("cnt")).group_by(
+        TaskStatus.name, TaskStatus.color
+    )
+    color_result = await db.execute(color_query)
+
+    column_colors = {}
+    for name, color, cnt in color_result.fetchall():
+        if name not in column_colors or cnt > column_colors[name]["cnt"]:
+            column_colors[name] = {"color": color, "cnt": cnt}
+
+    order_query = select(TaskStatus.name, func.min(TaskStatus.sort_order).label("min_order")).group_by(
+        TaskStatus.name
+    )
+    order_result = await db.execute(order_query)
+    column_order = {name: min_order for name, min_order in order_result.fetchall()}
+
+    columns = [KanbanColumnOut(name=name, color=data["color"]) for name, data in column_colors.items()]
+    columns.sort(key=lambda c: (column_order.get(c.name, 0), c.name))
+    return columns
+
+
+@global_router.post("/kanban/columns", response_model=list[TaskStatusOut], status_code=201)
+async def create_global_kanban_column(
+    data: GlobalKanbanColumnCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Создать колонку с указанным именем во всех проектах, где её ещё нет."""
+    projects_result = await db.execute(select(Project))
+    projects = projects_result.scalars().all()
+    if not projects:
+        raise HTTPException(status_code=400, detail="No projects found")
+
+    created = []
+    for project in projects:
+        existing = await db.execute(
+            select(TaskStatus).where(TaskStatus.project_id == project.id, TaskStatus.name == data.name)
+        )
+        if existing.scalar_one_or_none():
+            continue
+
+        max_order = await db.execute(
+            select(TaskStatus.sort_order)
+            .where(TaskStatus.project_id == project.id)
+            .order_by(TaskStatus.sort_order.desc())
+            .limit(1)
+        )
+        max_val = max_order.scalar_one_or_none() or 0
+        status = TaskStatus(
+            project_id=project.id,
+            name=data.name,
+            color=data.color or "#a78bfa",
+            sort_order=max_val + 1,
+        )
+        db.add(status)
+        await db.flush()
+        await db.refresh(status)
+        created.append(status)
+
+    await db.commit()
+    return created
+
+
+@global_router.patch("/kanban/columns/{name}", response_model=list[TaskStatusOut])
+async def update_global_kanban_column(
+    name: str,
+    data: GlobalKanbanColumnUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Переименовать или перекрасить колонку во всех проектах."""
+    result = await db.execute(select(TaskStatus).where(TaskStatus.name == name))
+    statuses = result.scalars().all()
+    if not statuses:
+        raise HTTPException(status_code=404, detail="Column not found")
+
+    new_name = data.new_name.strip() if data.new_name else None
+    if new_name:
+        for status in statuses:
+            conflict = await db.execute(
+                select(TaskStatus).where(
+                    TaskStatus.project_id == status.project_id,
+                    TaskStatus.name == new_name,
+                    TaskStatus.id != status.id,
+                )
+            )
+            if conflict.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Column '{new_name}' already exists in project",
+                )
+            status.name = new_name
+
+    if data.color:
+        for status in statuses:
+            status.color = data.color
+
+    await db.commit()
+    for status in statuses:
+        await db.refresh(status)
+    return statuses
+
+
+@global_router.delete("/kanban/columns/{name}", status_code=204)
+async def delete_global_kanban_column(
+    name: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Удалить колонку во всех проектах, если в них нет задач."""
+    result = await db.execute(select(TaskStatus).where(TaskStatus.name == name))
+    statuses = result.scalars().all()
+    if not statuses:
+        raise HTTPException(status_code=404, detail="Column not found")
+
+    for status in statuses:
+        tasks_result = await db.execute(select(Task.id).where(Task.status_id == status.id).limit(1))
+        if tasks_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Column '{name}' has tasks in some projects",
+            )
+
+    for status in statuses:
+        await db.delete(status)
+    await db.commit()
+    return None
 
 
 @global_router.patch("/kanban/tasks/{task_id}/status", response_model=TaskOut)
@@ -591,57 +930,7 @@ async def export_global_kanban(db: AsyncSession = Depends(get_db)):
 
     export_projects = []
     for project in projects:
-        statuses_result = await db.execute(
-            select(TaskStatus)
-            .where(TaskStatus.project_id == project.id)
-            .order_by(TaskStatus.sort_order.asc(), TaskStatus.created_at.asc())
-        )
-        statuses = statuses_result.scalars().all()
-
-        tasks_result = await db.execute(
-            select(Task)
-            .options(selectinload(Task.attachments))
-            .where(Task.project_id == project.id)
-            .order_by(Task.sort_order.asc(), Task.created_at.asc())
-        )
-        tasks = tasks_result.scalars().all()
-
-        status_map = {s.id: s.name for s in statuses}
-
-        export_projects.append({
-            "name": project.name,
-            "description": project.description,
-            "statuses": [
-                {
-                    "name": s.name,
-                    "color": s.color,
-                    "sort_order": s.sort_order,
-                }
-                for s in statuses
-            ],
-            "tasks": [
-                {
-                    "title": t.title,
-                    "description": t.description,
-                    "priority": t.priority,
-                    "due_date": t.due_date,
-                    "assignee_email": t.assignee_email,
-                    "tags": t.tags,
-                    "sort_order": t.sort_order,
-                    "status_name": status_map.get(t.status_id, ""),
-                    "attachments": [
-                        {
-                            "attachment_type": a.attachment_type,
-                            "title": a.title,
-                            "url": a.url,
-                            "file_path": a.file_path,
-                        }
-                        for a in t.attachments
-                    ],
-                }
-                for t in tasks
-            ],
-        })
+        export_projects.append(await _build_project_export(project.id, db))
 
     return {
         "version": 1,
@@ -675,103 +964,9 @@ async def import_global_kanban(
             await db.refresh(project)
         imported_projects += 1
 
-        status_name_to_id = {}
-        for status_data in project_data.statuses:
-            status_result = await db.execute(
-                select(TaskStatus).where(
-                    TaskStatus.project_id == project.id,
-                    TaskStatus.name == status_data.name,
-                )
-            )
-            status = status_result.scalar_one_or_none()
-            if not status:
-                status = TaskStatus(
-                    project_id=project.id,
-                    name=status_data.name,
-                    color=status_data.color,
-                    sort_order=status_data.sort_order,
-                )
-                db.add(status)
-                await db.flush()
-                await db.refresh(status)
-                imported_statuses += 1
-            else:
-                status.color = status_data.color
-                status.sort_order = status_data.sort_order
-            status_name_to_id[status.name] = status.id
-
-        for task_data in project_data.tasks:
-            status_id = status_name_to_id.get(task_data.status_name)
-            if not status_id:
-                status_result = await db.execute(
-                    select(TaskStatus).where(
-                        TaskStatus.project_id == project.id,
-                        TaskStatus.name == task_data.status_name,
-                    )
-                )
-                status = status_result.scalar_one_or_none()
-                if not status:
-                    continue
-                status_id = status.id
-
-            task_result = await db.execute(
-                select(Task).where(
-                    Task.project_id == project.id,
-                    Task.title == task_data.title,
-                    Task.status_id == status_id,
-                )
-            )
-            task = task_result.scalar_one_or_none()
-            if not task:
-                task = Task(
-                    project_id=project.id,
-                    status_id=status_id,
-                    title=task_data.title,
-                    description=task_data.description,
-                    priority=task_data.priority,
-                    due_date=task_data.due_date,
-                    assignee_email=task_data.assignee_email,
-                    tags=task_data.tags,
-                    sort_order=task_data.sort_order,
-                )
-                db.add(task)
-                imported_tasks += 1
-            else:
-                task.description = task_data.description
-                task.priority = task_data.priority
-                task.due_date = task_data.due_date
-                task.assignee_email = task_data.assignee_email
-                task.tags = task_data.tags
-                task.sort_order = task_data.sort_order
-
-            await db.flush()
-            await db.refresh(task)
-
-            attachments_to_import = list(task_data.attachments or [])
-            if attachments_to_import:
-                # Удаляем старые вложения, чтобы при повторном импорте не дублировать
-                old_attachments_result = await db.execute(
-                    select(TaskAttachment).where(TaskAttachment.task_id == task.id)
-                )
-                for old in old_attachments_result.scalars().all():
-                    if old.attachment_type == "file" and old.file_path:
-                        try:
-                            full_path = Path(get_settings().local_storage_path).resolve() / old.file_path
-                            if full_path.exists():
-                                full_path.unlink()
-                        except OSError:
-                            pass
-                    await db.delete(old)
-
-                for attachment_data in attachments_to_import:
-                    attachment = TaskAttachment(
-                        task_id=task.id,
-                        attachment_type=attachment_data.attachment_type,
-                        title=attachment_data.title,
-                        url=attachment_data.url,
-                        file_path=attachment_data.file_path,
-                    )
-                    db.add(attachment)
+        statuses, tasks = await _import_project_data(project.id, project_data, db)
+        imported_statuses += statuses
+        imported_tasks += tasks
 
     await db.commit()
     return {

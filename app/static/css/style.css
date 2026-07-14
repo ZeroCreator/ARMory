@@ -3444,6 +3444,7 @@ footer {
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
     font-size: 0.75rem;
     color: var(--sand-muted);
 }
@@ -3527,7 +3528,6 @@ footer {
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
-    margin-top: 0.5rem;
 }
 
 .kanban-card-footer .kanban-tags {
@@ -3574,6 +3574,33 @@ footer {
     color: #5b21b6;
 }
 
+.kanban-card-attachment-type {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 6px;
+    background: rgba(91, 33, 182, 0.1);
+    color: #5b21b6;
+    font-size: 0.75rem;
+}
+
+.kanban-card-attachment-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.4rem;
+    height: 1.4rem;
+    padding: 0 0.35rem;
+    border-radius: 50%;
+    background: rgba(91, 33, 182, 0.12);
+    color: #5b21b6;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 0.25rem;
+}
+
 #task-attachments-list .border {
     background: rgba(0,0,0,0.02);
 }
@@ -3589,4 +3616,64 @@ footer {
     background: rgba(255, 255, 255, 0.7);
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(107, 70, 193, 0.06);
+}
+
+.kanban-context-menu {
+    position: fixed;
+    z-index: 1060;
+    min-width: 180px;
+    background: #fff;
+    border: 1px solid rgba(107, 70, 193, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    padding: 0.35rem 0;
+    display: none;
+    overflow: hidden;
+}
+
+.kanban-context-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: none;
+    background: transparent;
+    color: #333;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.kanban-context-item:hover {
+    background: rgba(107, 70, 193, 0.08);
+}
+
+.kanban-context-item.disabled {
+    color: #6c757d;
+    cursor: default;
+    pointer-events: none;
+}
+
+.kanban-context-item.text-danger {
+    color: #dc3545;
+}
+
+.kanban-context-item.text-danger:hover {
+    background: rgba(220, 53, 69, 0.08);
+}
+
+.kanban-reset-btn {
+    padding: 0.6rem 1.25rem;
+    white-space: nowrap;
+}
+
+.kanban-card-highlighted {
+    box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.5);
+    animation: kanban-card-pulse 2s ease-in-out infinite;
+}
+
+@keyframes kanban-card-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.5); }
+    50% { box-shadow: 0 0 0 6px rgba(107, 70, 193, 0.3); }
 }

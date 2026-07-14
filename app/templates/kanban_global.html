@@ -81,8 +81,15 @@
                             <input type="datetime-local" class="form-control" name="due_date">
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Ответственный (email)</label>
-                            <input type="email" class="form-control" name="assignee_email" placeholder="user@example.com">
+                            <label class="form-label">Ответственный</label>
+                            <div class="input-group">
+                                <select class="form-select kanban-assignee-select" name="assignee_email" id="task-assignee-email">
+                                    <option value="">Не назначен</option>
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary" onclick="openAssigneeModal()" title="Добавить ответственного">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -144,12 +151,6 @@
                 <form id="status-form">
                     <input type="hidden" name="status_id" id="status-id">
                     <div class="mb-3">
-                        <label class="form-label">Проект <span class="text-danger">*</span></label>
-                        <select class="form-select" name="project_id" id="status-project-id" required>
-                            <option value="">Выберите проект</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
                         <label class="form-label">Название <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" name="name" required placeholder="Например: На review">
                     </div>
@@ -167,9 +168,37 @@
         </div>
     </div>
 </div>
+
+<!-- Модал ответственного -->
+<div class="modal fade" id="assigneeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="assignee-modal-title">Новый ответственный</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="assignee-form">
+                    <div class="mb-3">
+                        <label class="form-label">Имя <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name" required placeholder="Иван Иванов">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" name="email" required placeholder="user@example.com">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveAssignee()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-<script src="/static/js/kanban_global.js?v=29"></script>
+<script src="/static/js/kanban_global.js?v=41"></script>
 {% endblock %}

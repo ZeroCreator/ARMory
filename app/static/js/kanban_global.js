@@ -4,6 +4,7 @@
 
 let kanbanData = { columns: [], tasks: [] };
 let filterOptions = { projects: [], priorities: [], assignees: [], tags: [] };
+let kanbanAssignees = [];
 let projectStatuses = {};
 let kanbanSortables = [];
 let currentTaskId = null;
@@ -12,23 +13,63 @@ let currentStatusId = null;
 document.addEventListener('DOMContentLoaded', async () => {
     await loadFilters();
     await loadKanbanBoard();
+    handleTaskDeepLink();
+
+    const board = document.getElementById('kanban-board');
+    if (board) {
+        board.addEventListener('contextmenu', (e) => {
+            const card = e.target.closest('.kanban-card');
+            if (card) {
+                e.preventDefault();
+                e.stopPropagation();
+                const taskId = parseInt(card.dataset.id, 10);
+                showTaskContextMenu(e, taskId);
+            }
+        });
+        board.addEventListener('click', (e) => {
+            const card = e.target.closest('.kanban-card');
+            if (card) {
+                document.querySelectorAll('.kanban-card-highlighted').forEach(c => {
+                    c.classList.remove('kanban-card-highlighted');
+                });
+            }
+        });
+    }
 });
 
 async function loadFilters() {
     try {
-        filterOptions = await api(`${API_BASE}/kanban/filters`);
+        [filterOptions, kanbanAssignees] = await Promise.all([
+            api(`${API_BASE}/kanban/filters`),
+            api(`${API_BASE}/assignees`),
+        ]);
         populateSelect('filter-project', filterOptions.projects, 'id', 'name');
         populateSelect('filter-priority', filterOptions.priorities.map(p => ({ value: p, label: priorityLabel(p) })), 'value', 'label');
-        populateSelect('filter-assignee', filterOptions.assignees.map(a => ({ value: a, label: a })), 'value', 'label');
         populateSelect('filter-tag', filterOptions.tags.map(t => ({ value: t, label: t })), 'value', 'label');
 
         populateSelect('task-project-id', filterOptions.projects, 'id', 'name');
         populateSelect('status-project-id', filterOptions.projects, 'id', 'name');
 
+        populateAssigneeSelects(kanbanAssignees);
         await loadAllProjectStatuses();
     } catch (e) {
         console.error('Failed to load filters:', e);
     }
+}
+
+function populateAssigneeSelects(assignees) {
+    const options = (assignees || []).map(a => ({
+        value: a.email,
+        label: a.name,
+    }));
+    populateSelect('filter-assignee', options, 'value', 'label');
+    populateSelect('task-assignee-email', options, 'value', 'label');
+}
+
+function renderAssigneeName(email) {
+    if (!email) return '';
+    const assignee = kanbanAssignees.find(a => a.email === email);
+    return assignee ? assignee.name : email;
 }
 
 async function loadAllProjectStatuses() {
@@ -118,9 +159,10 @@ function renderBoard(data) {
 
     board.innerHTML = data.columns.map(column => {
         const tasks = (data.tasks || []).filter(t => t.status && t.status.name === column.name);
+
         return `
-            <div class="kanban-column" data-name="${escapeHtml(column.name)}">
-                <div class="kanban-column-header" style="border-top-color: ${escapeHtml(column.color)}">
+            <div class="kanban-column" data-name="${escapeHtml(column.name)}" data-column-name="${escapeHtml(column.name)}">
+                <div class="kanban-column-header" style="border-top-color: ${escapeHtml(column.color)}" oncontextmenu="showColumnContextMenu(event, '${escapeHtml(column.name)}')">
                     <span class="kanban-column-title">${escapeHtml(column.name)}</span>
                     <span class="badge bg-secondary rounded-pill kanban-column-count">${tasks.length}</span>
                 </div>
@@ -153,7 +195,7 @@ function renderTaskCard(task) {
         : '';
 
     const assignee = task.assignee_email
-        ? `<span class="kanban-task-meta" title="Ответственный"><i class="bi bi-person"></i> ${escapeHtml(task.assignee_email)}</span>`
+        ? `<span class="kanban-task-meta" title="Ответственный"><i class="bi bi-person"></i> ${escapeHtml(renderAssigneeName(task.assignee_email))}</span>`
         : '';
 
     const tags = task.tags
@@ -192,34 +234,30 @@ function renderTaskCard(task) {
 function renderCardAttachments(attachments) {
     if (!attachments || attachments.length === 0) return '';
 
-    const visible = attachments.slice(0, 3);
-    const restCount = attachments.length - visible.length;
+    const typeIcons = {
+        file: 'bi-file-earmark',
+        git: 'bi-git',
+        link: 'bi-link-45deg',
+    };
+    const typeLabels = {
+        file: 'Файл',
+        git: 'Git-репозиторий',
+        link: 'Ссылка',
+    };
 
-    const items = visible.map(a => {
-        let icon = 'bi-paperclip';
-        let href = '#';
-        let title = escapeHtml(a.title || '');
-        if (a.attachment_type === 'link') {
-            icon = 'bi-link-45deg';
-            href = escapeHtml(a.url || '#');
-            if (!title) title = 'Ссылка';
-        } else if (a.attachment_type === 'git') {
-            icon = 'bi-git';
-            href = escapeHtml(a.url || '#');
-            if (!title) title = 'Git';
-        } else if (a.attachment_type === 'file') {
-            icon = 'bi-file-earmark';
-            href = `/uploads/${escapeHtml(a.file_path || '')}`;
-            if (!title) title = 'Файл';
-        }
-        return `<a href="${href}" target="_blank" rel="noopener" class="kanban-card-attachment" title="${title}" onclick="event.stopPropagation()"><i class="bi ${icon}"></i></a>`;
+    const types = [...new Set(attachments.map(a => a.attachment_type))];
+    const icons = types.map(type => {
+        const icon = typeIcons[type] || 'bi-paperclip';
+        const label = typeLabels[type] || 'Вложение';
+        return `<span class="kanban-card-attachment-type" title="${label}"><i class="bi ${icon}"></i></span>`;
     }).join('');
 
-    const more = restCount > 0
-        ? `<span class="kanban-card-attachment" title="Ещё ${restCount} вложение(й)">+${restCount}</span>`
-        : '';
-
-    return `<div class="kanban-card-attachments mb-2">${items}${more}</div>`;
+    return `
+        <div class="kanban-card-attachments mb-2">
+            ${icons}
+            <span class="kanban-card-attachment-count">${attachments.length}</span>
+        </div>
+    `;
 }
 
 function updateTaskCardInBoard(task) {
@@ -581,11 +619,46 @@ async function reloadCurrentTask() {
 }
 
 // ═══════════════════════════════════════════════════
+// ОТВЕТСТВЕННЫЕ
+// ═══════════════════════════════════════════════════
+
+function openAssigneeModal() {
+    const modalEl = document.getElementById('assigneeModal');
+    const form = document.getElementById('assignee-form');
+    form.reset();
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+async function saveAssignee() {
+    const form = document.getElementById('assignee-form');
+    if (!form.name.value.trim() || !form.email.value.trim()) {
+        alert('Введите имя и email');
+        return;
+    }
+
+    try {
+        await api(`${API_BASE}/assignees`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: form.name.value.trim(),
+                email: form.email.value.trim(),
+            }),
+        });
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('assigneeModal')).hide();
+        kanbanAssignees = await api(`${API_BASE}/assignees`);
+        populateAssigneeSelects(kanbanAssignees);
+    } catch (e) {
+        alert('Ошибка добавления ответственного: ' + e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════
 // КОЛОНКИ
 // ═══════════════════════════════════════════════════
 
-function openStatusModal(statusId) {
-    currentStatusId = statusId || null;
+function openStatusModal(columnName) {
+    currentStatusId = columnName || null;
     const modalEl = document.getElementById('statusModal');
     const form = document.getElementById('status-form');
     const titleEl = document.getElementById('status-modal-title');
@@ -594,14 +667,13 @@ function openStatusModal(statusId) {
     form.reset();
     document.getElementById('status-id').value = '';
 
-    if (statusId) {
-        const status = findStatusById(statusId);
-        if (!status) return;
+    if (columnName) {
+        const column = kanbanData.columns.find(c => c.name === columnName);
+        if (!column) return;
         titleEl.textContent = 'Редактировать колонку';
-        document.getElementById('status-id').value = status.id;
-        document.getElementById('status-project-id').value = status.project_id;
-        form.name.value = status.name;
-        form.color.value = status.color;
+        document.getElementById('status-id').value = column.name;
+        form.name.value = column.name;
+        form.color.value = column.color;
         deleteBtn.style.display = 'inline-block';
     } else {
         titleEl.textContent = 'Новая колонка';
@@ -611,14 +683,6 @@ function openStatusModal(statusId) {
 
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
-}
-
-function findStatusById(statusId) {
-    for (const projectId in projectStatuses) {
-        const status = projectStatuses[projectId].find(s => s.id === statusId);
-        if (status) return status;
-    }
-    return null;
 }
 
 async function saveStatus() {
@@ -636,33 +700,31 @@ async function saveStatus() {
             alert('Введите название колонки');
             return;
         }
-        const projectId = parseInt(document.getElementById('status-project-id').value, 10);
-        if (!projectId) {
-            alert('Выберите проект');
-            return;
-        }
 
-        const payload = {
-            name: form.name.value.trim(),
-            color: form.color.value,
-        };
+        const name = form.name.value.trim();
+        const color = form.color.value;
 
         if (currentStatusId) {
-            await api(`${API_BASE}/projects/${projectId}/task-statuses/${currentStatusId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
+            const payload = {};
+            if (name !== currentStatusId) payload.new_name = name;
+            if (color) payload.color = color;
+            if (Object.keys(payload).length > 0) {
+                await api(`${API_BASE}/kanban/columns/${encodeURIComponent(currentStatusId)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+            }
         } else {
-            await api(`${API_BASE}/projects/${projectId}/task-statuses`, {
+            await api(`${API_BASE}/kanban/columns`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({ name, color }),
             });
         }
         bootstrap.Modal.getOrCreateInstance(document.getElementById('statusModal')).hide();
-        loadKanbanBoard();
         await loadFilters();
+        loadKanbanBoard();
     } catch (e) {
         console.error('saveStatus error:', e);
         alert('Ошибка сохранения колонки: ' + e.message);
@@ -676,23 +738,222 @@ async function saveStatus() {
 
 async function deleteStatusFromModal() {
     if (!currentStatusId) return;
-    const status = findStatusById(currentStatusId);
-    if (!status) return;
-    const hasTasks = kanbanData.tasks.some(t => t.status_id === currentStatusId);
+    const column = kanbanData.columns.find(c => c.name === currentStatusId);
+    if (!column) return;
+    const hasTasks = kanbanData.tasks.some(t => t.status && t.status.name === currentStatusId);
     if (hasTasks) {
         alert('Нельзя удалить колонку с задачами. Переместите или удалите задачи сначала.');
         return;
     }
-    if (!confirm(`Удалить колонку "${status.name}"?`)) return;
+    if (!confirm(`Удалить колонку "${column.name}"?`)) return;
 
     try {
-        await api(`${API_BASE}/projects/${status.project_id}/task-statuses/${currentStatusId}`, { method: 'DELETE' });
+        await api(`${API_BASE}/kanban/columns/${encodeURIComponent(currentStatusId)}`, { method: 'DELETE' });
         bootstrap.Modal.getOrCreateInstance(document.getElementById('statusModal')).hide();
         await loadFilters();
         loadKanbanBoard();
     } catch (e) {
         alert('Ошибка удаления колонки: ' + e.message);
     }
+}
+
+// ═══════════════════════════════════════════════════
+// КОНТЕКСТНОЕ МЕНЮ КОЛОНОК
+// ═══════════════════════════════════════════════════
+
+function getContextMenu() {
+    let menu = document.getElementById('kanban-context-menu');
+    if (!menu) {
+        menu = document.createElement('div');
+        menu.id = 'kanban-context-menu';
+        menu.className = 'kanban-context-menu';
+        menu.addEventListener('click', handleContextMenuClick);
+        document.body.appendChild(menu);
+    }
+    return menu;
+}
+
+function handleContextMenuClick(e) {
+    const item = e.target.closest('[data-action]');
+    if (!item) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const action = item.dataset.action;
+    const taskId = item.dataset.taskId ? parseInt(item.dataset.taskId, 10) : null;
+    const columnName = item.dataset.columnName || '';
+    const email = item.dataset.email || '';
+    if (action === 'copy-link') copyTaskLink(taskId);
+    else if (action === 'assignee-submenu') showTaskAssigneeSubmenu();
+    else if (action === 'set-assignee') setTaskAssignee(lastTaskContextMenuTaskId, email);
+    else if (action === 'back-to-task-menu') renderTaskContextMenu(lastTaskContextMenuTaskId, lastTaskContextMenuEvent);
+    else if (action === 'edit-task') editTaskFromContext(taskId);
+    else if (action === 'delete-task') deleteTaskFromContext(taskId);
+    else if (action === 'edit-column') editColumnFromContext(columnName);
+    else if (action === 'delete-column') deleteColumnFromContext(columnName);
+}
+
+function hideContextMenu() {
+    const menu = document.getElementById('kanban-context-menu');
+    if (menu) menu.style.display = 'none';
+}
+
+function showColumnContextMenu(event, columnName) {
+    event.preventDefault();
+    const menu = getContextMenu();
+    const safeName = escapeHtml(columnName);
+    menu.innerHTML = `
+        <button class="kanban-context-item" data-action="edit-column" data-column-name="${safeName}">
+            <i class="bi bi-pencil me-2"></i> Изменить
+        </button>
+        <button class="kanban-context-item text-danger" data-action="delete-column" data-column-name="${safeName}">
+            <i class="bi bi-trash me-2"></i> Удалить
+        </button>
+    `;
+    positionContextMenu(menu, event);
+}
+
+function positionContextMenu(menu, event) {
+    menu.style.display = 'block';
+    const rect = menu.getBoundingClientRect();
+    let left = event.clientX;
+    let top = event.clientY;
+    if (left + rect.width > window.innerWidth) {
+        left = window.innerWidth - rect.width - 8;
+    }
+    if (top + rect.height > window.innerHeight) {
+        top = window.innerHeight - rect.height - 8;
+    }
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+}
+
+function editColumnFromContext(columnName) {
+    hideContextMenu();
+    openStatusModal(columnName);
+}
+
+function deleteColumnFromContext(columnName) {
+    hideContextMenu();
+    currentStatusId = columnName;
+    deleteStatusFromModal();
+}
+
+document.addEventListener('click', (e) => {
+    const menu = document.getElementById('kanban-context-menu');
+    if (menu && !menu.contains(e.target)) {
+        hideContextMenu();
+    }
+});
+
+// ═══════════════════════════════════════════════════
+// КОНТЕКСТНОЕ МЕНЮ ЗАДАЧ
+// ═══════════════════════════════════════════════════
+
+let lastTaskContextMenuEvent = null;
+let lastTaskContextMenuTaskId = null;
+
+function showTaskContextMenu(event, taskId) {
+    event.preventDefault();
+    event.stopPropagation();
+    lastTaskContextMenuEvent = event;
+    lastTaskContextMenuTaskId = taskId;
+    renderTaskContextMenu(taskId, event);
+}
+
+function renderTaskContextMenu(taskId, event) {
+    const menu = getContextMenu();
+    menu.innerHTML = `
+        <button class="kanban-context-item" data-action="copy-link" data-task-id="${taskId}">
+            <i class="bi bi-link-45deg me-2"></i> Ссылка на задачу
+        </button>
+        <button class="kanban-context-item" data-action="assignee-submenu">
+            <i class="bi bi-person me-2"></i> Установить ответственного
+        </button>
+        <button class="kanban-context-item" data-action="edit-task" data-task-id="${taskId}">
+            <i class="bi bi-pencil me-2"></i> Редактировать
+        </button>
+        <button class="kanban-context-item text-danger" data-action="delete-task" data-task-id="${taskId}">
+            <i class="bi bi-trash me-2"></i> Удалить
+        </button>
+    `;
+    positionContextMenu(menu, event);
+}
+
+function showTaskAssigneeSubmenu() {
+    const taskId = lastTaskContextMenuTaskId;
+    const menu = getContextMenu();
+    const options = (kanbanAssignees || []).map(a => `
+        <button class="kanban-context-item" data-action="set-assignee" data-email="${escapeHtml(a.email)}">
+            ${escapeHtml(a.name)}
+        </button>
+    `).join('');
+    menu.innerHTML = `
+        <button class="kanban-context-item" data-action="back-to-task-menu">
+            <i class="bi bi-arrow-left me-2"></i> Назад
+        </button>
+        <div class="kanban-context-divider"></div>
+        <button class="kanban-context-item" data-action="set-assignee" data-email="">
+            Не назначен
+        </button>
+        ${options}
+    `;
+}
+
+async function setTaskAssignee(taskId, email) {
+    hideContextMenu();
+    const task = kanbanData.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    try {
+        await api(`${API_BASE}/projects/${task.project_id}/tasks/${taskId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ assignee_email: email || null }),
+        });
+        loadKanbanBoard();
+    } catch (e) {
+        alert('Ошибка установки ответственного: ' + e.message);
+    }
+}
+
+function copyTaskLink(taskId) {
+    const task = kanbanData.tasks.find(t => t.id === taskId);
+    const projectId = task ? task.project_id : null;
+    const url = projectId
+        ? `${window.location.origin}/projects/${projectId}/kanban?task=${taskId}`
+        : `${window.location.origin}/kanban?task=${taskId}`;
+    copyTextToClipboard(url);
+    showToast('Ссылка скопирована в буфер обмена');
+    hideContextMenu();
+}
+
+function editTaskFromContext(taskId) {
+    hideContextMenu();
+    openTaskModal(taskId);
+}
+
+async function deleteTaskFromContext(taskId) {
+    hideContextMenu();
+    const task = kanbanData.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    if (!confirm('Удалить задачу?')) return;
+    try {
+        await api(`${API_BASE}/projects/${task.project_id}/tasks/${taskId}`, { method: 'DELETE' });
+        loadKanbanBoard();
+    } catch (e) {
+        alert('Ошибка удаления задачи: ' + e.message);
+    }
+}
+
+function handleTaskDeepLink() {
+    const params = new URLSearchParams(window.location.search);
+    const taskId = params.get('task');
+    if (!taskId) return;
+    history.replaceState(null, '', window.location.pathname);
+    const card = document.querySelector(`.kanban-card[data-id="${taskId}"]`);
+    if (card) {
+        card.classList.add('kanban-card-highlighted');
+    }
+    openTaskModal(parseInt(taskId, 10));
 }
 
 // ═══════════════════════════════════════════════════
@@ -768,7 +1029,8 @@ async function exportKanban() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `kanban_export_${new Date().toISOString().slice(0, 10)}.json`;
+        const dt = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
+        a.download = `kanban_export_${dt}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

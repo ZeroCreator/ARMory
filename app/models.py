@@ -163,6 +163,15 @@ class GlossaryTerm(Base):
     subtopic = relationship("GlossarySubtopic", back_populates="terms")
 
 
+class Assignee(Base):
+    __tablename__ = "assignees"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False, unique=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 class TaskStatus(Base):
     __tablename__ = "task_statuses"
 

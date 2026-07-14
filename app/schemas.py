@@ -263,6 +263,19 @@ class GlossaryTermUpdate(BaseModel):
 # Канбан
 # ═══════════════════════════════════════════════════
 
+class AssigneeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    email: str
+    created_at: datetime
+
+
+class AssigneeCreate(BaseModel):
+    name: str
+    email: str
+
+
 class TaskStatusOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -358,10 +371,20 @@ class KanbanColumnOut(BaseModel):
     color: str
 
 
+class GlobalKanbanColumnCreate(BaseModel):
+    name: str
+    color: Optional[str] = "#a78bfa"
+
+
+class GlobalKanbanColumnUpdate(BaseModel):
+    new_name: Optional[str] = None
+    color: Optional[str] = None
+
+
 class KanbanFiltersOut(BaseModel):
     projects: List[ProjectOut]
     priorities: List[str]
-    assignees: List[str]
+    assignees: List[AssigneeOut]
     tags: List[str]
 
 
