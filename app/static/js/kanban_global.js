@@ -170,7 +170,7 @@ function renderBoard(data) {
                     ${tasks.map(task => renderTaskCard(task)).join('')}
                 </div>
                 <div class="kanban-column-footer">
-                    <button class="btn btn-sm btn-outline-brown w-100" onclick="openTaskModal(null, null, '${escapeHtml(column.name)}')">
+                    <button class="btn btn-sm btn-outline-brown w-100" onclick="openTaskModal(null)">
                         <i class="bi bi-plus-lg me-1"></i> Добавить задачу
                     </button>
                 </div>
@@ -322,7 +322,7 @@ async function updateTaskColumn(taskId, columnName) {
 // ЗАДАЧИ
 // ═══════════════════════════════════════════════════
 
-function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
+function openTaskModal(taskId, defaultProjectId) {
     currentTaskId = taskId || null;
     const modalEl = document.getElementById('taskModal');
     const form = document.getElementById('task-form');
@@ -358,19 +358,6 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
         form.priority.value = 'medium';
         deleteBtn.style.display = 'none';
         renderTaskAttachments([]);
-        if (defaultColumnName) {
-            // Подобрать первый проект, у которого есть такой статус
-            for (const project of filterOptions.projects) {
-                const statuses = projectStatuses[project.id] || [];
-                if (statuses.some(s => s.name === defaultColumnName)) {
-                    document.getElementById('task-project-id').value = project.id;
-                    onTaskProjectChange();
-                    const status = statuses.find(s => s.name === defaultColumnName);
-                    if (status) document.getElementById('task-status-id').value = status.id;
-                    break;
-                }
-            }
-        }
     }
 
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
