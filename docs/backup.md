@@ -1,14 +1,14 @@
 # Бэкапы и синхронизация
 
 Все данные ARMory хранятся в двух местах:
-- `data/projectdocs.db` — база данных SQLite
+- `data/armory.db` — база данных SQLite
 - `data/uploads/` — загруженные файлы
 
 ## Ручной бэкап
 
 ```bash
 cd ~/your-project
-tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/projectdocs.db data/uploads/
+tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/armory.db data/uploads/
 ```
 
 Получится архив вида `backup_<timestamp>.tar.gz`.
@@ -31,16 +31,16 @@ tar -xzvf backup_<timestamp>.tar.gz
 ### Синхронизация с Яндекс.Диском
 
 #### Сохранить на Яндекс.Диск
-Загружает `projectdocs.db` и все файлы из `data/uploads/` на Яндекс.Диск в папку `YANDEX_DISK_PATH` (по умолчанию `ARMory/data/`). Файлы, уже имеющиеся на диске, пропускаются. Операция выполняется в фоне; интерфейс показывает прогресс по `job_id`.
+Загружает `armory.db` и все файлы из `data/uploads/` на Яндекс.Диск в папку `YANDEX_DISK_PATH` (по умолчанию `ARMory/data/`). Файлы, уже имеющиеся на диске, пропускаются. Операция выполняется в фоне; интерфейс показывает прогресс по `job_id`.
 
 #### Загрузить с Яндекс.Диска
-Скачивает `projectdocs.db` и папку `uploads/` с Яндекс.Диска и восстанавливает локально. Перед операцией автоматически создаётся локальная резервная копия в `data/backups/auto_<timestamp>/`. Выполняется синхронно.
+Скачивает `armory.db` и папку `uploads/` с Яндекс.Диска и восстанавливает локально. Перед операцией автоматически создаётся локальная резервная копия в `data/backups/auto_<timestamp>/`. Выполняется синхронно.
 
 ### Архивные бэкапы ARMory
 
 Отдельный функционал для создания снапшотов в виде `.tar.gz`:
 
-- **Создать архив** — упаковывает `projectdocs.db` + `data/uploads/` в `armory_backup_<timestamp>.tar.gz` и загружает в папку `YANDEX_DISK_BACKUPS_PATH` (по умолчанию `ARMory/backups/`). Выполняется в фоне с отображением прогресса.
+- **Создать архив** — упаковывает `armory.db` + `data/uploads/` в `armory_backup_<timestamp>.tar.gz` и загружает в папку `YANDEX_DISK_BACKUPS_PATH` (по умолчанию `ARMory/backups/`). Выполняется в фоне с отображением прогресса.
 - **Восстановить** — скачивает выбранный архив и распаковывает его.
 - **Удалить** — удаляет архив с Яндекс.Диска.
 
@@ -72,14 +72,14 @@ TIMEZONE=Europe/Moscow
 ```bash
 # Каждый день в 3:00 утра
 crontab -e
-0 3 * * * cd ~/your-project && tar -czf ~/backups/app_$(date +\%Y\%m\%d).tar.gz data/projectdocs.db data/uploads/ >/dev/null 2>&1
+0 3 * * * cd ~/your-project && tar -czf ~/backups/app_$(date +\%Y\%m\%d).tar.gz data/armory.db data/uploads/ >/dev/null 2>&1
 ```
 
 ## Бэкап при деплое на другой сервер
 
 ```bash
 # На исходной машине
-tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/projectdocs.db data/uploads/ .env
+tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/armory.db data/uploads/ .env
 
 # На новом сервере
 mkdir -p /opt/your-project && cd /opt/your-project

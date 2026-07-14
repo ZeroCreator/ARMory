@@ -3,7 +3,7 @@ services:
     command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${PORT:-8088}", "--reload"]
     volumes:
       - ./data:/app/data
-      - ./projectdocs.db:/app/projectdocs.db
+      - ./armory.db:/app/armory.db
       - ./app:/app/app
       - ./pyproject.toml:/app/pyproject.toml
       - ./uv.lock:/app/uv.lock

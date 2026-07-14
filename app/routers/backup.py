@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/backup", tags=["backup"])
 settings = get_settings()
 
 _YANDEX_BASE = settings.yandex_disk_path.strip("/")
-REMOTE_DB = f"{_YANDEX_BASE}/projectdocs.db"
+REMOTE_DB = f"{_YANDEX_BASE}/armory.db"
 REMOTE_UPLOADS = f"{_YANDEX_BASE}/uploads"
 REMOTE_BACKUPS = settings.yandex_disk_backups_path.strip("/")
 REMOTE_ALEXANDRITE = settings.yandex_disk_alexandrite_path.strip("/")
@@ -314,7 +314,7 @@ def _local_auto_backup(db_path: Path, uploads_src: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     auto_dir = backup_dir / f"auto_{ts}"
     auto_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(db_path, auto_dir / "projectdocs.db")
+    shutil.copy2(db_path, auto_dir / "armory.db")
     if uploads_src.exists():
         shutil.copytree(uploads_src, auto_dir / "uploads", dirs_exist_ok=True)
     return auto_dir
@@ -322,7 +322,7 @@ def _local_auto_backup(db_path: Path, uploads_src: Path) -> Path:
 
 def _create_tarball(db_path: Path, uploads_src: Path, dest_path: Path, job_id: str | None = None) -> None:
     """Создаёт tar.gz с БД и uploads, обновляя прогресс в задаче."""
-    files_to_add = [(db_path, "projectdocs.db")]
+    files_to_add = [(db_path, "armory.db")]
     if uploads_src.exists():
         for fp in uploads_src.rglob("*"):
             if fp.is_file():
@@ -354,7 +354,7 @@ def _extract_tarball(tar_path: Path, db_dest: Path, uploads_dest: Path) -> None:
     """Распаковывает tar.gz в указанные пути."""
     with tarfile.open(tar_path, "r:gz") as tar:
         for member in tar.getmembers():
-            if member.name == "projectdocs.db":
+            if member.name == "armory.db":
                 extracted = tar.extractfile(member)
                 if extracted:
                     db_dest.write_bytes(extracted.read())
@@ -603,14 +603,14 @@ async def _run_sync_export_async(
 
         if job_id in _backup_jobs:
             _backup_jobs[job_id]["status"] = "running"
-            _backup_jobs[job_id]["current_file"] = "projectdocs.db"
+            _backup_jobs[job_id]["current_file"] = "armory.db"
 
         await asyncio.to_thread(yandex.create_folder, _YANDEX_BASE)
         await asyncio.to_thread(yandex.create_folder, REMOTE_UPLOADS)
 
         db_uploaded = await asyncio.to_thread(yandex.upload_file, str(db_path), REMOTE_DB)
         if not db_uploaded:
-            raise RuntimeError("Не удалось загрузить projectdocs.db на Яндекс.Диск")
+            raise RuntimeError("Не удалось загрузить armory.db на Яндекс.Диск")
 
         upload_stats = await asyncio.to_thread(_upload_uploads, yandex, uploads_src, REMOTE_UPLOADS, job_id)
 
@@ -651,10 +651,10 @@ async def sync_import():
 
     try:
         # Скачиваем БД
-        local_db = temp_dir / "projectdocs.db"
+        local_db = temp_dir / "armory.db"
         db_downloaded = await asyncio.to_thread(yandex.download_file, REMOTE_DB, str(local_db))
         if not db_downloaded:
-            raise HTTPException(status_code=502, detail="Не удалось скачать projectdocs.db с Яндекс.Диска. Возможно, синхронизация ещё не выполнялась.")
+            raise HTTPException(status_code=502, detail="Не удалось скачать armory.db с Яндекс.Диска. Возможно, синхронизация ещё не выполнялась.")
 
         # Читаем sqlite dump
         dump = await asyncio.to_thread(_read_sqlite_dump, local_db)

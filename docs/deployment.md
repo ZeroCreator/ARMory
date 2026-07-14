@@ -14,7 +14,7 @@ nano .env
 
 В `.env` укажи:
 ```env
-DATABASE_URL="sqlite+aiosqlite:///./data/projectdocs.db"
+DATABASE_URL="sqlite+aiosqlite:///./data/armory.db"
 LOCAL_STORAGE_PATH=./data/uploads
 STORAGE_TYPE=local
 ARMORY_PUBLIC_URL=https://armory.team-73.ru
@@ -47,7 +47,7 @@ mkdir -p data/uploads
 
 # 4. Если переносишь данные с другой машины — распакуй бэкап:
 # tar -xzvf backup_20260520.tar.gz
-# mv projectdocs.db data/
+# mv armory.db data/
 # mv uploads/* data/uploads/
 
 # 5. Если используется PocketBase — скопируй данные:
@@ -135,7 +135,7 @@ cd /opt/<your-project>
 git pull
 
 # Бэкап перед обновлением
-tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/ projectdocs.db
+tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/ armory.db
 
 # Пересобрать и перезапустить
 docker compose up -d --build

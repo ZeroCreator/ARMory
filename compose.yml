@@ -10,7 +10,7 @@ services:
       - "${PORT:-8088}"
     volumes:
       - ./data:/app/data
-      - ./projectdocs.db:/app/projectdocs.db
+      - ./armory.db:/app/armory.db
     env_file:
       - .env
     networks:

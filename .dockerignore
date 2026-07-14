@@ -24,7 +24,7 @@ env/
 *.db
 *.sqlite
 *.sqlite3
-projectdocs.db
+data/armory.db
 data/uploads/*
 
 # Backups

@@ -126,7 +126,7 @@ PocketBase используется как встроенный инструме
 
 ```python
 app_name: str = "ARMory"
-database_url: str = "sqlite+aiosqlite:///./projectdocs.db"
+database_url: str = "sqlite+aiosqlite:///./armory.db"
 storage_type: str = "local"          # local | s3
 local_storage_path: str = "./data/uploads"
 alexandrite_vault_path: str = "./data/alexandrite"
