@@ -1437,28 +1437,27 @@ async function loadSidebars() {
     }
 }
 
-function getSidebarBlockCollapsedState() {
-    return JSON.parse(localStorage.getItem('sidebar_blocks_collapsed') || '{}');
-}
-
-function isSidebarBlockCollapsed(blockId) {
-    // По умолчанию блоки свёрнуты
-    const state = getSidebarBlockCollapsedState();
-    return state[blockId] !== false;
-}
-
-function toggleSidebarBlock(blockId) {
-    const state = getSidebarBlockCollapsedState();
-    state[blockId] = !isSidebarBlockCollapsed(blockId);
-    localStorage.setItem('sidebar_blocks_collapsed', JSON.stringify(state));
+async function toggleSidebarBlock(blockId) {
     const block = document.querySelector(`.sidebar-block[data-id="${blockId}"]`);
     if (!block) return;
     const list = block.querySelector('.sidebar-link-list');
     const icon = block.querySelector('.sidebar-block-toggle i');
+    const collapsed = list && !list.classList.contains('d-none');
+
     if (list) list.classList.toggle('d-none');
     if (icon) {
         icon.classList.toggle('bi-chevron-down');
         icon.classList.toggle('bi-chevron-right');
+    }
+
+    try {
+        await api(`${API_BASE}/sidebar/blocks/${blockId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ collapsed }),
+        });
+    } catch (e) {
+        console.error('Failed to save sidebar block state:', e);
     }
 }
 
@@ -1470,7 +1469,7 @@ function renderSidebarBlocks(position, blocks) {
         return;
     }
     container.innerHTML = blocks.map(block => {
-        const collapsed = isSidebarBlockCollapsed(block.id);
+        const collapsed = block.collapsed !== false;
         const blockNote = block.note ? `<span class="sidebar-note-badge" onclick="event.stopPropagation(); openSidebarNoteModal('block', ${block.id})" title="${escapeHtml(block.note)}"><i class="bi bi-sticky"></i></span>` : '';
         return `
         <div class="sidebar-block fade-in" data-id="${block.id}" data-type="block" oncontextmenu="handleSidebarContextMenu(event, 'block', ${block.id}, '${escapeHtml(block.title).replace(/'/g, "\\'")}')">

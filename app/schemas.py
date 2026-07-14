@@ -155,6 +155,7 @@ class SidebarBlockOut(BaseModel):
     title: str
     note: Optional[str] = None
     sort_order: int = 0
+    collapsed: bool = True
     created_at: datetime
     links: List[SidebarLinkOut] = []
 
@@ -170,6 +171,7 @@ class SidebarBlockUpdate(BaseModel):
     position: Optional[str] = None
     note: Optional[str] = None
     sort_order: Optional[int] = None
+    collapsed: Optional[bool] = None
 
 
 class SidebarBlockReorderRequest(BaseModel):

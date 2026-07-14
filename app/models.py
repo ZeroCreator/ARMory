@@ -86,6 +86,7 @@ class SidebarBlock(Base):
     title = Column(String(255), nullable=False)
     note = Column(Text, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
+    collapsed = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     links = relationship("SidebarLink", back_populates="block", cascade="all, delete-orphan", lazy="selectin", order_by="SidebarLink.sort_order")

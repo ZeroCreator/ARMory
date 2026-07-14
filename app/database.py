@@ -6,7 +6,10 @@ settings = get_settings()
 
 engine = create_async_engine(
     settings.database_url,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
+    connect_args={
+        "check_same_thread": False,
+        "timeout": 30,
+    } if "sqlite" in settings.database_url else {},
     echo=False,
 )
 
