@@ -9,6 +9,7 @@ let kanbanSortables = [];
 let currentTaskId = null;
 let currentStatusId = null;
 let projectName = '';
+let editingTaskAttachmentId = null;
 window.kanbanAttachments = window.kanbanAttachments || {};
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -216,6 +217,8 @@ function renderTaskCard(task) {
     `;
 }
 
+
+
 function renderCardAttachments(attachments) {
     if (!attachments || attachments.length === 0) return '';
 
@@ -223,11 +226,26 @@ function renderCardAttachments(attachments) {
         window.kanbanAttachments[a.id] = { ...a, project_id: PROJECT_ID };
     });
 
-    const icons = attachments.map(a => {
-        const cat = detectCategoryFromAttachment(a);
-        const icon = getCategoryIcon(cat);
-        const label = a.title || a.url || a.file_path || 'Вложение';
-        return `<span class="kanban-card-attachment-type" style="cursor:pointer" title="${escapeHtml(label)}" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})"><i class="bi ${icon}"></i></span>`;
+    const typeIcons = {
+        file: 'bi-file-earmark',
+        git: 'bi-git',
+        link: 'bi-link-45deg',
+    };
+    const typeLabels = {
+        file: 'Файл',
+        git: 'Git-репозиторий',
+        link: 'Ссылка',
+    };
+
+    const types = [...new Set(attachments.map(a => a.attachment_type))];
+    const icons = types.map(type => {
+        const icon = typeIcons[type] || 'bi-paperclip';
+        const label = typeLabels[type] || 'Вложение';
+        const first = attachments.find(a => a.attachment_type === type);
+        const onclick = first
+            ? `event.stopPropagation(); openTaskAttachmentPreview(${first.id})`
+            : '';
+        return `<span class="kanban-card-attachment-type" style="cursor:pointer" title="${label}" ${onclick ? `onclick="${onclick}"` : ''}><i class="bi ${icon}"></i></span>`;
     }).join('');
 
     return `
@@ -442,6 +460,12 @@ async function deleteTaskFromModal() {
     }
 }
 
+
+
+function getCurrentTaskProjectId() {
+    return PROJECT_ID;
+}
+
 function renderTaskAttachments(attachments) {
     const container = document.getElementById('task-attachments-list');
     if (!container) return;
@@ -458,18 +482,21 @@ function renderTaskAttachments(attachments) {
         window.kanbanAttachments[a.id] = { ...a, project_id: projectId, task_id: currentTaskId };
     });
     container.innerHTML = attachments.map(a => {
-        let icon = 'bi-paperclip';
-        let display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
+        const cat = detectCategoryFromAttachment(a);
+        const icon = getCategoryIcon(cat);
+        const display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
         let link = '';
-        if (a.attachment_type === 'link') {
-            icon = 'bi-link-45deg';
+        let actionBtn = '';
+        if (a.attachment_type === 'link' || a.attachment_type === 'git') {
             link = `<a href="${escapeHtml(a.url || '#')}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
-        } else if (a.attachment_type === 'git') {
-            icon = 'bi-git';
-            link = `<a href="${escapeHtml(a.url || '#')}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
+            actionBtn = `<a href="${escapeHtml(a.url || '#')}" target="_blank" class="btn btn-sm btn-outline-brown" title="Открыть" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right"></i></a>`;
         } else if (a.attachment_type === 'file') {
-            icon = 'bi-file-earmark';
             link = `<span class="text-decoration-none" style="cursor:pointer" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})">${display}</span>`;
+            actionBtn = `
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); openTaskAttachmentInAlexandrite(${a.id})" title="Открыть в Alexandrite"><i class="bi bi-gem"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-brown" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})" title="Предпросмотр"><i class="bi bi-eye"></i></button>
+                <a href="/uploads/${encodeURIComponent(a.file_path || '')}" class="btn btn-sm btn-outline-success" title="Скачать" download onclick="event.stopPropagation()"><i class="bi bi-download"></i></a>
+            `;
         } else {
             link = `<span>${display}</span>`;
         }
@@ -478,16 +505,72 @@ function renderTaskAttachments(attachments) {
                 <div class="text-truncate">
                     <i class="bi ${icon} me-1"></i> ${link}
                 </div>
-                <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="deleteTaskAttachment(${a.id})" title="Удалить">
-                    <i class="bi bi-trash"></i>
-                </button>
+                <div class="d-flex gap-1 align-items-center">
+                    ${actionBtn}
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); editTaskAttachment(${a.id})" title="Изменить">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); deleteTaskAttachment(${a.id})" title="Удалить">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
             </div>
         `;
     }).join('');
 }
 
-function getCurrentTaskProjectId() {
-    return PROJECT_ID;
+function editTaskAttachment(attachmentId) {
+    const attachment = window.kanbanAttachments?.[attachmentId];
+    if (!attachment) return;
+    editingTaskAttachmentId = attachmentId;
+    const modalEl = document.getElementById('editTaskAttachmentModal');
+    const modalTitle = document.getElementById('edit-task-attachment-modal-title');
+    const titleInput = document.getElementById('edit-task-attachment-title');
+    const urlWrap = document.getElementById('edit-task-attachment-url-wrap');
+    const urlInput = document.getElementById('edit-task-attachment-url');
+    const fileWrap = document.getElementById('edit-task-attachment-file-wrap');
+    const fileInput = document.getElementById('edit-task-attachment-file');
+    titleInput.value = attachment.title || '';
+    fileInput.value = '';
+    if (attachment.attachment_type === 'link' || attachment.attachment_type === 'git') {
+        modalTitle.textContent = attachment.attachment_type === 'git' ? 'Редактировать git-репозиторий' : 'Редактировать ссылку';
+        urlWrap.style.display = 'block';
+        urlInput.value = attachment.url || '';
+        fileWrap.style.display = 'none';
+    } else {
+        modalTitle.textContent = 'Редактировать файл';
+        urlWrap.style.display = 'none';
+        urlInput.value = '';
+        fileWrap.style.display = 'block';
+    }
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+async function saveTaskAttachmentEdit() {
+    if (!editingTaskAttachmentId || !currentTaskId) return;
+    const attachment = window.kanbanAttachments?.[editingTaskAttachmentId];
+    if (!attachment) return;
+    const titleInput = document.getElementById('edit-task-attachment-title');
+    const fileInput = document.getElementById('edit-task-attachment-file');
+    const formData = new FormData();
+    const title = titleInput.value.trim();
+    if (title) formData.append('title', title);
+    if (attachment.attachment_type === 'link' || attachment.attachment_type === 'git') {
+        const url = document.getElementById('edit-task-attachment-url').value.trim();
+        if (url) formData.append('url', url);
+    } else if (fileInput.files && fileInput.files[0]) {
+        formData.append('file', fileInput.files[0]);
+    }
+    try {
+        await api(`${API_BASE}/projects/${PROJECT_ID}/tasks/${currentTaskId}/attachments/${editingTaskAttachmentId}`, {
+            method: 'PATCH',
+            body: formData,
+        });
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('editTaskAttachmentModal')).hide();
+        await reloadCurrentTask();
+    } catch (e) {
+        alert('Ошибка изменения вложения: ' + e.message);
+    }
 }
 
 function showAttachmentForm(type) {

@@ -190,6 +190,39 @@
     </div>
 </div>
 
+<!-- Модал редактирования вложения -->
+<div class="modal fade" id="editTaskAttachmentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="edit-task-attachment-modal-title">Редактировать вложение</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-task-attachment-form">
+                    <input type="hidden" id="edit-task-attachment-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" id="edit-task-attachment-title">
+                    </div>
+                    <div class="mb-3" id="edit-task-attachment-url-wrap" style="display:none;">
+                        <label class="form-label">URL</label>
+                        <input type="url" class="form-control" id="edit-task-attachment-url">
+                    </div>
+                    <div class="mb-3" id="edit-task-attachment-file-wrap" style="display:none;">
+                        <label class="form-label">Заменить файл</label>
+                        <input type="file" class="form-control" id="edit-task-attachment-file">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveTaskAttachmentEdit()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Модал предпросмотра вложений -->
 <div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">

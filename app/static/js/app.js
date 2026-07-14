@@ -1222,6 +1222,14 @@ function openItemInAlexandrite(item) {
     window.open(`/alexandrite?root=${root}&open=${path}`, '_blank');
 }
 
+function openTaskAttachmentInAlexandrite(attachmentId) {
+    const attachment = window.kanbanAttachments?.[attachmentId];
+    if (!attachment || !attachment.file_path) return alert('Файл не найден');
+    const root = encodeURIComponent(LOCAL_STORAGE_PATH || './data/uploads');
+    const path = encodeURIComponent(attachment.file_path);
+    window.open(`/alexandrite?root=${root}&open=${path}`, '_blank');
+}
+
 async function openItemLocally(item) {
     try {
         await api(getItemOpenUrl(item), { method: 'POST' });

@@ -320,6 +320,11 @@ class TaskAttachmentCreate(BaseModel):
     file_path: Optional[str] = None
 
 
+class TaskAttachmentUpdate(BaseModel):
+    title: Optional[str] = None
+    url: Optional[str] = None
+
+
 class TaskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

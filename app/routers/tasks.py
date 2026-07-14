@@ -33,6 +33,7 @@ from app.schemas import (
     KanbanTaskStatusUpdate,
     TaskAttachmentCreate,
     TaskAttachmentOut,
+    TaskAttachmentUpdate,
     TaskCreate,
     TaskOut,
     TaskReorderRequest,
@@ -622,6 +623,60 @@ async def open_task_attachment(
         raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
 
     return {"status": "opened", "path": local_path}
+
+
+@router.patch("/tasks/{task_id}/attachments/{attachment_id}", response_model=TaskAttachmentOut)
+async def update_task_attachment(
+    project_id: int,
+    task_id: int,
+    attachment_id: int,
+    title: Optional[str] = Form(None),
+    url: Optional[str] = Form(None),
+    file: UploadFile = File(None),
+    db: AsyncSession = Depends(get_db),
+):
+    task = await _get_task(project_id, task_id, db)
+    result = await db.execute(
+        select(TaskAttachment).where(
+            TaskAttachment.id == attachment_id,
+            TaskAttachment.task_id == task.id,
+        )
+    )
+    attachment = result.scalar_one_or_none()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    if title is not None:
+        attachment.title = title.strip() or None
+
+    if attachment.attachment_type in ("link", "git"):
+        if url is not None:
+            attachment.url = url.strip() or None
+    elif file and file.filename:
+        uploads_dir = _task_uploads_dir()
+        ext = Path(file.filename).suffix
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        file_path = uploads_dir / unique_name
+
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+
+        if attachment.file_path:
+            try:
+                old_full_path = Path(get_settings().local_storage_path).resolve() / attachment.file_path
+                if old_full_path.exists():
+                    old_full_path.unlink()
+            except OSError:
+                pass
+
+        attachment.file_path = f"tasks/{unique_name}"
+        if not attachment.title:
+            attachment.title = file.filename
+
+    await db.commit()
+    await db.refresh(attachment)
+    return attachment
 
 
 # ═══════════════════════════════════════════════════
