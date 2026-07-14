@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 from typing import List
 
 from app.database import get_db
-from app.models import Project, Document, DocumentItem, DocType
+from app.models import Project, Document, DocumentItem, DocType, TaskStatus
 from app.schemas import ProjectCreate, ProjectUpdate, ProjectOut, ProjectDetailOut, ProjectReorderRequest
 from app.storage import get_storage, StorageBackend, slugify
 
@@ -28,6 +28,17 @@ async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db)
     db.add(project)
     await db.commit()
     await db.refresh(project)
+
+    default_statuses = [
+        ("К выполнению", "#a78bfa", 0),
+        ("В работе", "#f6ad55", 1),
+        ("Тестирование", "#63b3ed", 2),
+        ("Деплой", "#68d391", 3),
+    ]
+    for name, color, sort_order in default_statuses:
+        db.add(TaskStatus(project_id=project.id, name=name, color=color, sort_order=sort_order))
+    await db.commit()
+
     return project
 
 

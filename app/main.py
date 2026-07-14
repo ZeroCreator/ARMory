@@ -341,12 +341,12 @@ async def lifespan(app: FastAPI):
                                 (:pid, 'К выполнению', '#a78bfa', 0, CURRENT_TIMESTAMP),
                                 (:pid, 'В работе', '#f6ad55', 1, CURRENT_TIMESTAMP),
                                 (:pid, 'Тестирование', '#63b3ed', 2, CURRENT_TIMESTAMP),
-                                (:pid, 'Готово', '#68d391', 3, CURRENT_TIMESTAMP)
+                                (:pid, 'Деплой', '#68d391', 3, CURRENT_TIMESTAMP)
                         """),
                         {"pid": proj_id},
                     )
 
-        # Добавить колонку "Тестирование" перед "Готово" в проектах, где её ещё нет
+        # Добавить колонку "Тестирование" перед "Деплой" в проектах, где её ещё нет
         if "task_statuses" in table_names and "projects" in table_names:
             project_rows = await conn.execute(text("SELECT id FROM projects"))
             for (proj_id,) in project_rows.fetchall():
@@ -357,7 +357,7 @@ async def lifespan(app: FastAPI):
                 if has_testing.fetchone():
                     continue
                 done_row = await conn.execute(
-                    text("SELECT id, sort_order FROM task_statuses WHERE project_id = :pid AND name = 'Готово' LIMIT 1"),
+                    text("SELECT id, sort_order FROM task_statuses WHERE project_id = :pid AND name = 'Деплой' LIMIT 1"),
                     {"pid": proj_id},
                 )
                 done = done_row.fetchone()
