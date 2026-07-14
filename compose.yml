@@ -27,14 +27,13 @@ services:
       POCKETBASE_ADMIN_EMAIL: ${POCKETBASE_ADMIN_EMAIL:-admin@example.com}
       POCKETBASE_ADMIN_PASSWORD: ${POCKETBASE_ADMIN_PASSWORD:-changeme}
     command: >
-      sh -c '/pb/pocketbase superuser upsert "$POCKETBASE_ADMIN_EMAIL" "$POCKETBASE_ADMIN_PASSWORD" &&
+      sh -c '/pb/pocketbase superuser upsert "$POCKETBASE_ADMIN_EMAIL" "$POCKETBASE_ADMIN_PASSWORD" --dir=/pb/pb_data &&
              /pb/pocketbase serve --http=0.0.0.0:8090 --dir=/pb/pb_data'
     expose:
       - "8090"
     volumes:
       - ./pocketbase/pocketbase:/pb/pocketbase:ro
       - ./data/pb_data:/pb/pb_data
-      - ./data/pb_migrations:/pb/pb_migrations
     networks:
       - armory-net
 

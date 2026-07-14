@@ -41,7 +41,6 @@ ARMory/
 │   ├── uploads/            # Загруженные файлы
 │   ├── alexandrite/        # Хранилище Alexandrite (автосоздаётся)
 │   ├── pb_data/            # Данные PocketBase
-│   ├── pb_migrations/      # Миграции PocketBase
 │   └── backups/            # Локальные резервные копии
 ├── docs/                   # Markdown-документация для MkDocs
 ├── site/                   # Собранная статика MkDocs
@@ -111,9 +110,10 @@ Project
 
 PocketBase используется как встроенный инструмент для проектирования и просмотра схем данных:
 
-- Доступен из меню ARMory по пути `/pocketbase/<project>/_/`.
-- Данные каждого проекта изолированы в `data/pb_data/<project>/`.
-- Миграции проекта хранятся в `data/pb_migrations/<project>/`.
+- Доступен из меню ARMory по пути `/pocketbase/_/`.
+- Данные PocketBase хранятся в `data/pb_data/`.
+- Схема импортируется вручную через `data/pb_schema.json` (не пушится в git).
+- JS-миграции не используются.
 - Суперпользователь создаётся автоматически при старте.
 
 Подробнее см. [PocketBase](pocketbase.md).

@@ -46,6 +46,11 @@ data/uploads/*
 !data/uploads/.gitkeep
 data/alexandrite/
 
+# PocketBase runtime data (databases, WAL-files, generated types)
+# Schema is imported manually via JSON; migrations are not used.
+data/pb_data/
+data/pb_schema.json
+
 # Backups
 backups/
 backup_*.tar.gz

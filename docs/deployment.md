@@ -50,9 +50,9 @@ mkdir -p data/uploads
 # mv projectdocs.db data/
 # mv uploads/* data/uploads/
 
-# 5. Если используется PocketBase — скопируй данные проектов:
+# 5. Если используется PocketBase — скопируй данные:
 # rsync -av source/data/pb_data/ data/pb_data/
-# rsync -av source/data/pb_migrations/ data/pb_migrations/
+# Для чистой базы импортируй схему через админку: data/pb_schema.json
 
 # 6. Запуск
 docker compose up -d --build
