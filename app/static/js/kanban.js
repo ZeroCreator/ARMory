@@ -251,6 +251,14 @@ function updateTaskCardInBoard(task) {
     }
 }
 
+function updateKanbanColumnCounts() {
+    document.querySelectorAll('.kanban-column').forEach(column => {
+        const count = column.querySelectorAll('.kanban-column-body .kanban-card').length;
+        const badge = column.querySelector('.kanban-column-count');
+        if (badge) badge.textContent = count;
+    });
+}
+
 function handleCardClick(taskId, card) {
     // Если карточка подсвечена (например, после перехода по ссылке),
     // клик только снимает подсветку, не открывая задачу повторно.
@@ -279,6 +287,7 @@ function initKanbanSortable() {
                 const taskId = parseInt(evt.item.dataset.id, 10);
                 const newStatusId = parseInt(evt.to.dataset.statusId, 10);
                 const newIndex = evt.newIndex;
+                updateKanbanColumnCounts();
                 updateTaskStatus(taskId, newStatusId, newIndex);
             },
         });
@@ -321,6 +330,7 @@ async function updateTaskStatus(taskId, statusId, newIndex) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status_id: statusId, task_ids: taskIds }),
         });
+        updateKanbanColumnCounts();
     } catch (e) {
         alert('Ошибка обновления статуса: ' + e.message);
         loadKanbanBoard(PROJECT_ID);

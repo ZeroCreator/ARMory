@@ -267,6 +267,14 @@ function updateTaskCardInBoard(task) {
     }
 }
 
+function updateKanbanColumnCounts() {
+    document.querySelectorAll('.kanban-column').forEach(column => {
+        const count = column.querySelectorAll('.kanban-column-body .kanban-card').length;
+        const badge = column.querySelector('.kanban-column-count');
+        if (badge) badge.textContent = count;
+    });
+}
+
 function initKanbanSortable() {
     kanbanSortables.forEach(s => s.destroy());
     kanbanSortables = [];
@@ -284,6 +292,7 @@ function initKanbanSortable() {
             onEnd: function (evt) {
                 const taskId = parseInt(evt.item.dataset.id, 10);
                 const columnName = evt.to.dataset.columnName;
+                updateKanbanColumnCounts();
                 updateTaskColumn(taskId, columnName);
             },
         });
@@ -302,6 +311,7 @@ async function updateTaskColumn(taskId, columnName) {
         if (idx !== -1) {
             kanbanData.tasks[idx] = updatedTask;
         }
+        updateKanbanColumnCounts();
     } catch (e) {
         alert('Ошибка перемещения задачи: ' + e.message);
         loadKanbanBoard();
