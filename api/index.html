@@ -12,7 +12,7 @@
         <link rel="prev" href="../architecture/">
       
       
-        <link rel="next" href="../s3/">
+        <link rel="next" href="../alexandrite/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -356,7 +356,43 @@
         <li class="md-nav__item">
   <a href="#_5" class="md-nav__link">
     <span class="md-ellipsis">
+      Календарь
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
       Планировщик
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      Глоссарий
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#alexandrite" class="md-nav__link">
+    <span class="md-ellipsis">
+      Alexandrite
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      Бэкапы и синхронизация (Яндекс.Диск)
     </span>
   </a>
   
@@ -377,11 +413,71 @@
   
   
     <li class="md-nav__item">
+      <a href="../alexandrite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Alexandrite
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Глоссарий
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../s3/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
     Хранилище S3
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calendar/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Календарь
   </span>
   
 
@@ -515,7 +611,43 @@
         <li class="md-nav__item">
   <a href="#_5" class="md-nav__link">
     <span class="md-ellipsis">
+      Календарь
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
       Планировщик
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      Глоссарий
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#alexandrite" class="md-nav__link">
+    <span class="md-ellipsis">
+      Alexandrite
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      Бэкапы и синхронизация (Яндекс.Диск)
     </span>
   </a>
   
@@ -607,7 +739,7 @@
 <tr>
 <td>DELETE</td>
 <td><code>/api/projects/{id}/sections/{sec_id}</code></td>
-<td>Удалить раздел (группы переходят в "Без раздела")</td>
+<td>Удалить раздел вместе со всеми группами, элементами и файлами</td>
 </tr>
 </tbody>
 </table>
@@ -667,6 +799,11 @@
 <td>Предпросмотр файла</td>
 </tr>
 <tr>
+<td>GET</td>
+<td><code>/api/projects/{id}/documents/{doc_id}/items/{item_id}/collabora</code></td>
+<td>URL iframe для редактирования в Collabora Online</td>
+</tr>
+<tr>
 <td>POST</td>
 <td><code>/api/projects/{id}/documents/{doc_id}/items/{item_id}/open</code></td>
 <td>Открыть файл в системном приложении (localhost only)</td>
@@ -720,7 +857,39 @@
 </tr>
 </tbody>
 </table>
-<h2 id="_5">Планировщик</h2>
+<h2 id="_5">Календарь</h2>
+<table>
+<thead>
+<tr>
+<th>Метод</th>
+<th>Путь</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/calendar/events</code></td>
+<td>Список событий</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/calendar/events</code></td>
+<td>Создать событие</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/calendar/events/{id}</code></td>
+<td>Обновить событие</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/calendar/events/{id}</code></td>
+<td>Удалить событие</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_6">Планировщик</h2>
 <table>
 <thead>
 <tr>
@@ -749,6 +918,252 @@
 <td>POST</td>
 <td><code>/api/scheduler/remove-task</code></td>
 <td>Удалить задачу из очереди</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_7">Глоссарий</h2>
+<table>
+<thead>
+<tr>
+<th>Метод</th>
+<th>Путь</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/glossary</code></td>
+<td>Список терминов (пагинация, поиск, фильтр по теме/подтеме)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/glossary/count</code></td>
+<td>Количество терминов с учётом фильтров</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/glossary</code></td>
+<td>Создать термин</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/glossary/{id}</code></td>
+<td>Получить термин</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/glossary/{id}</code></td>
+<td>Обновить термин</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/glossary/{id}</code></td>
+<td>Удалить термин</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/glossary/topics</code></td>
+<td>Список тем с подтемами</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/glossary/topics</code></td>
+<td>Создать тему</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/glossary/topics/{id}</code></td>
+<td>Обновить тему</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/glossary/topics/{id}</code></td>
+<td>Удалить тему</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/glossary/subtopics</code></td>
+<td>Список подтем</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/glossary/subtopics</code></td>
+<td>Создать подтему</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/glossary/subtopics/{id}</code></td>
+<td>Обновить подтему</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/glossary/subtopics/{id}</code></td>
+<td>Удалить подтему</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/glossary/export</code></td>
+<td>Экспорт глоссария в <code>.xlsx</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/glossary/import</code></td>
+<td>Импорт глоссария из <code>.xlsx</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="alexandrite">Alexandrite</h2>
+<table>
+<thead>
+<tr>
+<th>Метод</th>
+<th>Путь</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/alexandrite/roots</code></td>
+<td>Настроенные корневые папки</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/alexandrite/tree?root=&lt;path&gt;</code></td>
+<td>Дерево файлов и папок</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/alexandrite/file?root=&lt;path&gt;&amp;path=&lt;relative&gt;</code></td>
+<td>Содержимое файла</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/alexandrite/file?root=&lt;path&gt;</code></td>
+<td>Создать файл <code>.md</code>/<code>.txt</code></td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/api/alexandrite/file?root=&lt;path&gt;</code></td>
+<td>Обновить содержимое файла</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/alexandrite/file?root=&lt;path&gt;</code></td>
+<td>Переименовать файл</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/alexandrite/file?root=&lt;path&gt;&amp;path=&lt;relative&gt;</code></td>
+<td>Удалить файл</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/alexandrite/directory?root=&lt;path&gt;</code></td>
+<td>Создать папку</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/alexandrite/directory?root=&lt;path&gt;</code></td>
+<td>Переименовать папку</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/alexandrite/directory?root=&lt;path&gt;&amp;path=&lt;relative&gt;</code></td>
+<td>Удалить папку рекурсивно</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_8">Бэкапы и синхронизация (Яндекс.Диск)</h2>
+<table>
+<thead>
+<tr>
+<th>Метод</th>
+<th>Путь</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/backup/stats</code></td>
+<td>Статистика локальных данных и статус Яндекс.Диска</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/sync-export</code></td>
+<td>Синхронизация на Яндекс.Диск (DB + uploads); возвращает <code>job_id</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/sync-import</code></td>
+<td>Синхронизация с Яндекс.Диска (DB + uploads)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/backup/job/{job_id}</code></td>
+<td>Статус фоновой задачи синхронизации или архива</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/backup/archives</code></td>
+<td>Список архивных бэкапов на Яндекс.Диске</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/create</code></td>
+<td>Создать архив <code>.tar.gz</code> и загрузить на Яндекс.Диск; возвращает <code>job_id</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/restore</code></td>
+<td>Восстановить данные из архива на Яндекс.Диске</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/delete</code></td>
+<td>Удалить архив с Яндекс.Диска</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/backup/alexandrite/stats</code></td>
+<td>Статистика локальной папки Alexandrite</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/alexandrite/export</code></td>
+<td>Синхронная загрузка Alexandrite на Яндекс.Диск</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/alexandrite/export-async</code></td>
+<td>Асинхронная загрузка Alexandrite; возвращает <code>job_id</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/backup/alexandrite/export-status/{job_id}</code></td>
+<td>Статус фоновой загрузки Alexandrite</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/alexandrite/import</code></td>
+<td>Загрузить Alexandrite с Яндекс.Диска</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/alexandrite/archive</code></td>
+<td>Создать архив Alexandrite на Яндекс.Диске</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/backup/alexandrite/archives</code></td>
+<td>Список архивов Alexandrite</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backup/alexandrite/restore</code></td>
+<td>Восстановить Alexandrite из архива</td>
 </tr>
 </tbody>
 </table>

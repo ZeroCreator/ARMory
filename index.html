@@ -287,7 +287,16 @@
         <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
-      Стек
+      Быстрый старт
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Документация
     </span>
   </a>
   
@@ -348,11 +357,71 @@
   
   
     <li class="md-nav__item">
+      <a href="alexandrite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Alexandrite
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Глоссарий
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="s3/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
     Хранилище S3
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="calendar/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Календарь
   </span>
   
 
@@ -459,7 +528,16 @@
         <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
-      Стек
+      Быстрый старт
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Документация
     </span>
   </a>
   
@@ -480,25 +558,55 @@
                   
 
 
-<h1 id="armory">ARMory (Арсенал)</h1>
-<p>Веб-приложение для сбора и управления документами, файлами, ссылками и заметками проектов.</p>
+<h1 id="armory">ARMory</h1>
+<p>Система управления документацией проектов.</p>
 <h2 id="_1">Возможности</h2>
 <ul>
-<li><strong>Проекты</strong> — создавайте проекты и собирайте в них документы с описаниями</li>
-<li><strong>Разделы</strong> — группируйте документы внутри проекта по категориям</li>
-<li><strong>Ссылки</strong> — добавляйте ссылки на внешние ресурсы (Google Drive, Excel Online, Google Docs, YouTube, Figma, Notion, GitHub и т.д.) с автоматическим определением типа</li>
-<li><strong>Файлы</strong> — загружайте файлы напрямую в приложение. Файлы хранятся в структурированном дереве папок</li>
-<li><strong>Заметки</strong> — создавайте текстовые заметки прямо в документе</li>
-<li><strong>Предпросмотр</strong> — открывайте изображения, PDF, видео и аудио без скачивания, а для Word/Excel запускайте в системном приложении</li>
-<li><strong>Сайдбар</strong> — динамические блоки ссылок в левой и правой колонке</li>
-<li><strong>Планировщик</strong> — запускайте скрипты по расписанию через <code>at</code></li>
-<li><strong>Хранилище</strong> — локальное хранилище или S3 (MinIO, AWS S3, Yandex Cloud и др.)</li>
+<li><strong>Проекты</strong> — создавайте проекты, разбивайте их на разделы и группы.</li>
+<li><strong>Файлы, заметки и ссылки</strong> — храните файлы, текстовые заметки и ссылки в одном месте.</li>
+<li><strong>Замена файлов</strong> — обновляйте файл, сохраняя его название и историю версий.</li>
+<li><strong>Контекстное меню файлов</strong> — правый клик по элементу: копировать ссылку, предпросмотр, открыть в Alexandrite, изменить, скачать, удалить.</li>
+<li><strong>Сортировка</strong> — меняйте порядок групп и элементов внутри групп перетаскиванием.</li>
+<li><strong>Пагинация</strong> — удобная навигация по длинным спискам проектов с prev/next, окном страниц и многоточием.</li>
+<li><strong>Поиск</strong> — быстрый поиск по проектам и содержимому.</li>
+<li><strong>Alexandrite</strong> — встроенное Markdown-хранилище знаний с двухпанельным интерфейсом.</li>
+<li>Локальное редактирование файлов и папок.</li>
+<li>Read-only просмотр заметок с Яндекс.Диска.</li>
+<li>Центрированный предпросмотр текста, Markdown и изображений.</li>
+<li>Редактирование офисных документов через Collabora Online.</li>
+<li>Сохранение состояния дерева между операциями.</li>
+<li><strong>Яндекс.Диск</strong> — синхронизация базы данных, загруженных файлов и Alexandrite с облаком.</li>
+<li><strong>Архивные бэкапы</strong> — создание и восстановление архивов <code>.tar.gz</code> для ARMory и Alexandrite.</li>
+<li><strong>Планировщик задач</strong> — задачи с датами, повторениями, приоритетами и напоминаниями.</li>
+<li><strong>Календарь</strong> — визуальное представление задач и событий по месяцам.</li>
+<li><strong>Глоссарий</strong> — база терминов с темами, подтемами, импортом и экспортом в <code>.xlsx</code>.</li>
+<li><strong>Адаптивный UI</strong> — Bootstrap 5, сворачиваемые сайдбары, сохранение состояния интерфейса.</li>
 </ul>
-<h2 id="_2">Стек</h2>
+<h2 id="_2">Быстрый старт</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># 1. Клонировать репозиторий</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>clone<span class="w"> </span>&lt;repo-url&gt;
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">cd</span><span class="w"> </span>ARMory
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># 2. Скопировать и заполнить .env</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># 3. Запустить через Docker Compose</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--build
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># 4. Открыть в браузере</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>http://localhost:8000
+</code></pre></div>
+<h2 id="_3">Документация</h2>
 <ul>
-<li><strong>Backend</strong>: FastAPI + SQLAlchemy 2.0 (async) + SQLite</li>
-<li><strong>Frontend</strong>: Server-side rendering (Jinja2) + Bootstrap 5 + Vanilla JS</li>
-<li><strong>Package Manager</strong>: <a href="https://docs.astral.sh/uv/">uv</a></li>
+<li><a href="architecture/">Архитектура</a></li>
+<li><a href="api/">API</a></li>
+<li><a href="backup/">Бэкапы и синхронизация</a></li>
+<li><a href="alexandrite/">Alexandrite</a></li>
+<li><a href="scheduler/">Планировщик задач</a></li>
+<li><a href="calendar/">Календарь</a></li>
+<li><a href="s3/">S3-хранилище</a></li>
+<li><a href="deployment/">Развёртывание</a></li>
+<li><a href="glossary/">Глоссарий</a></li>
 </ul>
 
 

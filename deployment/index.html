@@ -290,11 +290,71 @@
   
   
     <li class="md-nav__item">
+      <a href="../alexandrite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Alexandrite
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Глоссарий
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../s3/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
     Хранилище S3
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calendar/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Календарь
   </span>
   
 
@@ -405,6 +465,24 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#auth-gateway-oauth2-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Запуск с auth gateway (oauth2-proxy)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#collabora-online" class="md-nav__link">
+    <span class="md-ellipsis">
+      Collabora Online
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#https-nginx-certbot" class="md-nav__link">
     <span class="md-ellipsis">
       HTTPS + домен (Nginx + Certbot)
@@ -484,6 +562,24 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#auth-gateway-oauth2-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Запуск с auth gateway (oauth2-proxy)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#collabora-online" class="md-nav__link">
+    <span class="md-ellipsis">
+      Collabora Online
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#https-nginx-certbot" class="md-nav__link">
     <span class="md-ellipsis">
       HTTPS + домен (Nginx + Certbot)
@@ -545,10 +641,24 @@
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>nano<span class="w"> </span>.env
 </code></pre></div>
 <p>В <code>.env</code> укажи:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>APP_NAME=&quot;Your App Name&quot;
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>DATABASE_URL=&quot;sqlite+aiosqlite:///./data/projectdocs.db&quot;
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>LOCAL_STORAGE_PATH=./data/uploads
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>STORAGE_TYPE=local
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>DATABASE_URL=&quot;sqlite+aiosqlite:///./data/projectdocs.db&quot;
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>LOCAL_STORAGE_PATH=./data/uploads
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>STORAGE_TYPE=local
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>ARMORY_PUBLIC_URL=https://armory.team-73.ru
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a># Yandex Disk (опционально)
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>YANDEX_DISK_TOKEN=your_oauth_token
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>YANDEX_DISK_PATH=ARMory/data
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>YANDEX_DISK_BACKUPS_PATH=ARMory/backups
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>YANDEX_DISK_ALEXANDRITE_PATH=ARMory/alexandrite
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>TIMEZONE=Europe/Moscow
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a># Alexandrite
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>ALEXANDRITE_VAULT_PATH=./data/alexandrite
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a># Планировщик
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>SCHEDULER_ENABLED=true
 </code></pre></div></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># 3. Создай папку для данных</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>data/uploads
@@ -561,51 +671,77 @@
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># 5. Запуск</span>
 <a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--build
 </code></pre></div>
-<p>Приложение доступно на <code>http://server-ip:&lt;PORT&gt;</code> (порт по умолчанию смотрите в <code>docker-compose.yml</code>).</p>
+<p>Приложение доступно на <code>http://server-ip:&lt;PORT&gt;</code> (порт по умолчанию смотрите в <code>compose.yml</code>).</p>
+<h2 id="auth-gateway-oauth2-proxy">Запуск с auth gateway (oauth2-proxy)</h2>
+<p>Если нужно закрыть ARMory авторизацией через Stalwart (mail.team-73.ru):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>compose.yml<span class="w"> </span>-f<span class="w"> </span>compose.gateway.yml<span class="w"> </span>up<span class="w"> </span>-d
+</code></pre></div>
+<p>В <code>.env</code> заполни:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>GATEWAY_PORT=5005
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>OAUTH2_PROXY_CLIENT_ID=armory
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>OAUTH2_PROXY_CLIENT_SECRET=&lt;secret от админа Stalwart&gt;
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>OAUTH2_PROXY_COOKIE_SECRET=&lt;openssl rand -base64 32&gt;
+</code></pre></div></p>
+<p>Callback URL для Stalwart: <code>https://armory.team-73.ru/oauth2/callback</code>.</p>
+<h2 id="collabora-online">Collabora Online</h2>
+<p>Для редактирования офисных документов в Alexandrite добавьте в <code>.env</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>COLLABORA_ENABLED=true
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>COLLABORA_DOMAIN=armory.team-73.ru
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>COLLABORA_INTERNAL_URL=http://collabora:9980
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>COLLABORA_PUBLIC_URL=https://armory.team-73.ru/collabora
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>COLLABORA_SERVICE_ROOT=/collabora
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>COLLABORA_WOPI_SECRET=&lt;openssl rand -hex 32&gt;
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>COLLABORA_ADMIN_USER=admin
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>COLLABORA_ADMIN_PASSWORD=&lt;сложный пароль&gt;
+</code></pre></div>
+<p>Запустите стек с Collabora:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>compose.yml<span class="w"> </span>-f<span class="w"> </span>compose.gateway.yml<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--build
+</code></pre></div>
+<p>ARMory автоматически проксирует <code>/collabora/*</code> на внутренний сервис Collabora, поэтому дополнительная настройка шлюза не требуется.</p>
 <h2 id="https-nginx-certbot">HTTPS + домен (Nginx + Certbot)</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>nginx<span class="w"> </span>certbot<span class="w"> </span>python3-certbot-nginx<span class="w"> </span>-y
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/nginx/sites-available/&lt;your-app&gt;<span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="s">server {</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="s">    listen 80;</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="s">    server_name &lt;your-domain&gt;;</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="s">    location / {</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="s">        proxy_pass http://127.0.0.1:&lt;PORT&gt;;</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="s">        proxy_set_header Host $host;</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="s">        proxy_set_header X-Real-IP $remote_addr;</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="s">        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="s">        proxy_set_header X-Forwarded-Proto $scheme;</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="s">    }</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="s">}</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="s">EOF</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>sudo<span class="w"> </span>ln<span class="w"> </span>-s<span class="w"> </span>/etc/nginx/sites-available/&lt;your-app&gt;<span class="w"> </span>/etc/nginx/sites-enabled/
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>sudo<span class="w"> </span>nginx<span class="w"> </span>-t<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>nginx
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="c1"># SSL</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>sudo<span class="w"> </span>certbot<span class="w"> </span>--nginx<span class="w"> </span>-d<span class="w"> </span>&lt;your-domain&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>nginx<span class="w"> </span>certbot<span class="w"> </span>python3-certbot-nginx<span class="w"> </span>-y
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/nginx/sites-available/&lt;your-app&gt;<span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="s">server {</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="s">    listen 80;</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="s">    server_name &lt;your-domain&gt;;</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="s">    location / {</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="s">        proxy_pass http://127.0.0.1:&lt;PORT&gt;;</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="s">        proxy_set_header Host $host;</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="s">        proxy_set_header X-Real-IP $remote_addr;</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="s">        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="s">        proxy_set_header X-Forwarded-Proto $scheme;</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="s">    }</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="s">}</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="s">EOF</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>sudo<span class="w"> </span>ln<span class="w"> </span>-s<span class="w"> </span>/etc/nginx/sites-available/&lt;your-app&gt;<span class="w"> </span>/etc/nginx/sites-enabled/
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>sudo<span class="w"> </span>nginx<span class="w"> </span>-t<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>nginx
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="c1"># SSL</span>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>sudo<span class="w"> </span>certbot<span class="w"> </span>--nginx<span class="w"> </span>-d<span class="w"> </span>&lt;your-domain&gt;
 </code></pre></div>
 <h2 id="_2">Обновление кода</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">cd</span><span class="w"> </span>/opt/&lt;your-project&gt;
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>git<span class="w"> </span>pull
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Бэкап перед обновлением</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>tar<span class="w"> </span>-czvf<span class="w"> </span>backup_<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d_%H%M%S<span class="k">)</span>.tar.gz<span class="w"> </span>data/
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Пересобрать и перезапустить</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--build
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">cd</span><span class="w"> </span>/opt/&lt;your-project&gt;
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>git<span class="w"> </span>pull
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Бэкап перед обновлением</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>tar<span class="w"> </span>-czvf<span class="w"> </span>backup_<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d_%H%M%S<span class="k">)</span>.tar.gz<span class="w"> </span>data/<span class="w"> </span>projectdocs.db
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Пересобрать и перезапустить</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--build
 </code></pre></div>
 <h2 id="_3">Проверка логов</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Логи приложения</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>-f
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Или напрямую</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>docker<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>&lt;container-name&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Логи приложения</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>-f
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Или напрямую</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>docker<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>&lt;container-name&gt;
 </code></pre></div>
 <h2 id="_4">Проверка статуса</h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>ps
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:&lt;PORT&gt;/api/projects
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>docker<span class="w"> </span>compose<span class="w"> </span>ps
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:&lt;PORT&gt;/api/projects
 </code></pre></div>
 
 
