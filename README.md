@@ -53,22 +53,33 @@ When the auth gateway (oauth2-proxy) is enabled, the public port is configured b
 
 Требуется [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
-1. Запустить PocketBase (если используется):
+1. Запустить PocketBase и ARMory одной командой:
    ```bash
-   ./pocketbase/run-pocketbase.sh
+   ./run-dev.sh
    ```
 
-2. В другом терминале запустить ARMory:
+   Или вручную в двух терминалах:
    ```bash
-   export POCKETBASE_INTERNAL_URL=http://127.0.0.1:8090
+   # терминал 1
+   ./pocketbase/run-pocketbase.sh
+   ```
+   ```bash
+   # терминал 2
    uv run uvicorn app.main:app --host 0.0.0.0 --port <PORT> --reload
    ```
 
 ### Запуск через systemd
 
+Если ARMory уже запускается через systemd, PocketBase можно добавить отдельным user-сервисом:
+
 ```bash
-sudo systemctl enable --now <your-service>.service
+mkdir -p ~/.config/systemd/user
+cp armory-pocketbase.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now armory-pocketbase.service
 ```
+
+Сервис поднимет PocketBase при старте системы; ARMory проксирует его через `/pocketbase/_/`. Для обычного локального запуска см. раздел выше.
 
 ___
 ## Разработка документации

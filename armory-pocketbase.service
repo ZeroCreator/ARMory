@@ -1,0 +1,16 @@
+[Unit]
+Description=ARMory PocketBase
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/ARMory
+Environment=POCKETBASE_ADMIN_EMAIL=admin@example.com
+Environment=POCKETBASE_ADMIN_PASSWORD=changeme
+ExecStart=%h/ARMory/pocketbase/run-pocketbase.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+пше
