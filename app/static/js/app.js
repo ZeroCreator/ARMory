@@ -771,15 +771,29 @@ function handleProjectItemContextMenu(event, docId, itemId) {
     }
     projectItemContextTarget = { docId, itemId, item, element: itemEl };
     const menu = document.getElementById('project-item-context-menu');
-    // Скрыть/показать пункты, недоступные для ссылок или заметок
+    // Набор пунктов — как у кнопок строки: у файла всё, у заметки без скачивания
+    // и Alexandrite, у ссылки только «Изменить» и «Удалить».
     const isFile = item && item.item_type === 'file';
+    const isLink = item && item.item_type === 'link';
     menu.querySelectorAll('.project-item-context-item').forEach(el => {
         const action = el.dataset.action;
-        if (['preview', 'alexandrite', 'download'].includes(action)) {
+        if (['alexandrite', 'download'].includes(action)) {
             el.style.display = isFile ? 'flex' : 'none';
+        } else if (action === 'preview') {
+            el.style.display = isLink ? 'none' : 'flex';
         } else {
             el.style.display = 'flex';
         }
+    });
+    // Скрыть разделители, после которых нет видимых пунктов
+    menu.querySelectorAll('.sidebar-context-divider').forEach(divider => {
+        let next = divider.nextElementSibling;
+        let anyVisible = false;
+        while (next && !next.classList.contains('sidebar-context-divider')) {
+            if (next.style.display !== 'none') anyVisible = true;
+            next = next.nextElementSibling;
+        }
+        divider.style.display = anyVisible ? '' : 'none';
     });
     menu.style.display = 'block';
     const x = Math.min(event.clientX, window.innerWidth - 220);
@@ -1911,8 +1925,10 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-const projectItemContextMenu = document.getElementById('project-item-context-menu');
-if (projectItemContextMenu) {
+// Меню подключается в шаблоне после app.js — вешаем обработчик после загрузки DOM
+document.addEventListener('DOMContentLoaded', () => {
+    const projectItemContextMenu = document.getElementById('project-item-context-menu');
+    if (!projectItemContextMenu) return;
     projectItemContextMenu.addEventListener('click', (e) => {
         const item = e.target.closest('.project-item-context-item');
         if (!item || !projectItemContextTarget) return;
@@ -1933,7 +1949,7 @@ if (projectItemContextMenu) {
             deleteItem(docId, itemId);
         }
     });
-}
+});
 
 const sidebarContextMenu = document.getElementById('sidebar-context-menu');
 if (sidebarContextMenu) {

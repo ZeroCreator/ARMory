@@ -62,9 +62,32 @@
 | Метод | Путь | Описание |
 |-------|------|----------|
 | GET | `/api/scheduler/tasks` | Список доступных задач |
-| POST | `/api/scheduler/schedule` | Запланировать задачу |
+| POST | `/api/scheduler/schedule` | Запланировать задачу (поддерживает `args` — аргументы скрипта) |
 | GET | `/api/scheduler/atq` | Список запланированных задач |
 | POST | `/api/scheduler/remove-task` | Удалить задачу из очереди |
+
+## Канбан и задачи
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/projects/{id}/tasks` | Задачи проекта |
+| GET | `/api/projects/{id}/tasks/board` | Доска канбана проекта |
+| POST | `/api/projects/{id}/tasks` | Создать задачу |
+| POST | `/api/projects/{id}/tasks/bulk` | Массовое создание задач (импорт ToDo) |
+| GET | `/api/projects/{id}/tasks/{task_id}` | Получить задачу |
+| PATCH | `/api/projects/{id}/tasks/{task_id}` | Обновить задачу (в т.ч. `is_closed` — закрытие) |
+| DELETE | `/api/projects/{id}/tasks/{task_id}` | Удалить задачу |
+| POST | `/api/projects/{id}/tasks/{task_id}/attachments` | Добавить вложение к задаче |
+| GET | `/api/projects/{id}/tasks/{task_id}/attachments/{att_id}/collabora` | URL редактирования вложения в Collabora Online |
+| GET | `/api/projects/{id}/kanban/export` | Экспорт доски проекта в JSON |
+| POST | `/api/projects/{id}/kanban/import` | Импорт доски проекта из JSON |
+| GET | `/api/tasks?project_id=` | Список задач всех проектов (фильтр по проекту) |
+| GET | `/api/kanban` | Общая доска по всем проектам |
+| GET | `/api/kanban/filters` | Опции фильтров общего канбана |
+| POST | `/api/kanban/tasks/bulk` | Массовое создание задач в общем канбане |
+| PATCH | `/api/kanban/tasks/{task_id}/status` | Перемещение задачи между колонками |
+| GET | `/api/kanban/export` | Экспорт общей доски в JSON |
+| POST | `/api/kanban/import` | Импорт общей доски из JSON |
 
 ## Глоссарий
 
