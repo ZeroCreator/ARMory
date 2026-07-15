@@ -391,7 +391,7 @@ function openTaskModal(taskId, defaultStatusId) {
         form.title.value = task.title;
         form.description.value = task.description || '';
         form.priority.value = task.priority || 'medium';
-        form.is_closed.checked = !!task.is_closed;
+        document.getElementById('task-is-closed').checked = !!task.is_closed;
         form.due_date.value = task.due_date ? formatDateTimeLocal(task.due_date) : '';
         form.assignee_email.value = task.assignee_email || '';
         form.tags.value = task.tags || '';
@@ -419,7 +419,7 @@ async function saveTask() {
         title: form.title.value.trim(),
         description: form.description.value.trim() || null,
         priority: form.priority.value,
-        is_closed: form.is_closed.checked,
+        is_closed: document.getElementById('task-is-closed').checked,
         due_date: form.due_date.value ? new Date(form.due_date.value).toISOString() : null,
         assignee_email: form.assignee_email.value.trim() || null,
         tags: form.tags.value.trim() || null,

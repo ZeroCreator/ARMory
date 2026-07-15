@@ -22,10 +22,10 @@
             <i class="bi bi-plus-lg me-1"></i> Задача
         </button>
         <button class="btn btn-outline-secondary" onclick="exportProjectKanban()" title="Экспортировать канбан проекта">
-            <i class="bi bi-download"></i>
+            <i class="bi bi-upload"></i>
         </button>
         <button class="btn btn-outline-secondary" onclick="document.getElementById('kanban-import-input').click()" title="Импортировать канбан проекта">
-            <i class="bi bi-upload"></i>
+            <i class="bi bi-download"></i>
         </button>
         <input type="file" id="kanban-import-input" accept=".json" style="display:none" onchange="importProjectKanban(this)">
     </div>
@@ -257,5 +257,5 @@
     const PROJECT_ID = {{ project_id }};
     const LOCAL_STORAGE_PATH = {{ local_storage_path | tojson }};
 </script>
-<script src="/static/js/kanban.js?v=29"></script>
+<script src="/static/js/kanban.js?v=30"></script>
 {% endblock %}
