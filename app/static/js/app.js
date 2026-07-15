@@ -1306,7 +1306,7 @@ async function openItemPreview(item) {
                 <div class="p-4">
                     <div class="note-preview">
                         <h5 class="mb-3">${escapeHtml(item.title || 'Заметка')}</h5>
-                        <div class="note-text">${escapeHtml(item.content || '').replace(/\n/g, '<br>')}</div>
+                        <div class="note-text">${escapeHtml(item.content || '')}</div>
                     </div>
                 </div>`;
             break;
