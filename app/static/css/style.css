@@ -3474,6 +3474,25 @@ footer {
     font-weight: 500;
 }
 
+.kanban-card-closed {
+    opacity: 0.7;
+    background: #f8f9fa;
+}
+
+.kanban-card-closed .kanban-card-title {
+    text-decoration: line-through;
+    color: #6c757d;
+}
+
+.kanban-card-closed .kanban-card-desc {
+    color: #adb5bd;
+}
+
+.kanban-tag-closed {
+    background: rgba(108, 117, 125, 0.15);
+    color: #6c757d;
+}
+
 .kanban-column-body.sortable-ghost,
 .kanban-card.sortable-ghost {
     opacity: 0.5;

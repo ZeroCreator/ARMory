@@ -92,6 +92,12 @@
                             </div>
                         </div>
                     </div>
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox" name="is_closed" id="task-is-closed">
+                        <label class="form-check-label" for="task-is-closed">
+                            Закрыто <span class="text-muted">(дедлайн будет сброшен)</span>
+                        </label>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Теги (через запятую)</label>
                         <input type="text" class="form-control" name="tags" placeholder="backend, urgent">
@@ -257,5 +263,5 @@
 <script>
     const LOCAL_STORAGE_PATH = {{ local_storage_path | tojson }};
 </script>
-<script src="/static/js/kanban_global.js?v=42"></script>
+<script src="/static/js/kanban_global.js?v=43"></script>
 {% endblock %}

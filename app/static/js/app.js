@@ -1560,13 +1560,22 @@ async function openTaskAttachmentPreview(attachmentId) {
 
 async function openTaskAttachmentInCollabora(attachment) {
     const modalEl = document.getElementById('previewModal');
-    const content = document.getElementById('preview-content');
-    const title = document.getElementById('preview-title');
-    const downloadBtn = document.getElementById('preview-download');
-    const modalDialog = modalEl.querySelector('.modal-dialog');
 
     try {
         const data = await api(`${API_BASE}/projects/${attachment.project_id}/tasks/${attachment.task_id}/attachments/${attachment.id}/collabora`);
+        const newWindow = window.open(data.url, '_blank');
+        if (newWindow) {
+            // Если вкладка успешно открылась, закрываем модалку предпросмотра.
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            return;
+        }
+        // Браузер заблокировал popup — открываем в модалке как fallback.
+        const content = document.getElementById('preview-content');
+        const title = document.getElementById('preview-title');
+        const downloadBtn = document.getElementById('preview-download');
+        const modalDialog = modalEl.querySelector('.modal-dialog');
+
         title.textContent = attachment.title || attachment.file_path || 'Документ';
         downloadBtn.href = getTaskAttachmentDownloadUrl(attachment);
         downloadBtn.style.display = 'inline-block';
@@ -1575,10 +1584,13 @@ async function openTaskAttachmentInCollabora(attachment) {
         const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
         modal.show();
     } catch (e) {
+        const content = document.getElementById('preview-content');
+        const title = document.getElementById('preview-title');
+        const downloadBtn = document.getElementById('preview-download');
+
         title.textContent = attachment.title || attachment.file_path || 'Документ';
         downloadBtn.href = getTaskAttachmentDownloadUrl(attachment);
         downloadBtn.style.display = 'inline-block';
-        modalDialog?.classList.remove('modal-fullscreen');
         content.innerHTML = `
             <div class="empty-state py-5">
                 <i class="bi bi-exclamation-triangle"></i>

@@ -177,7 +177,7 @@ async def list_tasks(project_id: int, db: AsyncSession = Depends(get_db)):
         select(Task)
         .options(selectinload(Task.status), selectinload(Task.attachments))
         .where(Task.project_id == project_id)
-        .order_by(Task.sort_order.asc(), Task.created_at.asc())
+        .order_by(Task.is_closed.asc(), Task.sort_order.asc(), Task.created_at.asc())
     )
     return result.scalars().all()
 
@@ -223,7 +223,7 @@ async def get_kanban_board(
         tasks_query = tasks_query.where(Task.due_date <= due_before)
 
     tasks_result = await db.execute(
-        tasks_query.order_by(Task.sort_order.asc(), Task.created_at.asc())
+        tasks_query.order_by(Task.is_closed.asc(), Task.sort_order.asc(), Task.created_at.asc())
     )
     tasks = tasks_result.scalars().all()
 
@@ -285,7 +285,8 @@ async def create_task(
         title=data.title,
         description=data.description,
         priority=data.priority or "medium",
-        due_date=data.due_date,
+        is_closed=data.is_closed or False,
+        due_date=None if data.is_closed else data.due_date,
         assignee_email=data.assignee_email,
         tags=data.tags,
         sort_order=max_val + 1,
@@ -347,6 +348,22 @@ async def update_task(
         task.assignee_email = update_data["assignee_email"]
     if "tags" in update_data:
         task.tags = update_data["tags"]
+
+    if "is_closed" in update_data:
+        was_closed = task.is_closed
+        task.is_closed = update_data["is_closed"]
+        if update_data["is_closed"] and not was_closed:
+            # При закрытии задачи сбрасываем дедлайн и отправляем вниз колонки.
+            task.due_date = None
+            max_order = await db.execute(
+                select(func.max(Task.sort_order))
+                .where(Task.project_id == project_id, Task.status_id == task.status_id)
+            )
+            task.sort_order = (max_order.scalar_one_or_none() or 0) + 1
+        elif not update_data["is_closed"] and was_closed:
+            # При открытии возвращаем задачу в начало колонки.
+            task.sort_order = 0
+
     task.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(task)
@@ -698,7 +715,7 @@ async def _build_project_export(project_id: int, db: AsyncSession) -> dict:
         select(Task)
         .options(selectinload(Task.attachments))
         .where(Task.project_id == project_id)
-        .order_by(Task.sort_order.asc(), Task.created_at.asc())
+        .order_by(Task.is_closed.asc(), Task.sort_order.asc(), Task.created_at.asc())
     )
     tasks = tasks_result.scalars().all()
 
@@ -720,6 +737,7 @@ async def _build_project_export(project_id: int, db: AsyncSession) -> dict:
                 "title": t.title,
                 "description": t.description,
                 "priority": t.priority,
+                "is_closed": t.is_closed,
                 "due_date": t.due_date,
                 "assignee_email": t.assignee_email,
                 "tags": t.tags,
@@ -803,6 +821,7 @@ async def _import_project_data(
                 title=task_data.title,
                 description=task_data.description,
                 priority=task_data.priority,
+                is_closed=task_data.is_closed,
                 due_date=task_data.due_date,
                 assignee_email=task_data.assignee_email,
                 tags=task_data.tags,
@@ -813,6 +832,7 @@ async def _import_project_data(
         else:
             task.description = task_data.description
             task.priority = task_data.priority
+            task.is_closed = task_data.is_closed
             task.due_date = task_data.due_date
             task.assignee_email = task_data.assignee_email
             task.tags = task_data.tags
@@ -921,7 +941,7 @@ async def global_kanban(
     if due_before is not None:
         query = query.where(Task.due_date <= due_before)
 
-    result = await db.execute(query.order_by(Task.sort_order.asc(), Task.created_at.asc()))
+    result = await db.execute(query.order_by(Task.is_closed.asc(), Task.sort_order.asc(), Task.created_at.asc()))
     tasks = result.scalars().all()
 
     # Колонки — уникальные названия статусов с приоритетным цветом (самый частый)

@@ -333,6 +333,7 @@ class TaskOut(BaseModel):
     title: str
     description: Optional[str] = None
     priority: str = "medium"
+    is_closed: bool = False
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
@@ -348,6 +349,7 @@ class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
     priority: Optional[str] = "medium"
+    is_closed: Optional[bool] = False
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
@@ -358,6 +360,7 @@ class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     priority: Optional[str] = None
+    is_closed: Optional[bool] = None
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
@@ -415,6 +418,7 @@ class KanbanTaskExport(BaseModel):
     title: str
     description: Optional[str] = None
     priority: str = "medium"
+    is_closed: bool = False
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     tags: Optional[str] = None

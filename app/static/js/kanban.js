@@ -179,7 +179,7 @@ function renderTaskCard(task) {
         high: 'Высокий',
     }[task.priority] || task.priority;
 
-    const dueDate = task.due_date
+    const dueDate = task.due_date && !task.is_closed
         ? `<span class="kanban-task-meta kanban-deadline-meta" title="Дедлайн"><i class="bi bi-bell"></i> ${formatDateTime(task.due_date)}</span>`
         : '';
 
@@ -189,16 +189,18 @@ function renderTaskCard(task) {
 
     const tags = task.tags
         ? task.tags.split(',').map(t => t.trim()).filter(Boolean).map(t =>
-            `<span class="kanban-tag">${escapeHtml(t)}</span>`
+            `<span class="kanban-tag ${task.is_closed ? 'kanban-tag-closed' : ''}">${escapeHtml(t)}</span>`
           ).join('')
         : '';
 
     const attachmentsHtml = renderCardAttachments(task.attachments);
+    const closedClass = task.is_closed ? 'kanban-card-closed' : '';
+    const closedBadge = task.is_closed ? '<span class="badge bg-secondary ms-2"><i class="bi bi-check-circle"></i> Закрыто</span>' : '';
 
     return `
-        <div class="kanban-card" data-id="${task.id}" data-status-id="${task.status_id}" onclick="handleCardClick(${task.id}, this)">
+        <div class="kanban-card ${closedClass}" data-id="${task.id}" data-status-id="${task.status_id}" onclick="handleCardClick(${task.id}, this)">
             <div class="d-flex justify-content-between align-items-start mb-2">
-                <span class="kanban-card-title">${escapeHtml(task.title)}</span>
+                <span class="kanban-card-title">${escapeHtml(task.title)}${closedBadge}</span>
                 <span class="badge ${priorityClass} priority-badge">${priorityLabel}</span>
             </div>
             ${task.description ? `<p class="kanban-card-desc">${escapeHtml(task.description)}</p>` : ''}
@@ -389,6 +391,7 @@ function openTaskModal(taskId, defaultStatusId) {
         form.title.value = task.title;
         form.description.value = task.description || '';
         form.priority.value = task.priority || 'medium';
+        form.is_closed.checked = !!task.is_closed;
         form.due_date.value = task.due_date ? formatDateTimeLocal(task.due_date) : '';
         form.assignee_email.value = task.assignee_email || '';
         form.tags.value = task.tags || '';
@@ -416,6 +419,7 @@ async function saveTask() {
         title: form.title.value.trim(),
         description: form.description.value.trim() || null,
         priority: form.priority.value,
+        is_closed: form.is_closed.checked,
         due_date: form.due_date.value ? new Date(form.due_date.value).toISOString() : null,
         assignee_email: form.assignee_email.value.trim() || null,
         tags: form.tags.value.trim() || null,
