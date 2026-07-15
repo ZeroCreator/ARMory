@@ -4,6 +4,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from shlex import quote
+from typing import List
 from dotenv import load_dotenv, dotenv_values
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -15,12 +16,10 @@ load_dotenv(BASE_DIR / ".env")
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
 
 
-# ── Загрузка тасок из .env проектов ──
+# ── Загрузка тасков из .env проектов ──
 def _load_tasks():
     paths_str = os.environ.get("SCRIPTS_PROJECT_PATHS", "")
     paths = [p.strip() for p in paths_str.split(",") if p.strip()]
-    if not paths:
-        return {}
 
     all_tasks = {}
     for path in paths:
@@ -30,23 +29,22 @@ def _load_tasks():
             continue
         project_name = path_obj.name
         env_file = path_obj / ".env"
-        if not env_file.exists():
-            continue
-        env_data = dotenv_values(env_file)
-        raw = env_data.get("SCHEDULER_TASKS", "")
-        if not raw:
-            continue
-        try:
-            data = json.loads(raw)
-            for k, v in data.items():
-                full_key = f"{project_name}:{k}"
-                all_tasks[full_key] = {
-                    "name": v.get("name", k),
-                    "script": v["script"],
-                    "project_dir": str(path_obj),
-                }
-        except Exception:
-            continue
+        if env_file.exists():
+            env_data = dotenv_values(env_file)
+            raw = env_data.get("SCHEDULER_TASKS", "")
+            if raw:
+                try:
+                    data = json.loads(raw)
+                    for k, v in data.items():
+                        full_key = f"{project_name.lower()}:{k}"
+                        all_tasks[full_key] = {
+                            "name": v.get("name", k),
+                            "script": v["script"],
+                            "project_dir": str(path_obj),
+                        }
+                except Exception:
+                    continue
+
     return all_tasks
 
 
@@ -56,6 +54,7 @@ TASKS = _load_tasks()
 class ScheduleRequest(BaseModel):
     project: str
     datetime: str
+    args: List[str] = []
 
 
 class RemoveTaskRequest(BaseModel):
@@ -103,7 +102,8 @@ def schedule_task(data: ScheduleRequest):
         script_path = Path(task["project_dir"]) / task["script"]
         if not script_path.exists():
             return {"error": f"Скрипт не найден: {script_path}"}
-        cmd = f"echo {quote(str(script_path))} | at {at_time}"
+        args = " ".join(quote(a) for a in (data.args or []))
+        cmd = f"cd {quote(str(task['project_dir']))} && {quote(str(script_path))}{' ' + args if args else ''} | at {at_time}"
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
         if result.returncode != 0:
             raise Exception(result.stderr)

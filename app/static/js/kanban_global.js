@@ -348,7 +348,19 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
 
     form.reset();
     document.getElementById('task-id').value = '';
-    document.getElementById('task-project-id').value = defaultProjectId || '';
+
+    const projectSelect = document.getElementById('task-project-id');
+    const statusSelect = document.getElementById('task-status-id');
+
+    // Temporarily detach the inline onchange handler to avoid it wiping the
+    // status while we programmatically set the project and status values.
+    const originalOnChange = projectSelect.getAttribute('onchange');
+    if (originalOnChange) {
+        projectSelect.removeAttribute('onchange');
+    }
+
+    projectSelect.value = defaultProjectId || '';
+    onTaskProjectChange();
 
     if (!taskId && defaultColumnName) {
         // Подобрать первый проект, у которого есть статус с таким названием.
@@ -356,17 +368,17 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
             const statuses = projectStatuses[project.id] || [];
             const match = statuses.find(s => s.name === defaultColumnName);
             if (match) {
-                document.getElementById('task-project-id').value = project.id;
+                projectSelect.value = project.id;
                 onTaskProjectChange();
-                document.getElementById('task-status-id').value = match.id;
+                statusSelect.value = match.id;
                 break;
             }
         }
-        if (!document.getElementById('task-status-id').value) {
-            onTaskProjectChange();
-        }
-    } else {
-        onTaskProjectChange();
+    }
+
+    // Restore the inline onchange handler for manual project selection.
+    if (originalOnChange) {
+        projectSelect.setAttribute('onchange', originalOnChange);
     }
 
     if (taskId) {

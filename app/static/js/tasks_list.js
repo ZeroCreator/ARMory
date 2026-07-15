@@ -245,31 +245,61 @@ function copyTaskLink(projectId, taskId) {
     showToast('Ссылка скопирована', 'success');
 }
 
+function toMoscowDateParts(date) {
+    // Server returns UTC; Moscow is UTC+3 all year round.
+    const moscow = new Date(date.getTime() + 3 * 60 * 60 * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    return {
+        year: moscow.getUTCFullYear(),
+        month: pad(moscow.getUTCMonth() + 1),
+        day: pad(moscow.getUTCDate()),
+        hour: pad(moscow.getUTCHours()),
+        minute: pad(moscow.getUTCMinutes()),
+    };
+}
+
+function formatDateTimeMoscow(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return isoString;
+    const p = toMoscowDateParts(date);
+    return `${p.day}.${p.month}.${p.year} ${p.hour}:${p.minute}`;
+}
+
+function formatNowMoscowForFilename() {
+    const p = toMoscowDateParts(new Date());
+    return `${p.year}-${p.month}-${p.day}_${p.hour}-${p.minute}`;
+}
+
 function exportTasks(format) {
     if (filteredTasks.length === 0) {
         alert('Нет задач для экспорта');
         return;
     }
+    const projectName = IS_GLOBAL
+        ? undefined
+        : (projectsMap[PROJECT_ID] || `Проект #${PROJECT_ID}`);
     const rows = filteredTasks.map(t => ({
         id: t.id,
-        project: IS_GLOBAL ? (projectsMap[t.project_id] || t.project_id) : undefined,
+        project: projectName || (projectsMap[t.project_id] || t.project_id),
         title: t.title,
         description: t.description,
         status: t.status?.name,
         priority: t.priority,
         assignee: assigneesMap[t.assignee_email] || t.assignee_email,
-        due_date: t.due_date,
+        due_date: formatDateTimeMoscow(t.due_date),
         tags: t.tags,
         list_name: t.list_name,
-        created_at: t.created_at,
+        created_at: formatDateTimeMoscow(t.created_at),
         is_closed: t.is_closed,
     }));
 
+    const timestamp = formatNowMoscowForFilename();
     if (format === 'json') {
         const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
-        downloadBlob(blob, `tasks_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`);
+        downloadBlob(blob, `tasks_${timestamp}.json`);
     } else if (format === 'csv') {
-        const headers = Object.keys(rows[0]).filter(k => k !== 'project' || IS_GLOBAL);
+        const headers = Object.keys(rows[0]);
         const lines = [headers.join(';')];
         rows.forEach(r => {
             lines.push(headers.map(h => {
@@ -280,7 +310,7 @@ function exportTasks(format) {
             }).join(';'));
         });
         const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-        downloadBlob(blob, `tasks_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`);
+        downloadBlob(blob, `tasks_${timestamp}.csv`);
     }
 }
 
@@ -352,21 +382,14 @@ function getSaveListColumnValue(task, key) {
     }
 }
 
-function renderSaveListText() {
-    const textArea = document.getElementById('save-list-text');
-    if (!textArea) return;
-
-    const selectedKeys = Array.from(document.querySelectorAll('#save-list-columns input:checked')).map(cb => cb.value);
+function buildSaveListText(selectedKeys, format) {
     if (selectedKeys.length === 0) {
-        textArea.value = 'Выберите хотя бы одну колонку';
-        return;
+        return 'Выберите хотя бы одну колонку';
     }
     if (filteredTasks.length === 0) {
-        textArea.value = 'Нет задач для сохранения';
-        return;
+        return 'Нет задач для сохранения';
     }
 
-    const format = document.getElementById('save-list-format')?.value || 'todo';
     const selectedColumns = SAVE_LIST_COLUMNS.filter(col => selectedKeys.includes(col.key));
 
     if (format === 'markdown') {
@@ -379,8 +402,7 @@ function renderSaveListText() {
         });
         const header = '| ' + headerLabels.join(' | ') + ' |';
         const separator = '|' + headerLabels.map(() => ' --- ').join('|') + '|';
-        textArea.value = [header, separator, ...rows].join('\n');
-        return;
+        return [header, separator, ...rows].join('\n');
     }
 
     if (format === 'oneline') {
@@ -390,8 +412,7 @@ function renderSaveListText() {
                 return String(v).replace(/\n/g, ' ');
             }).join(' | ');
         });
-        textArea.value = rows.join('\n');
-        return;
+        return rows.join('\n');
     }
 
     const titleColumn = selectedColumns.find(col => col.key === 'title');
@@ -417,7 +438,16 @@ function renderSaveListText() {
         }
     });
 
-    textArea.value = lines.join('\n');
+    return lines.join('\n');
+}
+
+function renderSaveListText() {
+    const textArea = document.getElementById('save-list-text');
+    if (!textArea) return;
+
+    const selectedKeys = Array.from(document.querySelectorAll('#save-list-columns input:checked')).map(cb => cb.value);
+    const format = document.getElementById('save-list-format')?.value || 'todo';
+    textArea.value = buildSaveListText(selectedKeys, format);
 }
 
 function copySaveList() {
