@@ -200,6 +200,7 @@ class Task(Base):
     due_date = Column(DateTime, nullable=True)
     assignee_email = Column(String(255), nullable=True)
     tags = Column(String(500), nullable=True)
+    list_name = Column(String(255), nullable=True, index=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

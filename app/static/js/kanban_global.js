@@ -172,7 +172,7 @@ function renderBoard(data) {
                     ${tasks.map(task => renderTaskCard(task)).join('')}
                 </div>
                 <div class="kanban-column-footer">
-                    <button class="btn btn-sm btn-outline-brown w-100" onclick="openTaskModal(null)">
+                    <button class="btn btn-sm btn-outline-brown w-100" onclick="openTaskModal(null, null, '${escapeHtml(column.name)}')">
                         <i class="bi bi-plus-lg me-1"></i> Добавить задачу
                     </button>
                 </div>
@@ -336,7 +336,7 @@ async function updateTaskColumn(taskId, columnName) {
 // ЗАДАЧИ
 // ═══════════════════════════════════════════════════
 
-function openTaskModal(taskId, defaultProjectId) {
+function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
     currentTaskId = taskId || null;
     const modalEl = document.getElementById('taskModal');
     const form = document.getElementById('task-form');
@@ -349,12 +349,30 @@ function openTaskModal(taskId, defaultProjectId) {
     form.reset();
     document.getElementById('task-id').value = '';
     document.getElementById('task-project-id').value = defaultProjectId || '';
-    onTaskProjectChange();
+
+    if (!taskId && defaultColumnName) {
+        // Подобрать первый проект, у которого есть статус с таким названием.
+        for (const project of filterOptions.projects || []) {
+            const statuses = projectStatuses[project.id] || [];
+            const match = statuses.find(s => s.name === defaultColumnName);
+            if (match) {
+                document.getElementById('task-project-id').value = project.id;
+                onTaskProjectChange();
+                document.getElementById('task-status-id').value = match.id;
+                break;
+            }
+        }
+        if (!document.getElementById('task-status-id').value) {
+            onTaskProjectChange();
+        }
+    } else {
+        onTaskProjectChange();
+    }
 
     if (taskId) {
         const task = kanbanData.tasks.find(t => t.id === taskId);
         if (!task) return;
-        titleEl.textContent = task.title;
+        titleEl.textContent = `Заявка #${task.id}`;
         document.getElementById('task-id').value = task.id;
         document.getElementById('task-project-id').value = task.project_id;
         onTaskProjectChange();
@@ -390,10 +408,6 @@ async function saveTask() {
     }
 
     try {
-        if (!form.title.value.trim()) {
-            alert('Введите название задачи');
-            return;
-        }
         const projectId = parseInt(document.getElementById('task-project-id').value, 10);
         const statusId = parseInt(document.getElementById('task-status-id').value, 10);
         if (!projectId) {
@@ -406,7 +420,7 @@ async function saveTask() {
         }
 
         const payload = {
-            title: form.title.value.trim(),
+            title: form.title.value.trim() || null,
             description: form.description.value.trim() || null,
             priority: form.priority.value,
             is_closed: document.getElementById('task-is-closed').checked,
@@ -1116,6 +1130,288 @@ function escapeHtml(text) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+// ═══════════════════════════════════════════════════
+// ИМПОРТ ЗАДАЧ ИЗ TODO-ЛИСТА
+// ═══════════════════════════════════════════════════
+
+let importTasksState = [];
+let importBulkAttachments = [];
+let importNextTempId = 1;
+
+function resetImportState() {
+    importTasksState = [];
+    importBulkAttachments = [];
+    importNextTempId = 1;
+    document.getElementById('import-todo-text').value = '';
+    document.getElementById('import-bulk-project').value = '';
+    document.getElementById('import-bulk-due-date').value = '';
+    document.getElementById('import-bulk-priority').value = 'medium';
+    document.getElementById('import-bulk-assignee').value = '';
+    document.getElementById('import-bulk-tags').value = '';
+    hideImportBulkAttachmentForm();
+    renderImportTasksList();
+    renderImportBulkAttachmentsList();
+}
+
+function openTaskImportModal() {
+    resetImportState();
+    populateSelect('import-bulk-project', filterOptions.projects || [], 'id', 'name');
+    populateSelect('import-bulk-assignee', kanbanAssignees.map(a => ({ value: a.email, label: a.name })), 'value', 'label');
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('taskImportModal'));
+    modal.show();
+}
+
+function parseTodoText(text) {
+    return text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => line.replace(/^[\-\•\*\+\d+\.\)\]]+\s*/, '').trim())
+        .filter(line => line.length > 0);
+}
+
+function splitTodoTextIntoTasks() {
+    const text = document.getElementById('import-todo-text').value;
+    const lines = parseTodoText(text);
+    lines.forEach(line => {
+        importTasksState.push({
+            id: importNextTempId++,
+            title: '',
+            description: line,
+            selected: true,
+            project_id: null,
+            due_date: null,
+            priority: null,
+            assignee_email: null,
+            tags: null,
+        });
+    });
+    renderImportTasksList();
+}
+
+function addImportTask() {
+    importTasksState.push({
+        id: importNextTempId++,
+        title: '',
+        description: '',
+        selected: true,
+        project_id: null,
+        due_date: null,
+        priority: null,
+        assignee_email: null,
+        tags: null,
+    });
+    renderImportTasksList();
+}
+
+function deleteImportTask(id) {
+    importTasksState = importTasksState.filter(t => t.id !== id);
+    renderImportTasksList();
+}
+
+function updateImportTaskTitle(id, title) {
+    const task = importTasksState.find(t => t.id === id);
+    if (task) task.title = title;
+}
+
+function updateImportTaskDescription(id, description) {
+    const task = importTasksState.find(t => t.id === id);
+    if (task) task.description = description;
+}
+
+function toggleImportTaskSelected(id) {
+    const task = importTasksState.find(t => t.id === id);
+    if (task) task.selected = !task.selected;
+}
+
+function toggleAllImportTasks(selected) {
+    importTasksState.forEach(t => t.selected = selected);
+    renderImportTasksList();
+}
+
+function renderImportTasksList() {
+    const container = document.getElementById('import-tasks-list');
+    if (!container) return;
+    if (importTasksState.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Нажмите «Разбить на задачи» или добавьте задачи вручную</span>';
+        return;
+    }
+
+    const allSelected = importTasksState.every(t => t.selected);
+    let html = `
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="import-task-check-all" ${allSelected ? 'checked' : ''} onchange="toggleAllImportTasks(this.checked)">
+            <label class="form-check-label" for="import-task-check-all">Выбрать все</label>
+        </div>
+    `;
+
+    html += importTasksState.map(t => `
+        <div class="import-task-row d-flex align-items-start gap-2 p-2 border rounded mb-1 ${t.selected ? 'import-task-selected' : ''}">
+            <input class="form-check-input mt-2" type="checkbox" ${t.selected ? 'checked' : ''} onchange="toggleImportTaskSelected(${t.id}); renderImportTasksList();">
+            <div class="flex-grow-1 d-flex flex-column gap-1">
+                <input type="text" class="form-control form-control-sm" placeholder="Название (необязательно)" value="${escapeHtml(t.title)}" oninput="updateImportTaskTitle(${t.id}, this.value)">
+                <textarea class="form-control form-control-sm" rows="2" placeholder="Описание" oninput="updateImportTaskDescription(${t.id}, this.value)">${escapeHtml(t.description)}</textarea>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger mt-1" onclick="deleteImportTask(${t.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+        </div>
+    `).join('');
+
+    container.innerHTML = html;
+}
+
+function showImportBulkAttachmentForm(type) {
+    const form = document.getElementById('import-bulk-attachment-form');
+    const typeInput = document.getElementById('import-bulk-attachment-type');
+    const titleInput = document.getElementById('import-bulk-attachment-title');
+    const urlInput = document.getElementById('import-bulk-attachment-url');
+    const urlWrap = document.getElementById('import-bulk-attachment-url-wrap');
+
+    typeInput.value = type;
+    titleInput.value = '';
+    urlInput.value = '';
+    urlWrap.style.display = type === 'file' ? 'none' : 'block';
+    urlInput.placeholder = type === 'git' ? 'URL репозитория' : 'URL';
+    form.style.display = 'block';
+}
+
+function hideImportBulkAttachmentForm() {
+    const form = document.getElementById('import-bulk-attachment-form');
+    if (form) form.style.display = 'none';
+}
+
+function submitImportBulkAttachmentForm() {
+    const type = document.getElementById('import-bulk-attachment-type').value;
+    const title = document.getElementById('import-bulk-attachment-title').value.trim() || null;
+    const url = document.getElementById('import-bulk-attachment-url').value.trim();
+
+    if (type !== 'file' && !url) {
+        alert('Введите URL');
+        return;
+    }
+
+    importBulkAttachments.push({ attachment_type: type, title, url });
+    hideImportBulkAttachmentForm();
+    renderImportBulkAttachmentsList();
+}
+
+async function submitImportBulkAttachmentFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    const projectId = document.getElementById('import-bulk-project').value || (filterOptions.projects[0]?.id);
+    if (!projectId) {
+        alert('Выберите проект для загрузки файла');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const attachment = await api(`${API_BASE}/projects/${projectId}/attachments/upload`, {
+            method: 'POST',
+            body: formData,
+        });
+        importBulkAttachments.push({
+            attachment_type: 'file',
+            title: attachment.title || file.name,
+            file_path: attachment.file_path,
+        });
+        renderImportBulkAttachmentsList();
+    } catch (e) {
+        alert('Ошибка загрузки файла: ' + e.message);
+    }
+}
+
+function deleteImportBulkAttachment(index) {
+    importBulkAttachments.splice(index, 1);
+    renderImportBulkAttachmentsList();
+}
+
+function renderImportBulkAttachmentsList() {
+    const container = document.getElementById('import-bulk-attachments-list');
+    if (!container) return;
+    if (importBulkAttachments.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
+        return;
+    }
+
+    container.innerHTML = importBulkAttachments.map((a, idx) => {
+        const icon = a.attachment_type === 'git' ? 'bi-git' : (a.attachment_type === 'link' ? 'bi-link-45deg' : 'bi-file-earmark');
+        const display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
+        return `
+            <div class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded mb-1">
+                <div class="text-truncate">
+                    <i class="bi ${icon} me-1"></i> ${display}
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteImportBulkAttachment(${idx})" title="Удалить"><i class="bi bi-trash"></i></button>
+            </div>
+        `;
+    }).join('');
+}
+
+function applyBulkToSelectedImportTasks() {
+    const projectId = document.getElementById('import-bulk-project').value || null;
+    const dueDate = document.getElementById('import-bulk-due-date').value || null;
+    const priority = document.getElementById('import-bulk-priority').value || null;
+    const assignee = document.getElementById('import-bulk-assignee').value || null;
+    const tags = document.getElementById('import-bulk-tags').value.trim() || null;
+
+    importTasksState.forEach(t => {
+        if (!t.selected) return;
+        if (projectId) t.project_id = parseInt(projectId, 10);
+        if (dueDate) t.due_date = new Date(dueDate).toISOString();
+        if (priority) t.priority = priority;
+        if (assignee) t.assignee_email = assignee;
+        if (tags) t.tags = tags;
+    });
+
+    showToast('Массовые настройки применены к выбранным задачам', 'success');
+    renderImportTasksList();
+}
+
+async function createTasksBulk() {
+    const validTasks = importTasksState.filter(t => t.title.trim() || t.description.trim());
+    if (validTasks.length === 0) {
+        alert('Нет задач для создания');
+        return;
+    }
+
+    const withoutProject = validTasks.filter(t => !t.project_id);
+    if (withoutProject.length > 0) {
+        alert('Укажите проект для всех задач (через массовое редактирование)');
+        return;
+    }
+
+    const payload = {
+        tasks: validTasks.map(t => ({
+            title: t.title.trim() || null,
+            description: t.description.trim() || null,
+            priority: t.priority || 'medium',
+            due_date: t.due_date,
+            assignee_email: t.assignee_email,
+            tags: t.tags,
+            project_id: t.project_id,
+        })),
+        attachments: importBulkAttachments,
+    };
+
+    try {
+        const result = await api(`${API_BASE}/kanban/tasks/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('taskImportModal')).hide();
+        showToast(`Создано задач: ${result.count}`, 'success');
+        await loadFilters();
+        loadKanbanBoard();
+    } catch (e) {
+        alert('Ошибка создания задач: ' + e.message);
+    }
 }
 
 async function exportKanban() {

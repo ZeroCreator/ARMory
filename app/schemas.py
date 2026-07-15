@@ -337,6 +337,7 @@ class TaskOut(BaseModel):
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
+    list_name: Optional[str] = None
     sort_order: int = 0
     created_at: datetime
     updated_at: datetime
@@ -346,13 +347,14 @@ class TaskOut(BaseModel):
 
 class TaskCreate(BaseModel):
     status_id: int
-    title: str
+    title: Optional[str] = None
     description: Optional[str] = None
     priority: Optional[str] = "medium"
     is_closed: Optional[bool] = False
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
+    list_name: Optional[str] = None
 
 
 class TaskUpdate(BaseModel):
@@ -364,11 +366,40 @@ class TaskUpdate(BaseModel):
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
+    list_name: Optional[str] = None
 
 
 class TaskReorderRequest(BaseModel):
     status_id: int
     task_ids: List[int]
+
+
+class TaskBulkCreate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = "medium"
+    due_date: Optional[datetime] = None
+    assignee_email: Optional[str] = None
+    tags: Optional[str] = None
+    list_name: Optional[str] = None
+    project_id: Optional[int] = None
+
+
+class TaskBulkAttachment(BaseModel):
+    attachment_type: str
+    title: Optional[str] = None
+    url: Optional[str] = None
+    file_path: Optional[str] = None
+
+
+class TaskBulkRequest(BaseModel):
+    tasks: List[TaskBulkCreate]
+    attachments: List[TaskBulkAttachment] = []
+
+
+class TaskBulkOut(BaseModel):
+    created: List[TaskOut]
+    count: int
 
 
 class KanbanBoardOut(BaseModel):
@@ -396,6 +427,7 @@ class KanbanFiltersOut(BaseModel):
     priorities: List[str]
     assignees: List[AssigneeOut]
     tags: List[str]
+    list_names: List[str]
 
 
 class KanbanGlobalOut(BaseModel):
@@ -415,13 +447,14 @@ class KanbanAttachmentExport(BaseModel):
 
 
 class KanbanTaskExport(BaseModel):
-    title: str
+    title: Optional[str] = None
     description: Optional[str] = None
     priority: str = "medium"
     is_closed: bool = False
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
+    list_name: Optional[str] = None
     sort_order: int = 0
     status_name: str
     attachments: List[KanbanAttachmentExport] = []

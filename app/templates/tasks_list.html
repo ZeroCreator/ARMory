@@ -1,0 +1,358 @@
+{% extends "base_project.html" %}
+
+{% block main_class %}container-fluid py-4{% endblock %}
+
+{% block content %}
+<div class="mb-3 d-flex align-items-center gap-2">
+    <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
+    {% if project_id %}
+    <a href="/projects/{{ project_id }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-folder"></i> К проекту</a>
+    <a href="/projects/{{ project_id }}/kanban" class="btn btn-sm btn-outline-brown"><i class="bi bi-kanban"></i> Канбан</a>
+    {% else %}
+    <a href="/kanban" class="btn btn-sm btn-outline-brown"><i class="bi bi-kanban"></i> Канбан</a>
+    {% endif %}
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h2 class="mb-0" id="tasks-list-title"><i class="bi bi-list-task"></i> Задачи</h2>
+    <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-outline-primary" onclick="openTaskImportModal()">
+            <i class="bi bi-list-task me-1"></i> Импорт из ToDo
+        </button>
+        <button class="btn btn-outline-secondary" onclick="exportTasks('json')">
+            <i class="bi bi-filetype-json me-1"></i> JSON
+        </button>
+        <button class="btn btn-outline-secondary" onclick="exportTasks('csv')">
+            <i class="bi bi-filetype-csv me-1"></i> CSV
+        </button>
+    </div>
+</div>
+
+<!-- Фильтры -->
+<div id="tasks-filters" class="card mb-4 border-0 shadow-sm kanban-filters">
+    <div class="card-header border-0 d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold"><i class="bi bi-funnel me-1"></i> Фильтры</span>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-success btn-sm" onclick="openSaveListModal()">
+                <i class="bi bi-save"></i> Сохранить список
+            </button>
+            <button class="btn btn-sm btn-link text-decoration-none kanban-filter-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#tasks-filters-collapse" aria-expanded="false" aria-controls="tasks-filters-collapse">
+                <i class="bi bi-caret-up-fill"></i>
+            </button>
+        </div>
+    </div>
+    <div id="tasks-filters-collapse" class="collapse">
+        <div class="card-body pt-0">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Поиск</label>
+                    <input type="text" class="form-control" id="filter-search" placeholder="Название, описание..." oninput="applyFilters()">
+                </div>
+                {% if not project_id %}
+                <div class="col-md-3">
+                    <label class="form-label">Проект</label>
+                    <select class="form-select" id="filter-project" onchange="applyFilters()"></select>
+                </div>
+                {% endif %}
+                <div class="col-md-3">
+                    <label class="form-label">Статус</label>
+                    <select class="form-select" id="filter-status" onchange="applyFilters()"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Приоритет</label>
+                    <select class="form-select" id="filter-priority" onchange="applyFilters()"></select>
+                </div>
+            </div>
+            <div class="row g-3 mt-1 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Ответственный</label>
+                    <select class="form-select" id="filter-assignee" onchange="applyFilters()"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Список</label>
+                    <select class="form-select" id="filter-list" onchange="applyFilters()"></select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Состояние</label>
+                    <select class="form-select" id="filter-closed" onchange="applyFilters()">
+                        <option value="">Все</option>
+                        <option value="0">Открытые</option>
+                        <option value="1">Закрытые</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Теги</label>
+                    <input type="text" class="form-control" id="filter-tags" placeholder="через запятую" oninput="applyFilters()">
+                </div>
+                <div class="col-auto ms-auto">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-outline-gray kanban-reset-btn" onclick="resetFilters()" title="Сбросить фильтры">
+                        <i class="bi bi-x-lg"></i>
+                        <span class="d-none d-md-inline ms-1">Сбросить</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .tasks-table-card {
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        overflow: hidden;
+    }
+    .table-top-scroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: 10px;
+        background: transparent;
+        line-height: 0;
+    }
+    .table-top-scroll::-webkit-scrollbar {
+        height: 10px;
+    }
+    .table-top-scroll::-webkit-scrollbar-track {
+        background: rgba(167, 139, 250, 0.1);
+        border-radius: 5px;
+    }
+    .table-top-scroll::-webkit-scrollbar-thumb {
+        background: rgba(107, 70, 193, 0.45);
+        border-radius: 5px;
+    }
+    .table-top-scroll::-webkit-scrollbar-thumb:hover {
+        background: rgba(107, 70, 193, 0.65);
+    }
+    .table-top-scroll-inner {
+        height: 1px;
+    }
+    .tasks-table-responsive {
+        overflow-x: auto;
+    }
+    .tasks-table-responsive::-webkit-scrollbar {
+        height: 10px;
+    }
+    .tasks-table-responsive::-webkit-scrollbar-track {
+        background: rgba(167, 139, 250, 0.1);
+        border-radius: 5px;
+    }
+    .tasks-table-responsive::-webkit-scrollbar-thumb {
+        background: rgba(107, 70, 193, 0.45);
+        border-radius: 5px;
+    }
+    .tasks-table-responsive::-webkit-scrollbar-thumb:hover {
+        background: rgba(107, 70, 193, 0.65);
+    }
+    .tasks-table {
+        margin-bottom: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: auto;
+        font-size: 0.85rem;
+    }
+    .tasks-table thead th {
+        white-space: nowrap;
+        font-weight: 600;
+        border-bottom: 2px solid #dee2e6;
+        background-color: #f8f9fa;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .tasks-table tbody tr {
+        height: 48px;
+    }
+    .tasks-table tbody td {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 220px;
+        vertical-align: middle;
+    }
+    .tasks-table tbody td.description-cell {
+        max-width: 320px;
+    }
+    .tasks-table tbody td.actions-cell {
+        max-width: none;
+        overflow: visible;
+    }
+    .tasks-table tbody tr:hover {
+        background-color: rgba(167, 139, 250, 0.08);
+    }
+</style>
+
+<!-- Таблица -->
+<div class="tasks-table-card">
+    <div class="table-top-scroll" id="table-top-scroll" style="display:none;">
+        <div class="table-top-scroll-inner" id="table-top-scroll-inner"></div>
+    </div>
+    <div class="table-responsive tasks-table-responsive" id="tasks-table-wrapper">
+        <table class="table table-sm table-hover align-middle tasks-table" id="tasks-table">
+            <thead>
+                <tr>
+                    <th style="cursor:pointer" onclick="sortTasks('id')"># <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    {% if not project_id %}
+                    <th class="d-none d-sm-table-cell" style="cursor:pointer" onclick="sortTasks('project_name')">Проект <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    {% endif %}
+                    <th style="cursor:pointer" onclick="sortTasks('title')">Название <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th class="d-none d-md-table-cell">Описание</th>
+                    <th style="cursor:pointer" onclick="sortTasks('status_name')">Статус <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th style="cursor:pointer" onclick="sortTasks('priority')">Приоритет <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th class="d-none d-sm-table-cell" style="cursor:pointer" onclick="sortTasks('assignee_name')">Ответственный <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th class="d-none d-sm-table-cell" style="cursor:pointer" onclick="sortTasks('due_date')">Дедлайн <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th class="d-none d-lg-table-cell">Теги</th>
+                    <th class="d-none d-sm-table-cell" style="cursor:pointer" onclick="sortTasks('list_name')">Список <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th class="d-none d-lg-table-cell" style="cursor:pointer" onclick="sortTasks('created_at')">Создано <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th class="d-none d-sm-table-cell" style="cursor:pointer" onclick="sortTasks('is_closed')">Закрыто <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody id="tasks-table-body">
+                <tr><td colspan="13" class="text-center text-muted py-4">Загрузка...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Модал сохранения списка задач -->
+<div class="modal fade" id="saveListModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Сохранить список задач</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Формат</label>
+                    <select class="form-select form-select-sm" id="save-list-format" onchange="renderSaveListText()" style="max-width: 300px;">
+                        <option value="numbered" selected>Нумерованный список</option>
+                        <option value="todo">Чек-лист ToDo</option>
+                        <option value="markdown">Markdown-таблица</option>
+                        <option value="oneline">Одна строка — одна задача</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Колонки</label>
+                    <div class="d-flex flex-wrap gap-3" id="save-list-columns"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Список</label>
+                    <textarea class="form-control" id="save-list-text" rows="14" readonly></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" onclick="downloadSaveList()">
+                    <i class="bi bi-download me-1"></i> Скачать .txt
+                </button>
+                <button type="button" class="btn btn-outline-primary" onclick="copySaveList()">
+                    <i class="bi bi-copy me-1"></i> Копировать
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модал импорта из ToDo -->
+<div class="modal fade" id="taskImportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Импорт задач из ToDo-списка</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Название списка</label>
+                    <input type="text" class="form-control" id="import-list-name" placeholder="Например, Спринт 12">
+                </div>
+                {% if not project_id %}
+                <div class="mb-3">
+                    <label class="form-label">Проект по умолчанию</label>
+                    <select class="form-select" id="import-bulk-project"></select>
+                </div>
+                {% endif %}
+                <div class="mb-3">
+                    <label class="form-label">Текст ToDo-списка</label>
+                    <textarea class="form-control" id="import-todo-text" rows="6" placeholder="- Описание задачи 1&#10;- Описание задачи 2&#10;- Описание задачи 3"></textarea>
+                </div>
+                <div class="d-flex gap-2 mb-3">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="splitTodoTextIntoTasks()">Разбить на задачи</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addImportTask()">Добавить задачу вручную</button>
+                </div>
+
+                <div id="import-tasks-list" class="import-tasks-list mb-3"></div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Массовые настройки</div>
+                    <div class="card-body row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label">Дедлайн</label>
+                            <input type="datetime-local" class="form-control form-control-sm" id="import-bulk-due-date">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Приоритет</label>
+                            <select class="form-select form-select-sm" id="import-bulk-priority">
+                                <option value="">—</option>
+                                <option value="low">Низкий</option>
+                                <option value="medium" selected>Средний</option>
+                                <option value="high">Высокий</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Ответственный</label>
+                            <select class="form-select form-select-sm" id="import-bulk-assignee"></select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Теги</label>
+                            <input type="text" class="form-control form-control-sm" id="import-bulk-tags" placeholder="через запятую">
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyBulkToSelectedImportTasks()">Применить к выбранным</button>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Общие вложения</label>
+                    <div class="d-flex gap-2 mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showImportBulkAttachmentForm('link')">Ссылка</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showImportBulkAttachmentForm('git')">Git</button>
+                        <label class="btn btn-sm btn-outline-secondary mb-0">
+                            Файл
+                            <input type="file" style="display:none" onchange="submitImportBulkAttachmentFile(this)">
+                        </label>
+                    </div>
+                    <div id="import-bulk-attachment-form" style="display:none" class="border rounded p-2 mb-2">
+                        <input type="hidden" id="import-bulk-attachment-type">
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control form-control-sm" id="import-bulk-attachment-title" placeholder="Название">
+                            </div>
+                            <div class="col-md-6" id="import-bulk-attachment-url-wrap">
+                                <input type="text" class="form-control form-control-sm" id="import-bulk-attachment-url" placeholder="URL">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-sm btn-primary w-100" onclick="submitImportBulkAttachmentForm()">Добавить</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="import-bulk-attachments-list"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="createTasksBulk()">Создать задачи</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const PROJECT_ID = {{ project_id | tojson }};
+    const IS_GLOBAL = PROJECT_ID === null;
+</script>
+<script src="/static/js/tasks_list.js?v=1"></script>
+{% endblock %}

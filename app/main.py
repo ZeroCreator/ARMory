@@ -298,6 +298,7 @@ async def lifespan(app: FastAPI):
                     due_date TIMESTAMP,
                     assignee_email VARCHAR(255),
                     tags VARCHAR(500),
+                    list_name VARCHAR(255),
                     sort_order INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -305,6 +306,11 @@ async def lifespan(app: FastAPI):
                     FOREIGN KEY (status_id) REFERENCES task_statuses(id) ON DELETE CASCADE
                 )
             """))
+        else:
+            columns_result = await conn.execute(text("PRAGMA table_info(tasks)"))
+            task_columns = {row[1] for row in columns_result.fetchall()}
+            if "list_name" not in task_columns:
+                await conn.execute(text("ALTER TABLE tasks ADD COLUMN list_name VARCHAR(255)"))
         if "task_attachments" not in table_names:
             await conn.execute(text("""
                 CREATE TABLE task_attachments (
@@ -473,6 +479,34 @@ async def global_kanban_page(request: Request):
         "kanban_global.html",
         {
             "request": request,
+            "title": settings.app_name,
+            "local_storage_path": settings.local_storage_path,
+            "pocketbase_url": settings.pocketbase_public_url,
+        },
+    )
+
+
+@app.get("/projects/{project_id}/tasks", response_class=HTMLResponse)
+async def project_tasks_list_page(request: Request, project_id: int):
+    return templates.TemplateResponse(
+        "tasks_list.html",
+        {
+            "request": request,
+            "project_id": project_id,
+            "title": settings.app_name,
+            "local_storage_path": settings.local_storage_path,
+            "pocketbase_url": settings.pocketbase_public_url,
+        },
+    )
+
+
+@app.get("/tasks", response_class=HTMLResponse)
+async def global_tasks_list_page(request: Request):
+    return templates.TemplateResponse(
+        "tasks_list.html",
+        {
+            "request": request,
+            "project_id": None,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
             "pocketbase_url": settings.pocketbase_public_url,

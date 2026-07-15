@@ -34,6 +34,10 @@ from app.schemas import (
     TaskAttachmentCreate,
     TaskAttachmentOut,
     TaskAttachmentUpdate,
+    TaskBulkAttachment,
+    TaskBulkCreate,
+    TaskBulkOut,
+    TaskBulkRequest,
     TaskCreate,
     TaskOut,
     TaskReorderRequest,
@@ -254,11 +258,18 @@ async def project_kanban_filters(project_id: int, db: AsyncSession = Depends(get
             if tag:
                 tag_set.add(tag)
 
+    list_names_result = await db.execute(
+        select(distinct(Task.list_name))
+        .where(Task.list_name.isnot(None), Task.project_id == project_id)
+    )
+    list_names = [ln[0] for ln in list_names_result.fetchall() if ln[0]]
+
     return KanbanFiltersOut(
         projects=[],
         priorities=sorted(priorities),
         assignees=assignees,
         tags=sorted(tag_set),
+        list_names=sorted(list_names),
     )
 
 
@@ -282,19 +293,161 @@ async def create_task(
     task = Task(
         project_id=project_id,
         status_id=data.status_id,
-        title=data.title,
+        title=data.title or "",
         description=data.description,
         priority=data.priority or "medium",
         is_closed=data.is_closed or False,
         due_date=None if data.is_closed else data.due_date,
         assignee_email=data.assignee_email,
         tags=data.tags,
+        list_name=data.list_name,
         sort_order=max_val + 1,
     )
     db.add(task)
     await db.commit()
     await db.refresh(task)
     return task
+
+
+async def _get_or_create_todo_status(project_id: int, db: AsyncSession) -> TaskStatus:
+    """Найти или создать статус 'К выполнению' в проекте."""
+    result = await db.execute(
+        select(TaskStatus)
+        .where(TaskStatus.project_id == project_id, TaskStatus.name == "К выполнению")
+    )
+    status = result.scalar_one_or_none()
+    if status:
+        return status
+
+    max_order = await db.execute(
+        select(TaskStatus.sort_order)
+        .where(TaskStatus.project_id == project_id)
+        .order_by(TaskStatus.sort_order.desc())
+        .limit(1)
+    )
+    max_val = max_order.scalar_one_or_none() or 0
+    status = TaskStatus(
+        project_id=project_id,
+        name="К выполнению",
+        color="#a78bfa",
+        sort_order=max_val + 1,
+    )
+    db.add(status)
+    await db.flush()
+    await db.refresh(status)
+    return status
+
+
+async def _bulk_create_tasks(
+    project_id: int,
+    tasks_data: list[TaskBulkCreate],
+    attachments_data: list[TaskBulkAttachment],
+    db: AsyncSession,
+) -> list[Task]:
+    """Создать несколько задач в колонке 'К выполнению' и прикрепить общие вложения."""
+    status = await _get_or_create_todo_status(project_id, db)
+
+    max_order = await db.execute(
+        select(Task.sort_order)
+        .where(Task.project_id == project_id, Task.status_id == status.id)
+        .order_by(Task.sort_order.desc())
+        .limit(1)
+    )
+    base_order = max_order.scalar_one_or_none() or 0
+
+    created_tasks: list[Task] = []
+    for idx, task_data in enumerate(tasks_data):
+        task = Task(
+            project_id=project_id,
+            status_id=status.id,
+            title=task_data.title or "",
+            description=task_data.description,
+            priority=task_data.priority or "medium",
+            is_closed=False,
+            due_date=task_data.due_date,
+            assignee_email=task_data.assignee_email,
+            tags=task_data.tags,
+            list_name=task_data.list_name,
+            sort_order=base_order + idx + 1,
+        )
+        db.add(task)
+        created_tasks.append(task)
+
+    await db.flush()
+
+    for task in created_tasks:
+        for attachment_data in attachments_data:
+            attachment = TaskAttachment(
+                task_id=task.id,
+                attachment_type=attachment_data.attachment_type,
+                title=attachment_data.title,
+                url=attachment_data.url,
+                file_path=attachment_data.file_path,
+            )
+            db.add(attachment)
+
+    await db.commit()
+
+    for task in created_tasks:
+        await db.refresh(task, attribute_names=["status", "attachments"])
+
+    return created_tasks
+
+
+@router.post("/tasks/bulk", response_model=TaskBulkOut, status_code=201)
+async def create_tasks_bulk(
+    project_id: int,
+    data: TaskBulkRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Массовое создание задач в проекте в колонке 'К выполнению'."""
+    await _get_project(project_id, db)
+    if not data.tasks:
+        raise HTTPException(status_code=400, detail="No tasks provided")
+
+    created = await _bulk_create_tasks(project_id, data.tasks, data.attachments, db)
+    return TaskBulkOut(created=created, count=len(created))
+
+
+@global_router.post("/kanban/tasks/bulk", response_model=TaskBulkOut, status_code=201)
+async def create_tasks_bulk_global(
+    data: TaskBulkRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Массовое создание задач в общем канбане. Каждая задача должна содержать project_id."""
+    if not data.tasks:
+        raise HTTPException(status_code=400, detail="No tasks provided")
+
+    # Сгруппировать задачи по проектам и проверить существование проектов.
+    tasks_by_project: dict[int, list[TaskBulkCreate]] = {}
+    for task_data in data.tasks:
+        if not task_data.project_id:
+            raise HTTPException(status_code=400, detail="Each task must have project_id")
+        tasks_by_project.setdefault(task_data.project_id, []).append(task_data)
+
+    for pid in tasks_by_project:
+        await _get_project(pid, db)
+
+    created: list[Task] = []
+    for project_id, project_tasks in tasks_by_project.items():
+        project_created = await _bulk_create_tasks(project_id, project_tasks, data.attachments, db)
+        created.extend(project_created)
+
+    return TaskBulkOut(created=created, count=len(created))
+
+
+@global_router.get("/tasks", response_model=list[TaskOut])
+async def list_tasks_global(
+    project_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Список всех задач (с возможностью фильтрации по проекту)."""
+    query = select(Task).options(selectinload(Task.status), selectinload(Task.attachments))
+    if project_id is not None:
+        await _get_project(project_id, db)
+        query = query.where(Task.project_id == project_id)
+    result = await db.execute(query.order_by(Task.is_closed.asc(), Task.created_at.asc()))
+    return result.scalars().all()
 
 
 @router.patch("/tasks/reorder", status_code=204)
@@ -337,7 +490,7 @@ async def update_task(
         await _get_status(project_id, update_data["status_id"], db)
         task.status_id = update_data["status_id"]
     if "title" in update_data:
-        task.title = update_data["title"]
+        task.title = update_data["title"] or ""
     if "priority" in update_data:
         task.priority = update_data["priority"]
     if "description" in update_data:
@@ -348,6 +501,8 @@ async def update_task(
         task.assignee_email = update_data["assignee_email"]
     if "tags" in update_data:
         task.tags = update_data["tags"]
+    if "list_name" in update_data:
+        task.list_name = update_data["list_name"]
 
     if "is_closed" in update_data:
         was_closed = task.is_closed
@@ -393,6 +548,36 @@ def _task_uploads_dir() -> Path:
     uploads = base / "tasks"
     uploads.mkdir(parents=True, exist_ok=True)
     return uploads
+
+
+@router.post("/attachments/upload", response_model=TaskAttachmentOut, status_code=201)
+async def upload_bulk_attachment_file(
+    project_id: int,
+    title: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+):
+    """Загрузить файл для последующего массового прикрепления к задачам."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File name is required")
+
+    uploads_dir = _task_uploads_dir()
+    ext = Path(file.filename).suffix
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = uploads_dir / unique_name
+
+    contents = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    rel_path = f"tasks/{unique_name}"
+    return TaskAttachmentOut(
+        id=0,
+        task_id=0,
+        attachment_type="file",
+        title=title or file.filename,
+        file_path=rel_path,
+        created_at=datetime.utcnow(),
+    )
 
 
 @router.post("/tasks/{task_id}/attachments", response_model=TaskAttachmentOut, status_code=201)
@@ -741,6 +926,7 @@ async def _build_project_export(project_id: int, db: AsyncSession) -> dict:
                 "due_date": t.due_date,
                 "assignee_email": t.assignee_email,
                 "tags": t.tags,
+                "list_name": t.list_name,
                 "sort_order": t.sort_order,
                 "status_name": status_map.get(t.status_id, ""),
                 "attachments": [
@@ -825,6 +1011,7 @@ async def _import_project_data(
                 due_date=task_data.due_date,
                 assignee_email=task_data.assignee_email,
                 tags=task_data.tags,
+                list_name=task_data.list_name,
                 sort_order=task_data.sort_order,
             )
             db.add(task)
@@ -836,6 +1023,7 @@ async def _import_project_data(
             task.due_date = task_data.due_date
             task.assignee_email = task_data.assignee_email
             task.tags = task_data.tags
+            task.list_name = task_data.list_name
             task.sort_order = task_data.sort_order
 
         await db.flush()
@@ -990,11 +1178,17 @@ async def global_kanban_filters(db: AsyncSession = Depends(get_db)):
             if tag:
                 tag_set.add(tag)
 
+    list_names_result = await db.execute(
+        select(distinct(Task.list_name)).where(Task.list_name.isnot(None))
+    )
+    list_names = [ln[0] for ln in list_names_result.fetchall() if ln[0]]
+
     return KanbanFiltersOut(
         projects=projects,
         priorities=sorted(priorities),
         assignees=assignees,
         tags=sorted(tag_set),
+        list_names=sorted(list_names),
     )
 
 

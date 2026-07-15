@@ -3362,16 +3362,16 @@ footer {
     flex-shrink: 0;
 }
 
-#kanban-filters {
+.kanban-filters {
     background: linear-gradient(180deg, var(--sand-light) 0%, rgba(255, 255, 255, 0.6) 100%);
 }
 
-#kanban-filters .card-header,
-#kanban-filters .card-body {
+.kanban-filters .card-header,
+.kanban-filters .card-body {
     background: transparent;
 }
 
-#kanban-filters .form-label {
+.kanban-filters .form-label {
     color: #4a4a4a;
     font-weight: 500;
 }
@@ -3701,4 +3701,27 @@ footer {
 @keyframes kanban-card-pulse {
     0%, 100% { box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.5); }
     50% { box-shadow: 0 0 0 6px rgba(107, 70, 193, 0.3); }
+}
+
+/* Импорт задач из ToDo-листа */
+.import-tasks-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.import-task-row {
+    background: #fff;
+    transition: background-color 0.15s ease;
+}
+
+.import-task-row.import-task-selected {
+    background: rgba(91, 33, 182, 0.06);
+}
+
+.import-task-row input[type="text"] {
+    min-width: 0;
+}
+
+#import-bulk-attachments-list .d-flex {
+    background: #fff;
 }
