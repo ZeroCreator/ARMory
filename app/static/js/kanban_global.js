@@ -464,6 +464,18 @@ function getCurrentTaskProjectId() {
     return task ? task.project_id : null;
 }
 
+function copyTaskAttachmentUrl(url) {
+    if (!url) return showToast('Ссылка пуста', 'warning');
+    copyTextToClipboard(url);
+    showToast('Ссылка скопирована в буфер обмена', 'success');
+}
+
+function copyTaskAttachmentById(attachmentId) {
+    const attachment = window.kanbanAttachments?.[attachmentId];
+    if (!attachment) return showToast('Вложение не найдено', 'warning');
+    copyTaskAttachmentUrl(attachment.url);
+}
+
 function renderTaskAttachments(attachments) {
     const container = document.getElementById('task-attachments-list');
     if (!container) return;
@@ -487,7 +499,10 @@ function renderTaskAttachments(attachments) {
         let actionBtn = '';
         if (a.attachment_type === 'link' || a.attachment_type === 'git') {
             link = `<a href="${escapeHtml(a.url || '#')}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
-            actionBtn = `<a href="${escapeHtml(a.url || '#')}" target="_blank" class="btn btn-sm btn-outline-brown" title="Открыть" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right"></i></a>`;
+            actionBtn = `
+                <a href="${escapeHtml(a.url || '#')}" target="_blank" class="btn btn-sm btn-outline-brown" title="Открыть" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right"></i></a>
+                <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); copyTaskAttachmentById(${a.id})" title="Копировать ссылку"><i class="bi bi-link-45deg"></i></button>
+            `;
         } else if (a.attachment_type === 'file') {
             link = `<span class="text-decoration-none" style="cursor:pointer" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})">${display}</span>`;
             actionBtn = `
