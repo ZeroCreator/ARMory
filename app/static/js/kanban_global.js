@@ -9,6 +9,7 @@ let projectStatuses = {};
 let kanbanSortables = [];
 let currentTaskId = null;
 let currentStatusId = null;
+let pendingTaskColumnName = null;
 let editingTaskAttachmentId = null;
 window.kanbanAttachments = window.kanbanAttachments || {};
 
@@ -107,6 +108,11 @@ function onTaskProjectChange() {
         option.textContent = status.name;
         statusSelect.appendChild(option);
     });
+    // Если задача создаётся из колонки общего канбана — подставить статус с таким же именем
+    if (pendingTaskColumnName) {
+        const match = statuses.find(s => s.name === pendingTaskColumnName);
+        if (match) statusSelect.value = match.id;
+    }
 }
 
 function buildQueryString() {
@@ -349,37 +355,12 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
     form.reset();
     document.getElementById('task-id').value = '';
 
-    const projectSelect = document.getElementById('task-project-id');
-    const statusSelect = document.getElementById('task-status-id');
+    // При создании из колонки общего канбана проект не заполняем —
+    // статус подставится по имени колонки после выбора проекта (onTaskProjectChange).
+    pendingTaskColumnName = (!taskId && defaultColumnName) ? defaultColumnName : null;
 
-    // Temporarily detach the inline onchange handler to avoid it wiping the
-    // status while we programmatically set the project and status values.
-    const originalOnChange = projectSelect.getAttribute('onchange');
-    if (originalOnChange) {
-        projectSelect.removeAttribute('onchange');
-    }
-
-    projectSelect.value = defaultProjectId || '';
+    document.getElementById('task-project-id').value = defaultProjectId || '';
     onTaskProjectChange();
-
-    if (!taskId && defaultColumnName) {
-        // Подобрать первый проект, у которого есть статус с таким названием.
-        for (const project of filterOptions.projects || []) {
-            const statuses = projectStatuses[project.id] || [];
-            const match = statuses.find(s => s.name === defaultColumnName);
-            if (match) {
-                projectSelect.value = project.id;
-                onTaskProjectChange();
-                statusSelect.value = match.id;
-                break;
-            }
-        }
-    }
-
-    // Restore the inline onchange handler for manual project selection.
-    if (originalOnChange) {
-        projectSelect.setAttribute('onchange', originalOnChange);
-    }
 
     if (taskId) {
         const task = kanbanData.tasks.find(t => t.id === taskId);
