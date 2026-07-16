@@ -2138,10 +2138,10 @@ async function fillSchedulerTasks() {
         const data = await api(`${API_BASE}/scheduler/tasks`);
         const tasks = data.tasks || [];
         if (!tasks.length) {
-            select.innerHTML = '<option value="" disabled selected>-- Нет доступных тасок --</option>';
+            select.innerHTML = '<option value="" disabled selected>-- Нет доступных задач --</option>';
             return;
         }
-        select.innerHTML = '<option value="" disabled selected>-- Выберите таск --</option>' +
+        select.innerHTML = '<option value="" disabled selected>-- Выберите задачу --</option>' +
             tasks.map(t => `<option value="${escapeHtml(t.key)}">${escapeHtml(t.name)}</option>`).join('');
     } catch (e) {
         select.innerHTML = '<option value="" disabled selected>-- Ошибка загрузки --</option>';

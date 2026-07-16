@@ -10,13 +10,11 @@
                     <i class="bi bi-calendar3 me-1"></i>Календарь
                 </button>
             </li>
-            {% if scheduler_enabled %}
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="planner-tab" data-bs-toggle="tab" data-bs-target="#planner-pane" type="button" role="tab">
                     <i class="bi bi-clock-history me-1"></i>Планировщик
                 </button>
             </li>
-            {% endif %}
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup-pane" type="button" role="tab">
                     <i class="bi bi-arrow-repeat me-1"></i>Синхронизация
@@ -41,13 +39,12 @@
                     </div>
                 </div>
             </div>
-            {% if scheduler_enabled %}
             <!-- Планировщик -->
             <div class="tab-pane fade" id="planner-pane" role="tabpanel" aria-labelledby="planner-tab">
                 <div class="scheduler-body">
                     <div class="scheduler-form-row">
                         <div class="scheduler-form-group scheduler-form-group-half">
-                            <label class="form-label" for="project-select">Выберите таск:</label>
+                            <label class="form-label" for="project-select">Выберите задачу:</label>
                             <select id="project-select" class="form-select">
                                 <option value="" disabled selected>-- Загрузка... --</option>
                             </select>
@@ -73,7 +70,7 @@
                         </div>
                         <div class="scheduler-form-group mt-3">
                             <label class="form-label" for="task-id">ID задачи для удаления:</label>
-                            <input type="text" id="task-id" class="form-control" placeholder="Введите ID задачи">
+                            <input type="text" id="task-id" class="form-control" placeholder="ID или сервер:ID из очереди">
                         </div>
                         <div class="scheduler-btn-row">
                             <button id="remove-btn" class="scheduler-btn scheduler-btn-red">
@@ -83,7 +80,6 @@
                     </div>
                 </div>
             </div>
-            {% endif %}
             <!-- Синхронизация / Backup -->
             <div class="tab-pane fade" id="backup-pane" role="tabpanel" aria-labelledby="backup-tab">
                 <div class="backup-body">
@@ -323,10 +319,8 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         loadProjects().then(() => {
-            {% if scheduler_enabled %}
             initScheduler();
             fillSchedulerTasks();
-            {% endif %}
         });
         loadSidebars();
         initSchedulerTabs();

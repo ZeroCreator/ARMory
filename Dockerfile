@@ -20,6 +20,10 @@ LABEL maintainer="Shkola Olga"
 
 WORKDIR /app
 
+# SSH-клиент для постановки задач планировщика на удалённые серверы
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv
 RUN pip install --no-cache-dir uv
 

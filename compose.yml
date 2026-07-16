@@ -11,6 +11,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./armory.db:/app/armory.db
+      # SSH-ключ планировщика (read-only; приложение само скопирует с правами 0600)
+      - ${SCHEDULER_SSH_KEY_HOST:-./deploy/id_ed25519}:/app/ssh/id_ed25519:ro
     env_file:
       - .env
     networks:

@@ -439,7 +439,6 @@ async def index(request: Request):
         {
             "request": request,
             "title": settings.app_name,
-            "scheduler_enabled": settings.scheduler_enabled,
             "pocketbase_url": settings.pocketbase_public_url,
         },
     )

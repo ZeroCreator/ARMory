@@ -30,8 +30,11 @@ TIMEZONE=Europe/Moscow
 ALEXANDRITE_VAULT_PATH=./data/alexandrite
 ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
 
-# Планировщик
-SCHEDULER_ENABLED=true
+# Планировщик: проекты со скриптами и ssh-доступ к их серверам
+SCRIPTS_PROJECT_PATHS=/home/user/scripts/dcript,/home/user/flat-parser
+SCRIPTS_PROJECT_SSH=dcript=user@192.168.1.10,flat-parser=user@192.168.1.20
+SCHEDULER_SSH_KEY=/app/ssh/id_ed25519
+SCHEDULER_SSH_KEY_HOST=./deploy/id_ed25519
 
 # PocketBase
 POCKETBASE_PROJECTS=intraservice,armory

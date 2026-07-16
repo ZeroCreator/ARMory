@@ -133,7 +133,6 @@ alexandrite_vault_path: str = "./data/alexandrite"
 yandex_disk_path: str = "ARMory/data"
 yandex_disk_backups_path: str = "ARMory/backups"
 yandex_disk_alexandrite_path: str = "ARMory/alexandrite"
-scheduler_enabled: bool = True
 armory_public_url: str = "https://armory.team-73.ru"
 collabora_enabled: bool = False
 ```

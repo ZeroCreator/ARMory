@@ -37,9 +37,6 @@ class Settings(BaseSettings):
     # Если не задано — доступен весь диск. Например: ARMory
     alexandrite_yandex_root_path: str | None = None
 
-    # Отключение планировщика (вкладка не отображается на главной странице)
-    scheduler_enabled: bool = True
-
     # Telegram-уведомления о событиях календаря
     telegram_reminder_enabled: bool = False
     telegram_bot_token: str | None = None
