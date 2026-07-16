@@ -73,16 +73,28 @@ def _run_ssh(target: str, remote_cmd: list, stdin: str | None = None) -> subproc
     )
 
 
+def _remote_path(path: str) -> str:
+    """Путь на удалённом сервере.
+
+    Если путь начинается с ~, не экранируем его — пусть remote shell
+    сама развернёт домашний каталог пользователя. Остальные пути
+    экранируем через shlex.quote.
+    """
+    if path.startswith("~"):
+        return path
+    return quote(path)
+
+
 # ── Загрузка тасков из .env проектов ──
-def _read_project_env(path_obj: Path, target: str | None) -> dict:
+def _read_project_env(project_dir_raw: str, target: str | None) -> dict:
     """Прочитать .env проекта — локально или по ssh."""
     if target is None:
-        env_file = path_obj / ".env"
+        env_file = Path(os.path.expanduser(project_dir_raw)) / ".env"
         if not env_file.exists():
             return {}
         return dotenv_values(env_file)
     try:
-        result = _run_ssh(target, ["cat", quote(str(path_obj / ".env"))])
+        result = _run_ssh(target, ["cat", _remote_path(f"{project_dir_raw}/.env")])
     except (subprocess.TimeoutExpired, OSError):
         return {}
     if result.returncode != 0:
@@ -96,15 +108,15 @@ def _load_tasks():
     ssh_map = _ssh_map()
 
     all_tasks = {}
-    for path in paths:
-        expanded = os.path.expanduser(path)
-        path_obj = Path(expanded)
-        project_name = path_obj.name
+    for project_dir_raw in paths:
+        project_name = Path(project_dir_raw).name
         target = ssh_map.get(project_name.lower())
         # Локальный проект без каталога пропускаем; у удалённого каталог не проверяем
-        if target is None and not path_obj.is_dir():
-            continue
-        env_data = _read_project_env(path_obj, target)
+        if target is None:
+            expanded = Path(os.path.expanduser(project_dir_raw))
+            if not expanded.is_dir():
+                continue
+        env_data = _read_project_env(project_dir_raw, target)
         raw = env_data.get("SCHEDULER_TASKS", "")
         if raw:
             try:
@@ -114,7 +126,7 @@ def _load_tasks():
                     all_tasks[full_key] = {
                         "name": v.get("name", k),
                         "script": v["script"],
-                        "project_dir": str(path_obj),
+                        "project_dir": project_dir_raw,
                         "target": target,
                     }
             except Exception:
@@ -171,21 +183,26 @@ def schedule_task(data: ScheduleRequest):
         return {"error": "Missing datetime"}
     try:
         dt = datetime.fromisoformat(data.datetime)
-        script_path = Path(task["project_dir"]) / task["script"]
+        project_dir_raw = task["project_dir"]
+        script_rel = task["script"]
         args = " ".join(quote(a) for a in (data.args or []))
-        job_cmd = f"cd {quote(task['project_dir'])} && {quote(str(script_path))}{' ' + args if args else ''}"
         target = task["target"]
         if target is None:
+            project_dir = Path(os.path.expanduser(project_dir_raw))
+            script_path = project_dir / script_rel
             if not script_path.exists():
                 return {"error": f"Скрипт не найден: {script_path}"}
+            job_cmd = f"cd {quote(str(project_dir))} && {quote(str(script_path))}{' ' + args if args else ''}"
             at_time = dt.strftime("%H:%M %Y-%m-%d")
             result = subprocess.run(
                 f"{job_cmd} | at {at_time}", shell=True, capture_output=True, text=True
             )
         else:
-            check = _run_ssh(target, ["test", "-f", quote(str(script_path))])
+            script_remote = _remote_path(f"{project_dir_raw}/{script_rel}")
+            check = _run_ssh(target, ["test", "-f", script_remote])
             if check.returncode != 0:
-                return {"error": f"Скрипт не найден на {target}: {script_path}"}
+                return {"error": f"Скрипт не найден на {target}: {project_dir_raw}/{script_rel}"}
+            job_cmd = f"cd {_remote_path(project_dir_raw)} && {script_remote}{' ' + args if args else ''}"
             # Время трактуется в локальной таймзоне целевого сервера
             result = _run_ssh(
                 target,
@@ -214,7 +231,7 @@ def _project_targets() -> list:
         path = path.strip()
         if not path:
             continue
-        name = Path(os.path.expanduser(path)).name.lower()
+        name = Path(path).name.lower()
         target = ssh_map.get(name)
         if target not in targets:
             targets.append(target)
