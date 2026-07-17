@@ -437,6 +437,7 @@ class KanbanGlobalOut(BaseModel):
 
 class KanbanTaskStatusUpdate(BaseModel):
     column_name: str
+    insert_top: bool = False
 
 
 class KanbanAttachmentExport(BaseModel):

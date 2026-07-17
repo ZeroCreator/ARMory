@@ -299,10 +299,18 @@ function initKanbanSortable() {
             dragClass: 'sortable-drag',
             onEnd: function (evt) {
                 const taskId = parseInt(evt.item.dataset.id, 10);
+                const oldStatusId = parseInt(evt.from.dataset.statusId, 10);
                 const newStatusId = parseInt(evt.to.dataset.statusId, 10);
-                const newIndex = evt.newIndex;
+                const movedToNewColumn = oldStatusId !== newStatusId;
+
+                let taskIds = Array.from(evt.to.querySelectorAll('.kanban-card'))
+                    .map(card => parseInt(card.dataset.id, 10));
+                if (movedToNewColumn) {
+                    taskIds = [taskId, ...taskIds.filter(id => id !== taskId)];
+                }
+
                 updateKanbanColumnCounts();
-                updateTaskStatus(taskId, newStatusId, newIndex);
+                updateTaskStatus(taskId, newStatusId, taskIds);
             },
         });
         kanbanSortables.push(sortable);
@@ -327,13 +335,7 @@ function initKanbanSortable() {
     }
 }
 
-async function updateTaskStatus(taskId, statusId, newIndex) {
-    const columnBody = document.querySelector(`.kanban-column-body[data-status-id="${statusId}"]`);
-    if (!columnBody) return;
-
-    const taskIds = Array.from(columnBody.querySelectorAll('.kanban-card'))
-        .map(card => parseInt(card.dataset.id, 10));
-
+async function updateTaskStatus(taskId, statusId, taskIds) {
     // Оптимистично обновляем локальные данные
     const task = kanbanData.tasks.find(t => t.id === taskId);
     if (task) task.status_id = statusId;

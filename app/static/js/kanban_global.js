@@ -311,9 +311,14 @@ function initKanbanSortable() {
             dragClass: 'sortable-drag',
             onEnd: function (evt) {
                 const taskId = parseInt(evt.item.dataset.id, 10);
-                const columnName = evt.to.dataset.columnName;
+                const fromColumn = evt.from.dataset.columnName;
+                const toColumn = evt.to.dataset.columnName;
                 updateKanbanColumnCounts();
-                updateTaskColumn(taskId, columnName);
+                if (fromColumn === toColumn) {
+                    loadKanbanBoard();
+                    return;
+                }
+                updateTaskColumn(taskId, toColumn);
             },
         });
         kanbanSortables.push(sortable);
@@ -325,13 +330,14 @@ async function updateTaskColumn(taskId, columnName) {
         const updatedTask = await api(`${API_BASE}/kanban/tasks/${taskId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ column_name: columnName }),
+            body: JSON.stringify({ column_name: columnName, insert_top: true }),
         });
         const idx = kanbanData.tasks.findIndex(t => t.id === taskId);
         if (idx !== -1) {
             kanbanData.tasks[idx] = updatedTask;
         }
         updateKanbanColumnCounts();
+        loadKanbanBoard();
     } catch (e) {
         alert('Ошибка перемещения задачи: ' + e.message);
         loadKanbanBoard();

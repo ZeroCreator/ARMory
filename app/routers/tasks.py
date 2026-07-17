@@ -1350,6 +1350,18 @@ async def update_task_status_by_column_name(
             detail=f"Status '{data.column_name}' not found in project"
         )
 
+    if data.insert_top and task.status_id != status.id:
+        await db.execute(
+            update(Task)
+            .where(
+                Task.project_id == task.project_id,
+                Task.status_id == status.id,
+                Task.id != task.id,
+            )
+            .values(sort_order=Task.sort_order + 1)
+        )
+        task.sort_order = 0
+
     task.status_id = status.id
     task.updated_at = datetime.utcnow()
     await db.commit()
