@@ -118,6 +118,7 @@ class CalendarEvent(Base):
     color = Column(String(7), default="#a78bfa")
     reminder_minutes = Column(Integer, nullable=True)
     notified_at = Column(DateTime, nullable=True)
+    dismissed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 

@@ -61,6 +61,7 @@ async def list_events(db: AsyncSession = Depends(get_db)):
             "color": e.color,
             "reminder_minutes": e.reminder_minutes,
             "notified_at": e.notified_at.isoformat() if e.notified_at else None,
+            "dismissed_at": e.dismissed_at.isoformat() if e.dismissed_at else None,
         }
         for e in events
     ]
@@ -175,7 +176,10 @@ async def active_reminders(db: AsyncSession = Depends(get_db)):
     now = datetime.datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
     result = await db.execute(
         select(CalendarEvent)
-        .where(CalendarEvent.reminder_minutes.isnot(None))
+        .where(
+            CalendarEvent.reminder_minutes.isnot(None),
+            CalendarEvent.dismissed_at.is_(None),
+        )
         .order_by(CalendarEvent.start_date)
     )
     events = result.scalars().all()
@@ -197,3 +201,16 @@ async def active_reminders(db: AsyncSession = Depends(get_db)):
         }
         for e in active
     ]
+
+
+@router.post("/events/{event_id}/dismiss")
+async def dismiss_event(event_id: int, db: AsyncSession = Depends(get_db)):
+    """Отметить напоминание о событии как закрытое пользователем."""
+    result = await db.execute(select(CalendarEvent).where(CalendarEvent.id == event_id))
+    event = result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Событие не найдено")
+    event.dismissed_at = datetime.datetime.utcnow()
+    await db.commit()
+    await db.refresh(event)
+    return {"id": event.id, "message": "Напоминание закрыто"}

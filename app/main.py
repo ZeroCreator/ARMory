@@ -211,6 +211,7 @@ async def lifespan(app: FastAPI):
                     color VARCHAR(7) DEFAULT '#a78bfa',
                     reminder_minutes INTEGER,
                     notified_at TIMESTAMP,
+                    dismissed_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
@@ -223,6 +224,8 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("ALTER TABLE calendar_events ADD COLUMN reminder_minutes INTEGER"))
             if "notified_at" not in calendar_col_names:
                 await conn.execute(text("ALTER TABLE calendar_events ADD COLUMN notified_at TIMESTAMP"))
+            if "dismissed_at" not in calendar_col_names:
+                await conn.execute(text("ALTER TABLE calendar_events ADD COLUMN dismissed_at TIMESTAMP"))
 
         # Миграция: таблица glossary_terms
         if "glossary_terms" not in table_names:

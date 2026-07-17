@@ -2960,27 +2960,12 @@ function formatReminderTime(reminder) {
     return `${dateStr} ${timeStr}`;
 }
 
-const DISMISSED_REMINDERS_KEY = 'dismissed_reminders';
-
-function getDismissedReminders() {
-    try {
-        return new Set(JSON.parse(localStorage.getItem(DISMISSED_REMINDERS_KEY) || '[]'));
-    } catch (e) {
-        return new Set();
-    }
-}
-
-function saveDismissedReminders(ids) {
-    localStorage.setItem(DISMISSED_REMINDERS_KEY, JSON.stringify(Array.from(ids)));
-}
-
 function renderActiveReminders(reminders) {
     const container = document.getElementById('active-reminders-container');
     if (!container) return;
 
     const now = new Date();
-    const dismissed = getDismissedReminders();
-    const visible = (reminders || []).filter(r => !dismissed.has(r.id));
+    const visible = reminders || [];
     activeReminderIds = new Set(visible.map(r => r.id));
 
     container.querySelectorAll('.active-reminder-card').forEach(card => {
@@ -3032,14 +3017,16 @@ async function loadActiveReminders() {
     }
 }
 
-function dismissActiveReminder(id) {
+async function dismissActiveReminder(id) {
     const card = document.querySelector(`.active-reminder-card[data-id="${id}"]`);
     if (card) card.remove();
-    const dismissed = getDismissedReminders();
-    dismissed.add(id);
-    saveDismissedReminders(dismissed);
     activeReminderIds.delete(id);
     renderCalendarEventsList();
+    try {
+        await api(`${API_BASE}/calendar/events/${id}/dismiss`, { method: 'POST' });
+    } catch (e) {
+        console.error('[reminders] dismiss error:', e);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

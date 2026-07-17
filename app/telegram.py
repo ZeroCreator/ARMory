@@ -86,6 +86,7 @@ async def check_and_send_calendar_reminders(db: AsyncSession) -> None:
         select(CalendarEvent).where(
             CalendarEvent.reminder_minutes.isnot(None),
             CalendarEvent.notified_at.is_(None),
+            CalendarEvent.dismissed_at.is_(None),
         )
     )
     events = result.scalars().all()
