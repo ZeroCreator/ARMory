@@ -7,6 +7,7 @@ let filteredTasks = [];
 let filterOptions = { projects: [], priorities: [], assignees: [], tags: [], list_names: [] };
 let assigneesMap = {};
 let projectsMap = {};
+let lastStatusIds = {};
 let sortColumn = 'created_at';
 let sortDirection = 'desc';
 const togglingTasks = new Set();
@@ -105,10 +106,31 @@ async function loadTasks() {
     try {
         const url = IS_GLOBAL ? `${API_BASE}/tasks` : `${API_BASE}/projects/${PROJECT_ID}/tasks`;
         allTasks = await api(url);
+        await loadLastStatuses();
         rebuildStatusFilter();
         applyFilters();
     } catch (e) {
         tbody.innerHTML = `<tr><td colspan="14" class="text-center text-danger py-4">Ошибка загрузки: ${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+
+async function loadLastStatuses() {
+    lastStatusIds = {};
+    try {
+        if (IS_GLOBAL) {
+            const projectIds = [...new Set((allTasks || []).map(t => t.project_id).filter(Boolean))];
+            await Promise.all(projectIds.map(async (projectId) => {
+                const statuses = await api(`${API_BASE}/projects/${projectId}/task-statuses`);
+                const last = (statuses || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).pop();
+                if (last) lastStatusIds[projectId] = last.id;
+            }));
+        } else {
+            const statuses = await api(`${API_BASE}/projects/${PROJECT_ID}/task-statuses`);
+            const last = (statuses || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).pop();
+            if (last) lastStatusIds[PROJECT_ID] = last.id;
+        }
+    } catch (e) {
+        console.error('Failed to load last statuses:', e);
     }
 }
 
@@ -471,7 +493,7 @@ function buildSaveListText(selectedKeys, format) {
     }
 
     const titleColumn = selectedColumns.find(col => col.key === 'title');
-    const detailColumns = selectedColumns.filter(col => col.key !== 'title');
+    const detailColumns = selectedColumns.filter(col => col.key !== 'title' && col.key !== 'id');
     const lines = [];
 
     filteredTasks.forEach((task, idx) => {
@@ -479,7 +501,9 @@ function buildSaveListText(selectedKeys, format) {
         const titlePart = titleColumn ? (title === `Заявка #${task.id}` ? '' : ' ' + title) : '';
 
         if (format === 'todo') {
-            lines.push(`- [ ] #${task.id}${titlePart}`.trim());
+            const isDone = task.is_closed || lastStatusIds[task.project_id] === task.status_id;
+            const checkbox = isDone ? '[x]' : '[ ]';
+            lines.push(`- ${checkbox} #${task.id}${titlePart}`.trim());
             detailColumns.forEach(col => {
                 const v = getSaveListColumnValue(task, col.key);
                 lines.push(`  ${col.label}: ${String(v).replace(/\n/g, ' ')}`);
