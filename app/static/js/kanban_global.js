@@ -383,6 +383,7 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
         form.due_date.value = task.due_date ? formatDateTimeLocal(task.due_date) : '';
         form.assignee_email.value = task.assignee_email || '';
         form.tags.value = task.tags || '';
+        form.list_name.value = task.list_name || '';
         deleteBtn.style.display = 'inline-block';
         renderTaskAttachments(task.attachments || []);
     } else {
@@ -426,6 +427,7 @@ async function saveTask() {
             due_date: form.due_date.value ? new Date(form.due_date.value).toISOString() : null,
             assignee_email: form.assignee_email.value.trim() || null,
             tags: form.tags.value.trim() || null,
+            list_name: form.list_name.value.trim() || null,
         };
 
         if (currentTaskId) {

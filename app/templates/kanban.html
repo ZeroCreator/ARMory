@@ -98,9 +98,15 @@
                             Закрыто <span class="text-muted">(дедлайн будет сброшен)</span>
                         </label>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Теги (через запятую)</label>
-                        <input type="text" class="form-control" name="tags" placeholder="backend, urgent">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Теги (через запятую)</label>
+                            <input type="text" class="form-control text-truncate" name="tags">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Список</label>
+                            <input type="text" class="form-control text-truncate" name="list_name">
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Вложения</label>
@@ -374,5 +380,5 @@
     const PROJECT_ID = {{ project_id }};
     const LOCAL_STORAGE_PATH = {{ local_storage_path | tojson }};
 </script>
-<script src="/static/js/kanban.js?v=34"></script>
+<script src="/static/js/kanban.js?v=36"></script>
 {% endblock %}
