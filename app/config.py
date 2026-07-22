@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # Публичный URL ARMory (используется для WOPI / Collabora)
     armory_public_url: str = "https://armory.team-73.ru"
 
+    # MCP API key для аутентификации Kimi Code CLI на endpoint /mcp
+    mcp_api_key: str | None = None
+
     # Collabora Online — редактирование документов в Alexandrite
     collabora_enabled: bool = False
     collabora_domain: str = "armory.team-73.ru"

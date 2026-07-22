@@ -24,8 +24,9 @@ services:
       - OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY=false
       - OAUTH2_PROXY_REQUEST_TIMEOUT=0
       # WOPI endpoints вызываются изнутри Collabora, без cookie пользователя.
-      # Доступ контролируется WOPI access token, поэтому пропускаем аутентификацию oauth2-proxy.
-      - OAUTH2_PROXY_SKIP_AUTH_ROUTES=/wopi/.*
+      # MCP endpoint защищён собственным API-ключом в приложении.
+      # Пропускаем аутентификацию oauth2-proxy для этих маршрутов.
+      - OAUTH2_PROXY_SKIP_AUTH_ROUTES=/wopi/.*,/mcp
       # Разрешить oauth2-proxy проксировать WebSocket upgrade запросы на ARMory.
       - OAUTH2_PROXY_PROXY_WEBSOCKETS=true
     env_file:

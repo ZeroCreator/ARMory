@@ -452,6 +452,20 @@ async def list_tasks_global(
     return result.scalars().all()
 
 
+@global_router.get("/tasks/{task_id}", response_model=TaskOut)
+async def get_task_global(task_id: int, db: AsyncSession = Depends(get_db)):
+    """Получить задачу по глобальному ID (без указания проекта)."""
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.status), selectinload(Task.attachments))
+        .where(Task.id == task_id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
 @router.patch("/tasks/reorder", status_code=204)
 async def reorder_tasks(
     project_id: int,
