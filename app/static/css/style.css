@@ -3703,7 +3703,7 @@ footer {
     50% { box-shadow: 0 0 0 6px rgba(107, 70, 193, 0.3); }
 }
 
-/* Импорт задач из ToDo-листа */
+/* Импорт задач */
 .import-tasks-list {
     max-height: 300px;
     overflow-y: auto;
