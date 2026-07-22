@@ -218,9 +218,12 @@ function renderTaskCard(task) {
 
     return `
         <div class="kanban-card ${closedClass}" data-id="${task.id}" onclick="openTaskModal(${task.id})">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-                <span class="kanban-card-title">${escapeHtml(task.title)}${closedBadge}</span>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="badge bg-orange">#${task.id}</span>
                 <span class="badge ${priorityClass} priority-badge">${priorityLabel(task.priority)}</span>
+            </div>
+            <div class="mb-2">
+                <span class="kanban-card-title">${escapeHtml(task.title)}${closedBadge}</span>
             </div>
             <div class="kanban-task-project">
                 <i class="bi bi-folder"></i> ${escapeHtml(projectName)}
