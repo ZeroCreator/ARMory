@@ -511,9 +511,12 @@ async def update_task(
 ):
     task = await _get_task(project_id, task_id, db)
     update_data = data.model_dump(exclude_unset=True)
+    status_changed = False
     if "status_id" in update_data:
         await _get_status(project_id, update_data["status_id"], db)
-        task.status_id = update_data["status_id"]
+        if task.status_id != update_data["status_id"]:
+            task.status_id = update_data["status_id"]
+            status_changed = True
     if "title" in update_data:
         task.title = update_data["title"] or ""
     if "priority" in update_data:
@@ -543,6 +546,30 @@ async def update_task(
         elif not update_data["is_closed"] and was_closed:
             # При открытии возвращаем задачу в начало колонки.
             task.sort_order = 0
+        elif status_changed:
+            # Задача просто перенесена в другую колонку — ставим первой.
+            await db.execute(
+                update(Task)
+                .where(
+                    Task.project_id == project_id,
+                    Task.status_id == task.status_id,
+                    Task.id != task.id,
+                )
+                .values(sort_order=Task.sort_order + 1)
+            )
+            task.sort_order = 0
+    elif status_changed:
+        # Задача перенесена в другую колонку без изменения флага закрытия — ставим первой.
+        await db.execute(
+            update(Task)
+            .where(
+                Task.project_id == project_id,
+                Task.status_id == task.status_id,
+                Task.id != task.id,
+            )
+            .values(sort_order=Task.sort_order + 1)
+        )
+        task.sort_order = 0
 
     task.updated_at = datetime.utcnow()
     await db.commit()
