@@ -7,7 +7,7 @@
 
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
@@ -44,7 +44,7 @@ async def mcp_endpoint(request: Request):
 
     if result is None:
         # Notification — no response required.
-        return JSONResponse(content={}, status_code=204)
+        return Response(status_code=204)
 
     response = {"jsonrpc": "2.0", "id": id_}
     if isinstance(result, dict) and "error" in result:
