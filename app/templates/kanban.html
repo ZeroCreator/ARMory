@@ -113,15 +113,20 @@
                         <div id="task-attachments-list" class="mb-2">
                             <!-- JS заполнит -->
                         </div>
-                        <div class="dropdown">
-                            <button id="task-add-attachment-btn" class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-plus-lg"></i> Добавить вложение
+                        <div class="d-flex gap-2 align-items-center">
+                            <div class="dropdown">
+                                <button id="task-add-attachment-btn" class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-plus-lg"></i> Добавить вложение
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('link'); return false;"><i class="bi bi-link-45deg me-2"></i> Ссылка</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('git'); return false;"><i class="bi bi-git me-2"></i> Git-репозиторий</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('file'); return false;"><i class="bi bi-paperclip me-2"></i> Файл</a></li>
+                                </ul>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-success" id="task-export-btn" onclick="exportCurrentTask()" title="Экспорт задачи" style="display:none;">
+                                <i class="bi bi-download"></i> Экспорт
                             </button>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('link'); return false;"><i class="bi bi-link-45deg me-2"></i> Ссылка</a></li>
-                                <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('git'); return false;"><i class="bi bi-git me-2"></i> Git-репозиторий</a></li>
-                                <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('file'); return false;"><i class="bi bi-paperclip me-2"></i> Файл</a></li>
-                            </ul>
                         </div>
                         <div id="task-attachment-form" class="kanban-attachment-form mt-2" style="display:none;">
                             <input type="hidden" id="attachment-form-type">
@@ -381,5 +386,5 @@
     const LOCAL_STORAGE_PATH = {{ local_storage_path | tojson }};
 </script>
 <script src="/static/js/kanban_common.js?v=1"></script>
-<script src="/static/js/kanban.js?v=44"></script>
+<script src="/static/js/kanban.js?v=45"></script>
 {% endblock %}

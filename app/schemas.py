@@ -457,6 +457,9 @@ class KanbanAttachmentExport(BaseModel):
 
 
 class KanbanTaskExport(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
     priority: str = "medium"

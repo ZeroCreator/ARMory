@@ -30,6 +30,7 @@ from app.schemas import (
     KanbanGlobalOut,
     KanbanImportIn,
     KanbanProjectExport,
+    KanbanTaskExport,
     KanbanTaskStatusUpdate,
     TaskAttachmentCreate,
     TaskAttachmentOut,
@@ -538,6 +539,114 @@ async def delete_task(
     return None
 
 
+@router.get("/tasks/{task_id}/export", response_model=KanbanTaskExport)
+async def export_single_task(
+    project_id: int,
+    task_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Экспорт одной задачи в формате KanbanTaskExport."""
+    task = await _get_task(project_id, task_id, db)
+    status = await _get_status(project_id, task.status_id, db)
+    return {
+        "id": task.id,
+        "title": task.title,
+        "description": task.description,
+        "priority": task.priority,
+        "is_closed": bool(task.is_closed),
+        "due_date": task.due_date,
+        "assignee_email": task.assignee_email,
+        "tags": task.tags,
+        "list_name": task.list_name,
+        "sort_order": task.sort_order,
+        "status_name": status.name,
+        "attachments": [
+            {
+                "attachment_type": a.attachment_type,
+                "title": a.title,
+                "url": a.url,
+                "file_path": a.file_path,
+            }
+            for a in task.attachments
+        ],
+    }
+
+
+@router.post("/tasks/import", response_model=TaskOut, status_code=201)
+async def import_single_task(
+    project_id: int,
+    data: KanbanTaskExport,
+    db: AsyncSession = Depends(get_db),
+):
+    """Импорт одной задачи. Если ID занят — создаётся задача с новым номером."""
+    await _get_project(project_id, db)
+
+    status_result = await db.execute(
+        select(TaskStatus).where(
+            TaskStatus.project_id == project_id,
+            TaskStatus.name == data.status_name,
+        )
+    )
+    status = status_result.scalar_one_or_none()
+    if not status:
+        max_order = await db.execute(
+            select(func.max(TaskStatus.sort_order))
+            .where(TaskStatus.project_id == project_id)
+        )
+        status = TaskStatus(
+            project_id=project_id,
+            name=data.status_name,
+            color="#a78bfa",
+            sort_order=(max_order.scalar_one_or_none() or 0) + 1,
+        )
+        db.add(status)
+        await db.flush()
+        await db.refresh(status)
+
+    task_id_to_use = data.id
+    if task_id_to_use:
+        existing_result = await db.execute(
+            select(Task).where(Task.project_id == project_id, Task.id == task_id_to_use)
+        )
+        if existing_result.scalar_one_or_none():
+            task_id_to_use = None
+
+    task_kwargs = {
+        "project_id": project_id,
+        "status_id": status.id,
+        "title": data.title,
+        "description": data.description,
+        "priority": data.priority,
+        "is_closed": data.is_closed,
+        "due_date": data.due_date,
+        "assignee_email": data.assignee_email,
+        "tags": data.tags,
+        "list_name": data.list_name,
+        "sort_order": data.sort_order,
+    }
+    if task_id_to_use:
+        task_kwargs["id"] = task_id_to_use
+
+    task = Task(**task_kwargs)
+    db.add(task)
+    await db.flush()
+    await db.refresh(task)
+
+    for attachment_data in data.attachments or []:
+        attachment = TaskAttachment(
+            task_id=task.id,
+            attachment_type=attachment_data.attachment_type,
+            title=attachment_data.title,
+            url=attachment_data.url,
+            file_path=attachment_data.file_path,
+        )
+        db.add(attachment)
+
+    await db.commit()
+    await db.refresh(task, attribute_names=["status", "attachments"])
+    return task
+
+
 # ═══════════════════════════════════════════════════
 # Вложения к задачам (файлы, ссылки, git)
 # ═══════════════════════════════════════════════════
@@ -920,6 +1029,7 @@ async def _build_project_export(project_id: int, db: AsyncSession) -> dict:
         ],
         "tasks": [
             {
+                "id": t.id,
                 "title": t.title,
                 "description": t.description,
                 "priority": t.priority,

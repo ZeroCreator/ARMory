@@ -26,7 +26,7 @@
     --btn-green:      #4a7a5a;
     --btn-green-dark: #3d5a45;
     --btn-red:        #8a4a4a;
-    --btn-red-dark:   #6d3a3a;
+    --btn-red-dark:   #a85c5c;
     --btn-gray:       #4a465a;
     --btn-gray-dark:  #3d3a4a;
 
@@ -276,6 +276,15 @@ hr { border-color: rgba(139,124,246,0.15); }
     box-shadow: 0 1px 0 var(--btn-red-dark),
                 0 2px 6px rgba(0,0,0,0.3),
                 inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+#delete-selected-btn {
+    color: #fff !important;
+}
+#delete-selected-btn:disabled {
+    opacity: 1 !important;
+    background: rgba(220, 53, 69, 0.55);
+    color: #fff !important;
 }
 
 /* ═══ Контурные кнопки — тёмные с фиолетовым свечением ═══ */

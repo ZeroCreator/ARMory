@@ -389,9 +389,11 @@ function openTaskModal(taskId, defaultStatusId) {
     const titleEl = document.getElementById('task-modal-title');
     const deleteBtn = document.getElementById('task-delete-btn');
     const addAttachBtn = document.getElementById('task-add-attachment-btn');
+    const exportBtn = document.getElementById('task-export-btn');
     const statusDisplay = document.getElementById('task-status-display');
     const statusDisplayName = document.getElementById('task-status-display-name');
     if (addAttachBtn) addAttachBtn.disabled = !currentTaskId;
+    if (exportBtn) exportBtn.style.display = currentTaskId ? 'inline-block' : 'none';
     hideAttachmentForm();
 
     form.reset();
@@ -483,9 +485,21 @@ async function saveTask() {
     }
 }
 
+async function exportCurrentTask() {
+    if (!currentTaskId) return;
+    try {
+        const task = await api(`${API_BASE}/projects/${PROJECT_ID}/tasks/${currentTaskId}/export`);
+        const blob = new Blob([JSON.stringify(task, null, 2)], { type: 'application/json' });
+        const filename = `task_${currentTaskId}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.json`;
+        downloadBlob(blob, filename);
+        showToast('Задача экспортирована', 'success');
+    } catch (e) {
+        showToast('Ошибка экспорта: ' + e.message, 'danger');
+    }
+}
+
 async function deleteTaskFromModal() {
     if (!currentTaskId) return;
-    if (!confirm('Удалить задачу?')) return;
 
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/tasks/${currentTaskId}`, { method: 'DELETE' });

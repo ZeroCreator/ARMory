@@ -10,7 +10,7 @@ let projectsMap = {};
 let lastStatusIds = {};
 let sortColumn = 'created_at';
 let sortDirection = 'desc';
-const togglingTasks = new Set();
+let selectedTaskIds = new Set();
 
 const SAVE_LIST_COLUMNS = [
     { key: 'id', label: '#', default: true },
@@ -44,14 +44,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tableBody = document.getElementById('tasks-table-body');
     if (tableBody) {
         tableBody.addEventListener('click', (e) => {
-            const checkbox = e.target.closest('[data-action="toggle-closed"]');
+            const checkbox = e.target.closest('[data-action="select-task"]');
             if (!checkbox) return;
             e.preventDefault();
             e.stopPropagation();
-            toggleTaskClosed(
-                parseInt(checkbox.dataset.taskId, 10),
-                parseInt(checkbox.dataset.projectId, 10)
-            );
+            toggleTaskSelected(parseInt(checkbox.dataset.taskId, 10));
         });
     }
 });
@@ -254,7 +251,7 @@ function renderTable() {
         return `
             <tr class="${task.is_closed ? 'table-secondary' : ''}">
                 <td class="text-center">
-                    <input class="form-check-input" type="checkbox" ${task.is_closed ? 'checked' : ''} data-action="toggle-closed" data-task-id="${task.id}" data-project-id="${task.project_id}" title="${task.is_closed ? 'Открыть задачу' : 'Закрыть задачу'}">
+                    <input class="form-check-input" type="checkbox" ${selectedTaskIds.has(task.id) ? 'checked' : ''} data-action="select-task" data-task-id="${task.id}" title="Выбрать задачу">
                 </td>
                 <td>${task.id}</td>
                 ${projectCell}
@@ -271,6 +268,7 @@ function renderTable() {
                 <td class="actions-cell">
                     <a href="${kanbanUrl}" class="btn btn-sm btn-outline-brown" title="Открыть в канбане"><i class="bi bi-kanban"></i></a>
                     <button class="btn btn-sm btn-outline-secondary" onclick="copyTaskLink(${task.project_id}, ${task.id})" title="Копировать ссылку"><i class="bi bi-link-45deg"></i></button>
+                    <button class="btn btn-sm btn-outline-success" onclick="exportSingleTask(${task.project_id}, ${task.id})" title="Экспорт задачи"><i class="bi bi-download"></i></button>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteTask(${task.id}, ${task.project_id})" title="Удалить задачу"><i class="bi bi-trash"></i></button>
                 </td>
             </tr>
@@ -278,6 +276,7 @@ function renderTable() {
     }).join('');
 
     setupTopScroll();
+    updateSelectionToolbar();
 }
 
 function copyTaskLink(projectId, taskId) {
@@ -286,28 +285,66 @@ function copyTaskLink(projectId, taskId) {
     showToast('Ссылка скопирована', 'success');
 }
 
-async function toggleTaskClosed(taskId, projectId) {
-    if (togglingTasks.has(taskId)) return;
-
-    const task = allTasks.find(t => t.id === taskId);
-    if (!task) return;
-    const newClosed = !task.is_closed;
-
-    togglingTasks.add(taskId);
-
+async function exportSingleTask(projectId, taskId) {
     try {
-        await api(`${API_BASE}/projects/${projectId}/tasks/${taskId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ is_closed: newClosed }),
-        });
-        task.is_closed = newClosed;
-        applyFilters();
+        const task = await api(`${API_BASE}/projects/${projectId}/tasks/${taskId}/export`);
+        const blob = new Blob([JSON.stringify(task, null, 2)], { type: 'application/json' });
+        const filename = `task_${taskId}_${formatNowMoscowForFilename()}.json`;
+        downloadBlob(blob, filename);
+        showToast('Задача экспортирована', 'success');
     } catch (e) {
-        console.error('Ошибка обновления задачи:', e);
-        applyFilters();
-    } finally {
-        togglingTasks.delete(taskId);
+        showToast('Ошибка экспорта: ' + e.message, 'danger');
+    }
+}
+
+async function importSingleTask() {
+    const input = document.getElementById('import-single-file');
+    const file = input?.files[0];
+    if (!file) {
+        showToast('Выберите JSON-файл задачи', 'warning');
+        return;
+    }
+
+    let task;
+    try {
+        const text = await file.text();
+        task = JSON.parse(text);
+    } catch (e) {
+        showToast('Некорректный JSON-файл: ' + e.message, 'danger');
+        return;
+    }
+
+    const projectId = task.project_id || getImportProjectId() || PROJECT_ID;
+    if (!projectId) {
+        showToast('Не удалось определить проект для импорта', 'warning');
+        return;
+    }
+    try {
+        const result = await api(`${API_BASE}/projects/${projectId}/tasks/import`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(task),
+        });
+        resetImportSingleFile();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('taskImportModal')).hide();
+        showToast(`Задача импортирована #${result.id}`, 'success');
+        await loadTasks();
+        await loadFilters();
+    } catch (e) {
+        showToast('Ошибка импорта: ' + e.message, 'danger');
+    }
+}
+
+function resetImportSingleFile() {
+    const input = document.getElementById('import-single-file');
+    if (input) {
+        const wrapper = input.parentElement;
+        const newInput = document.createElement('input');
+        newInput.type = 'file';
+        newInput.id = 'import-single-file';
+        newInput.className = input.className;
+        newInput.accept = input.accept;
+        wrapper.replaceChild(newInput, input);
     }
 }
 
@@ -315,11 +352,74 @@ async function deleteTask(taskId, projectId) {
     try {
         await api(`${API_BASE}/projects/${projectId}/tasks/${taskId}`, { method: 'DELETE' });
         allTasks = allTasks.filter(t => t.id !== taskId);
+        selectedTaskIds.delete(taskId);
         applyFilters();
         showToast('Задача удалена', 'success');
     } catch (e) {
         showToast('Ошибка удаления задачи: ' + e.message, 'danger');
     }
+}
+
+function toggleTaskSelected(taskId) {
+    if (selectedTaskIds.has(taskId)) {
+        selectedTaskIds.delete(taskId);
+    } else {
+        selectedTaskIds.add(taskId);
+    }
+    applyFilters();
+}
+
+function toggleSelectAll(selectAll) {
+    if (selectAll) {
+        filteredTasks.forEach(t => selectedTaskIds.add(t.id));
+    } else {
+        filteredTasks.forEach(t => selectedTaskIds.delete(t.id));
+    }
+    applyFilters();
+}
+
+async function deleteSelectedTasks() {
+    if (selectedTaskIds.size === 0) return;
+    if (!confirm(`Удалить ${selectedTaskIds.size} выбранных задач?`)) return;
+
+    const ids = Array.from(selectedTaskIds);
+    const toDelete = allTasks.filter(t => selectedTaskIds.has(t.id));
+    let deleted = 0;
+    let failed = 0;
+
+    for (const task of toDelete) {
+        try {
+            await api(`${API_BASE}/projects/${task.project_id}/tasks/${task.id}`, { method: 'DELETE' });
+            allTasks = allTasks.filter(t => t.id !== task.id);
+            selectedTaskIds.delete(task.id);
+            deleted++;
+        } catch (e) {
+            console.error(`Failed to delete task ${task.id}:`, e);
+            failed++;
+        }
+    }
+
+    applyFilters();
+    if (failed === 0) {
+        showToast(`Удалено задач: ${deleted}`, 'success');
+    } else {
+        showToast(`Удалено: ${deleted}, не удалось: ${failed}`, 'danger');
+    }
+}
+
+function updateSelectionToolbar() {
+    const countEl = document.getElementById('selected-tasks-count');
+    const deleteBtn = document.getElementById('delete-selected-btn');
+    const selectAllCheckbox = document.getElementById('select-all-tasks');
+    if (!countEl || !deleteBtn || !selectAllCheckbox) return;
+
+    const visibleIds = filteredTasks.map(t => t.id);
+    const selectedVisible = visibleIds.filter(id => selectedTaskIds.has(id));
+    const allVisibleSelected = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
+
+    countEl.textContent = selectedTaskIds.size > 0 ? `Выбрано: ${selectedTaskIds.size}` : '';
+    deleteBtn.disabled = selectedTaskIds.size === 0;
+    selectAllCheckbox.checked = allVisibleSelected;
 }
 
 function toMoscowDateParts(date) {
@@ -703,6 +803,7 @@ function resetImportState() {
     importNextTempId = 1;
     document.getElementById('import-list-name').value = '';
     document.getElementById('import-todo-text').value = '';
+    resetImportSingleFile();
     document.getElementById('import-bulk-due-date').value = '';
     document.getElementById('import-bulk-priority').value = 'medium';
     document.getElementById('import-bulk-assignee').value = '';
@@ -936,11 +1037,7 @@ function applyBulkToSelectedImportTasks() {
 }
 
 async function createTasksBulk() {
-    const listName = document.getElementById('import-list-name').value.trim();
-    if (!listName) {
-        alert('Введите название списка');
-        return;
-    }
+    const listName = document.getElementById('import-list-name').value.trim() || null;
 
     const validTasks = importTasksState.filter(t => t.title.trim() || t.description.trim());
     if (validTasks.length === 0) {
@@ -964,7 +1061,7 @@ async function createTasksBulk() {
             due_date: t.due_date,
             assignee_email: t.assignee_email,
             tags: t.tags,
-            list_name: listName,
+            list_name: listName || undefined,
             project_id: IS_GLOBAL ? t.project_id : undefined,
         })).filter(t => t.project_id !== undefined || !IS_GLOBAL),
         attachments: importBulkAttachments,
