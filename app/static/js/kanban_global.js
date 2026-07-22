@@ -6,7 +6,7 @@ let kanbanData = { columns: [], tasks: [] };
 let filterOptions = { projects: [], priorities: [], assignees: [], tags: [] };
 let kanbanAssignees = [];
 let projectStatuses = {};
-let kanbanSortables = [];
+let kanbanDragController = null;
 let currentTaskId = null;
 let currentStatusId = null;
 let pendingTaskColumnName = null;
@@ -187,6 +187,11 @@ function renderBoard(data) {
     }).join('');
 }
 
+function handleGlobalCardClick(taskId) {
+    if (!kanbanDragController) return;
+    kanbanDragController.handleCardClick(taskId, () => openTaskModal(taskId));
+}
+
 function renderTaskCard(task) {
     const taskProjectId = String(task.project_id);
     const project = (filterOptions?.projects || []).find(p => String(p.id) === taskProjectId);
@@ -217,7 +222,7 @@ function renderTaskCard(task) {
     const closedBadge = task.is_closed ? '<span class="badge bg-secondary ms-2"><i class="bi bi-check-circle"></i> Закрыто</span>' : '';
 
     return `
-        <div class="kanban-card ${closedClass}" data-id="${task.id}" onclick="openTaskModal(${task.id})">
+        <div class="kanban-card ${closedClass}" data-id="${task.id}" onclick="handleGlobalCardClick(${task.id})">
             <div class="d-flex justify-content-between align-items-center mb-1">
                 <span class="badge bg-orange">#${task.id}</span>
                 <span class="badge ${priorityClass} priority-badge">${priorityLabel(task.priority)}</span>
@@ -299,36 +304,22 @@ function updateKanbanColumnCounts() {
 }
 
 function initKanbanSortable() {
-    kanbanSortables.forEach(s => s.destroy());
-    kanbanSortables = [];
-
-    document.querySelectorAll('.kanban-column-body').forEach(body => {
-        const sortable = Sortable.create(body, {
-            group: 'kanban-global-tasks',
-            animation: 80,
-            delay: 100,
-            delayOnTouchOnly: true,
-            scroll: false,
-            swapThreshold: 0.65,
-            ghostClass: 'sortable-ghost',
-            dragClass: 'sortable-drag',
-            onEnd: function (evt) {
-                const taskId = parseInt(evt.item.dataset.id, 10);
-                const fromColumn = evt.from.dataset.columnName;
-                const toColumn = evt.to.dataset.columnName;
-                updateKanbanColumnCounts();
-                if (fromColumn === toColumn) {
-                    loadKanbanBoard();
-                    return;
-                }
-                updateTaskColumn(taskId, toColumn);
-            },
-        });
-        kanbanSortables.push(sortable);
+    kanbanDragController = new KanbanDragController({
+        boardSelector: '#kanban-board',
+        group: 'kanban-global-tasks',
+        getColumnId: (body) => body.dataset.columnName,
+        onUpdateCounts: updateKanbanColumnCounts,
+        onSameColumnReorder: (taskIds, columnName) => {
+            reorderGlobalTasks(taskIds, columnName);
+        },
+        onCrossColumnMove: (taskId, columnName, targetBody) => {
+            updateTaskColumn(taskId, columnName, targetBody);
+        },
     });
+    kanbanDragController.init();
 }
 
-async function updateTaskColumn(taskId, columnName) {
+async function updateTaskColumn(taskId, columnName, targetColumnBody) {
     try {
         const updatedTask = await api(`${API_BASE}/kanban/tasks/${taskId}/status`, {
             method: 'PATCH',
@@ -339,10 +330,52 @@ async function updateTaskColumn(taskId, columnName) {
         if (idx !== -1) {
             kanbanData.tasks[idx] = updatedTask;
         }
+        // Перемещаем карточку в начало целевой колонки, чтобы соответствовать бэкенду (insert_top)
+        if (targetColumnBody) {
+            const card = targetColumnBody.querySelector(`.kanban-card[data-id="${taskId}"]`);
+            if (card) targetColumnBody.insertBefore(card, targetColumnBody.firstChild);
+        }
         updateKanbanColumnCounts();
-        loadKanbanBoard();
     } catch (e) {
         alert('Ошибка перемещения задачи: ' + e.message);
+        loadKanbanBoard();
+    }
+}
+
+async function reorderGlobalTasks(taskIds, columnName) {
+    const orderMap = new Map(taskIds.map((id, idx) => [id, idx]));
+    kanbanData.tasks.forEach(task => {
+        if (orderMap.has(task.id)) {
+            task.sort_order = orderMap.get(task.id);
+        }
+    });
+
+    // Группируем по project_id, так как в одной колонке общего канбана могут быть задачи из разных проектов
+    const byProject = new Map();
+    taskIds.forEach(id => {
+        const task = kanbanData.tasks.find(t => t.id === id);
+        if (!task || !task.status) return;
+        const key = `${task.project_id}:${task.status.id}`;
+        if (!byProject.has(key)) byProject.set(key, { projectId: task.project_id, statusId: task.status.id, ids: [] });
+        byProject.get(key).ids.push(id);
+    });
+
+    const errors = [];
+    for (const { projectId, statusId, ids } of byProject.values()) {
+        try {
+            await api(`${API_BASE}/projects/${projectId}/tasks/reorder`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status_id: statusId, task_ids: ids }),
+            });
+        } catch (e) {
+            errors.push(e.message);
+        }
+    }
+
+    updateKanbanColumnCounts();
+    if (errors.length > 0) {
+        alert('Ошибка изменения порядка: ' + errors.join(', '));
         loadKanbanBoard();
     }
 }

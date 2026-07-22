@@ -5,7 +5,7 @@
 let kanbanData = { statuses: [], tasks: [] };
 let filterOptions = { priorities: [], assignees: [], tags: [] };
 let kanbanAssignees = [];
-let kanbanSortables = [];
+let kanbanDragController = null;
 let currentTaskId = null;
 let currentStatusId = null;
 let projectName = '';
@@ -276,48 +276,52 @@ function updateKanbanColumnCounts() {
     });
 }
 
+function updateLocalTaskOrder(statusId, taskIds) {
+    const orderMap = new Map(taskIds.map((id, idx) => [id, idx]));
+    kanbanData.tasks.forEach(task => {
+        if (task.status_id === statusId && orderMap.has(task.id)) {
+            task.sort_order = orderMap.get(task.id);
+        }
+    });
+    kanbanData.tasks.sort((a, b) => {
+        if (a.status_id !== b.status_id) return a.status_id - b.status_id;
+        return (a.sort_order || 0) - (b.sort_order || 0);
+    });
+}
+
 function handleCardClick(taskId, card) {
-    // Если карточка подсвечена (например, после перехода по ссылке),
-    // клик только снимает подсветку, не открывая задачу повторно.
-    if (card.classList.contains('kanban-card-highlighted')) {
-        card.classList.remove('kanban-card-highlighted');
-        return;
-    }
-    openTaskModal(taskId);
+    if (!kanbanDragController) return;
+    kanbanDragController.handleCardClick(taskId, () => {
+        // Если карточка подсвечена (например, после перехода по ссылке),
+        // клик только снимает подсветку, не открывая задачу повторно.
+        if (card.classList.contains('kanban-card-highlighted')) {
+            card.classList.remove('kanban-card-highlighted');
+            return;
+        }
+        openTaskModal(taskId);
+    });
 }
 
 function initKanbanSortable() {
-    kanbanSortables.forEach(s => s.destroy());
-    kanbanSortables = [];
-
-    document.querySelectorAll('.kanban-column-body').forEach(body => {
-        const sortable = Sortable.create(body, {
-            group: 'kanban-tasks',
-            animation: 80,
-            delay: 100,
-            delayOnTouchOnly: true,
-            scroll: false,
-            swapThreshold: 0.65,
-            ghostClass: 'sortable-ghost',
-            dragClass: 'sortable-drag',
-            onEnd: function (evt) {
-                const taskId = parseInt(evt.item.dataset.id, 10);
-                const oldStatusId = parseInt(evt.from.dataset.statusId, 10);
-                const newStatusId = parseInt(evt.to.dataset.statusId, 10);
-                const movedToNewColumn = oldStatusId !== newStatusId;
-
-                let taskIds = Array.from(evt.to.querySelectorAll('.kanban-card'))
-                    .map(card => parseInt(card.dataset.id, 10));
-                if (movedToNewColumn) {
-                    taskIds = [taskId, ...taskIds.filter(id => id !== taskId)];
-                }
-
-                updateKanbanColumnCounts();
-                updateTaskStatus(taskId, newStatusId, taskIds);
-            },
-        });
-        kanbanSortables.push(sortable);
+    kanbanDragController = new KanbanDragController({
+        boardSelector: '#kanban-board',
+        group: 'kanban-tasks',
+        getColumnId: (body) => parseInt(body.dataset.statusId, 10),
+        onUpdateCounts: updateKanbanColumnCounts,
+        onSameColumnReorder: (taskIds, statusId) => {
+            updateLocalTaskOrder(statusId, taskIds);
+            updateTaskStatus(null, statusId, taskIds);
+        },
+        onCrossColumnMove: (taskId, statusId) => {
+            const columnBody = document.querySelector(`.kanban-column-body[data-status-id="${statusId}"]`);
+            const taskIds = [taskId, ...Array.from(columnBody?.querySelectorAll('.kanban-card') || [])
+                .map(card => parseInt(card.dataset.id, 10))
+                .filter(id => id !== taskId)];
+            updateLocalTaskOrder(statusId, taskIds);
+            updateTaskStatus(taskId, statusId, taskIds);
+        },
     });
+    kanbanDragController.init();
 
     const board = document.getElementById('kanban-board');
     if (board && board.classList.contains('kanban-board')) {
@@ -340,8 +344,13 @@ function initKanbanSortable() {
 
 async function updateTaskStatus(taskId, statusId, taskIds) {
     // Оптимистично обновляем локальные данные
-    const task = kanbanData.tasks.find(t => t.id === taskId);
-    if (task) task.status_id = statusId;
+    if (taskId) {
+        const task = kanbanData.tasks.find(t => t.id === taskId);
+        if (task) {
+            task.status_id = statusId;
+            task.sort_order = taskIds.indexOf(taskId);
+        }
+    }
 
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/tasks/reorder`, {

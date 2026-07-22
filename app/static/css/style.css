@@ -3404,6 +3404,14 @@ footer {
     flex: 1 1 auto;
     overflow-y: auto;
     min-height: 80px;
+    scrollbar-gutter: stable;
+}
+
+.kanban-dragging .kanban-column,
+.kanban-dragging .kanban-column-body,
+.kanban-dragging .kanban-card,
+.kanban-dragging .kanban-card * {
+    transition: none !important;
 }
 
 .kanban-column-footer {
@@ -3532,6 +3540,7 @@ footer {
 
 .kanban-card.sortable-drag * {
     transition: none !important;
+    user-select: none !important;
 }
 
 .kanban-column.sortable-ghost {
