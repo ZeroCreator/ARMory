@@ -440,6 +440,15 @@ class KanbanTaskStatusUpdate(BaseModel):
     insert_top: bool = False
 
 
+class TaskListTelegramConfig(BaseModel):
+    is_global: bool = False
+    project_id: int | None = None
+    filters: dict = {}
+    format: str = "todo"
+    columns: List[str] = ["title", "status_name", "priority", "assignee_name", "due_date"]
+    caption: str = "📋 <b>Список задач</b>"
+
+
 class KanbanAttachmentExport(BaseModel):
     attachment_type: str
     title: Optional[str] = None

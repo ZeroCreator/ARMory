@@ -1,0 +1,11 @@
+{
+  "is_global": true,
+  "project_id": null,
+  "filters": {},
+  "format": "todo",
+  "columns": [
+    "title",
+    "status_name"
+  ],
+  "caption": "Test"
+}

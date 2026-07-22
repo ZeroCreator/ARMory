@@ -471,6 +471,43 @@ function downloadSaveList() {
     downloadBlob(blob, filename);
 }
 
+async function saveListForTelegram() {
+    if (filteredTasks.length === 0) {
+        showToast('Нет задач для сохранения', 'warning');
+        return;
+    }
+    const selectedKeys = Array.from(document.querySelectorAll('#save-list-columns input:checked')).map(cb => cb.value);
+    const format = document.getElementById('save-list-format')?.value || 'todo';
+    const config = {
+        is_global: IS_GLOBAL,
+        project_id: PROJECT_ID || null,
+        filters: {
+            search: document.getElementById('filter-search')?.value || '',
+            status: document.getElementById('filter-status')?.value || '',
+            priority: document.getElementById('filter-priority')?.value || '',
+            assignee: document.getElementById('filter-assignee')?.value || '',
+            list_name: document.getElementById('filter-list')?.value || '',
+            closed: document.getElementById('filter-closed')?.value || '',
+            tags: document.getElementById('filter-tags')?.value || '',
+            project_id: document.getElementById('filter-project')?.value || '',
+        },
+        format,
+        columns: selectedKeys,
+        caption: IS_GLOBAL ? '📋 <b>Все задачи</b>' : '📋 <b>Задачи проекта</b>',
+    };
+    try {
+        await api(`${API_BASE}/tasks/telegram-list-config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        });
+        showToast('Список сохранён для Telegram', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('saveListModal'))?.hide();
+    } catch (e) {
+        showToast('Ошибка сохранения: ' + e.message, 'danger');
+    }
+}
+
 function setupTopScroll() {
     const wrapper = document.getElementById('tasks-table-wrapper');
     const top = document.getElementById('table-top-scroll');

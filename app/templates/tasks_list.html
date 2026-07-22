@@ -249,6 +249,9 @@
                 <button type="button" class="btn btn-outline-primary" onclick="copySaveList()">
                     <i class="bi bi-copy me-1"></i> Копировать
                 </button>
+                <button type="button" class="btn btn-outline-success" onclick="saveListForTelegram()">
+                    <i class="bi bi-telegram me-1"></i> Сохранить для Telegram
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
             </div>
         </div>
@@ -354,5 +357,5 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=1"></script>
+<script src="/static/js/tasks_list.js?v=2"></script>
 {% endblock %}

@@ -46,6 +46,7 @@ from app.schemas import (
     TaskStatusReorderRequest,
     TaskStatusUpdate,
     TaskUpdate,
+    TaskListTelegramConfig,
 )
 
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["tasks"])
@@ -1367,6 +1368,15 @@ async def update_task_status_by_column_name(
     await db.commit()
     await db.refresh(task)
     return task
+
+
+@global_router.post("/tasks/telegram-list-config", status_code=204)
+async def save_telegram_task_list_config(data: TaskListTelegramConfig):
+    """Сохранить конфигурацию списка задач для отправки в Telegram."""
+    config_path = Path("data/telegram_task_list.json")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(data.model_dump_json(indent=2), encoding="utf-8")
+    return None
 
 
 @global_router.get("/kanban/export", response_model=KanbanExportOut)
