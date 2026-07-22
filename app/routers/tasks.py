@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import Settings, get_settings
 from app.database import get_db
+from app.events import broadcast
 from app.models import Assignee, Project, Task, TaskAttachment, TaskStatus
 from app.routers.collabora import build_collabora_iframe_url
 from app.routers.wopi import OFFICE_EXTENSIONS, encode_file_id
@@ -122,6 +123,7 @@ async def create_task_status(
     db.add(status)
     await db.commit()
     await db.refresh(status)
+    broadcast({"type": "board_changed", "project_id": project_id})
     return status
 
 
@@ -139,6 +141,7 @@ async def reorder_task_statuses(
             .values(sort_order=idx)
         )
     await db.commit()
+    broadcast({"type": "board_changed", "project_id": project_id})
     return None
 
 
@@ -157,6 +160,7 @@ async def update_task_status(
     status.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(status)
+    broadcast({"type": "board_changed", "project_id": project_id})
     return status
 
 
@@ -169,6 +173,7 @@ async def delete_task_status(
     status = await _get_status(project_id, status_id, db)
     await db.delete(status)
     await db.commit()
+    broadcast({"type": "board_changed", "project_id": project_id})
     return None
 
 
@@ -308,6 +313,7 @@ async def create_task(
     db.add(task)
     await db.commit()
     await db.refresh(task)
+    broadcast({"type": "board_changed", "project_id": project_id})
     return task
 
 
@@ -408,6 +414,7 @@ async def create_tasks_bulk(
         raise HTTPException(status_code=400, detail="No tasks provided")
 
     created = await _bulk_create_tasks(project_id, data.tasks, data.attachments, db)
+    broadcast({"type": "board_changed", "project_id": project_id})
     return TaskBulkOut(created=created, count=len(created))
 
 
@@ -435,6 +442,7 @@ async def create_tasks_bulk_global(
         project_created = await _bulk_create_tasks(project_id, project_tasks, data.attachments, db)
         created.extend(project_created)
 
+    broadcast({"type": "board_changed", "global": True})
     return TaskBulkOut(created=created, count=len(created))
 
 
@@ -481,6 +489,7 @@ async def reorder_tasks(
             .values(status_id=data.status_id, sort_order=idx)
         )
     await db.commit()
+    broadcast({"type": "board_changed", "project_id": project_id})
     return None
 
 
@@ -538,6 +547,7 @@ async def update_task(
     task.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(task)
+    broadcast({"type": "board_changed", "project_id": project_id})
     return task
 
 
@@ -550,6 +560,7 @@ async def delete_task(
     task = await _get_task(project_id, task_id, db)
     await db.delete(task)
     await db.commit()
+    broadcast({"type": "board_changed", "project_id": project_id})
     return None
 
 
@@ -1379,6 +1390,7 @@ async def create_global_kanban_column(
         created.append(status)
 
     await db.commit()
+    broadcast({"type": "board_changed", "global": True})
     return created
 
 
@@ -1418,6 +1430,7 @@ async def update_global_kanban_column(
     await db.commit()
     for status in statuses:
         await db.refresh(status)
+    broadcast({"type": "board_changed", "global": True})
     return statuses
 
 
@@ -1443,6 +1456,7 @@ async def delete_global_kanban_column(
     for status in statuses:
         await db.delete(status)
     await db.commit()
+    broadcast({"type": "board_changed", "global": True})
     return None
 
 
@@ -1491,6 +1505,7 @@ async def update_task_status_by_column_name(
     task.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(task)
+    broadcast({"type": "board_changed", "project_id": task.project_id, "global": True})
     return task
 
 
@@ -1550,6 +1565,7 @@ async def import_global_kanban(
         imported_tasks += tasks
 
     await db.commit()
+    broadcast({"type": "board_changed", "global": True})
     return {
         "success": True,
         "imported_projects": imported_projects,

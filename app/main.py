@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 
 from app.database import engine, Base, AsyncSessionLocal
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora, tasks, assignees, pocketbase_proxy, mcp as mcp_router
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora, tasks, assignees, pocketbase_proxy, mcp as mcp_router, events
 from app.config import get_settings
 from app.telegram import check_and_send_calendar_reminders
 
@@ -86,6 +86,7 @@ app.include_router(tasks.router)
 app.include_router(tasks.global_router)
 app.include_router(assignees.router)
 app.include_router(mcp_router.router)
+app.include_router(events.router)
 app.include_router(pocketbase_proxy.router, prefix="/pocketbase")
 
 

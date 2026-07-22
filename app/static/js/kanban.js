@@ -10,6 +10,7 @@ let currentTaskId = null;
 let currentStatusId = null;
 let projectName = '';
 let editingTaskAttachmentId = null;
+let kanbanEventSource = null;
 window.kanbanAttachments = window.kanbanAttachments || {};
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -18,6 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadFilters();
     await loadKanbanBoard(PROJECT_ID);
     handleTaskDeepLink();
+    connectKanbanEvents(PROJECT_ID);
 
     const board = document.getElementById('kanban-board');
     if (board) {
@@ -33,6 +35,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     }
 });
+
+function connectKanbanEvents(projectId) {
+    if (kanbanEventSource) {
+        kanbanEventSource.close();
+    }
+
+    kanbanEventSource = new EventSource('/api/events');
+
+    kanbanEventSource.addEventListener('kanban', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            if (event.project_id === projectId || event.global) {
+                loadKanbanBoard(projectId);
+            }
+        } catch (err) {
+            console.error('Failed to parse SSE event:', err);
+        }
+    });
+
+    kanbanEventSource.addEventListener('error', (e) => {
+        console.warn('SSE error, will reconnect automatically:', e);
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (kanbanEventSource) {
+            kanbanEventSource.close();
+        }
+    });
+}
 async function loadProjectHeader(projectId) {
     try {
         const project = await api(`${API_BASE}/projects/${projectId}`);

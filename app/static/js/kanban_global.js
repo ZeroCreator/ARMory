@@ -11,12 +11,14 @@ let currentTaskId = null;
 let currentStatusId = null;
 let pendingTaskColumnName = null;
 let editingTaskAttachmentId = null;
+let kanbanEventSource = null;
 window.kanbanAttachments = window.kanbanAttachments || {};
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadFilters();
     await loadKanbanBoard();
     handleTaskDeepLink();
+    connectGlobalKanbanEvents();
 
     const board = document.getElementById('kanban-board');
     if (board) {
@@ -58,6 +60,35 @@ async function loadFilters() {
     } catch (e) {
         console.error('Failed to load filters:', e);
     }
+}
+
+function connectGlobalKanbanEvents() {
+    if (kanbanEventSource) {
+        kanbanEventSource.close();
+    }
+
+    kanbanEventSource = new EventSource('/api/events');
+
+    kanbanEventSource.addEventListener('kanban', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            if (event.global || event.project_id) {
+                loadKanbanBoard();
+            }
+        } catch (err) {
+            console.error('Failed to parse SSE event:', err);
+        }
+    });
+
+    kanbanEventSource.addEventListener('error', (e) => {
+        console.warn('SSE error, will reconnect automatically:', e);
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (kanbanEventSource) {
+            kanbanEventSource.close();
+        }
+    });
 }
 
 function populateAssigneeSelects(assignees) {
