@@ -313,7 +313,7 @@ async def create_task(
     db.add(task)
     await db.commit()
     await db.refresh(task)
-    broadcast({"type": "board_changed", "project_id": project_id})
+    broadcast({"type": "task_changed", "project_id": project_id, "task_id": task.id, "status_id": task.status_id})
     return task
 
 
@@ -574,7 +574,7 @@ async def update_task(
     task.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(task)
-    broadcast({"type": "board_changed", "project_id": project_id})
+    broadcast({"type": "task_changed", "project_id": project_id, "task_id": task.id, "status_id": task.status_id})
     return task
 
 
@@ -585,9 +585,10 @@ async def delete_task(
     db: AsyncSession = Depends(get_db),
 ):
     task = await _get_task(project_id, task_id, db)
+    status_id = task.status_id
     await db.delete(task)
     await db.commit()
-    broadcast({"type": "board_changed", "project_id": project_id})
+    broadcast({"type": "task_changed", "project_id": project_id, "task_id": task_id, "status_id": status_id, "deleted": True})
     return None
 
 

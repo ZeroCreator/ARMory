@@ -68,11 +68,21 @@ function connectGlobalKanbanEvents() {
     }
 
     kanbanEventSource = new EventSource('/api/events');
+    console.log('[SSE] connecting for global kanban');
+
+    kanbanEventSource.addEventListener('open', () => {
+        console.log('[SSE] connected');
+    });
 
     kanbanEventSource.addEventListener('kanban', (e) => {
         try {
             const event = JSON.parse(e.data);
-            if (event.global || event.project_id) {
+            console.log('[SSE] received event', event);
+            if (!event.global && !event.project_id) return;
+            if (event.type === 'task_changed') {
+                handleGlobalKanbanTaskChanged(event);
+            } else {
+                console.log('[SSE] reloading board');
                 loadKanbanBoard();
             }
         } catch (err) {
@@ -89,6 +99,59 @@ function connectGlobalKanbanEvents() {
             kanbanEventSource.close();
         }
     });
+}
+
+async function handleGlobalKanbanTaskChanged(event) {
+    if (event.deleted) {
+        const card = document.querySelector(`.kanban-card[data-id="${event.task_id}"]`);
+        if (card) {
+            card.remove();
+            updateKanbanColumnCounts();
+        }
+        return;
+    }
+
+    try {
+        const task = await api(`${API_BASE}/tasks/${event.task_id}`);
+        updateGlobalKanbanTaskCard(task);
+    } catch (err) {
+        console.error('Failed to fetch updated task:', err);
+    }
+}
+
+function updateGlobalKanbanTaskCard(task) {
+    const statusName = task.status?.name;
+    if (!statusName) {
+        loadKanbanBoard();
+        return;
+    }
+
+    const escapedName = statusName.replace(/"/g, '\\"');
+    const columnBody = document.querySelector(`.kanban-column-body[data-column-name="${escapedName}"]`);
+    if (!columnBody) {
+        loadKanbanBoard();
+        return;
+    }
+
+    const existingCard = document.querySelector(`.kanban-card[data-id="${task.id}"]`);
+    if (existingCard) {
+        const currentColumnName = existingCard.closest('.kanban-column-body')?.dataset.columnName;
+        if (currentColumnName === statusName) {
+            existingCard.outerHTML = renderGlobalTaskCard(task);
+        } else {
+            existingCard.remove();
+            prependGlobalTaskCard(columnBody, task);
+        }
+    } else {
+        prependGlobalTaskCard(columnBody, task);
+    }
+
+    updateKanbanColumnCounts();
+}
+
+function prependGlobalTaskCard(columnBody, task) {
+    const html = renderGlobalTaskCard(task);
+    columnBody.insertAdjacentHTML('afterbegin', html);
 }
 
 function populateAssigneeSelects(assignees) {

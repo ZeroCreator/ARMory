@@ -42,11 +42,21 @@ function connectKanbanEvents(projectId) {
     }
 
     kanbanEventSource = new EventSource('/api/events');
+    console.log('[SSE] connecting for project', projectId);
+
+    kanbanEventSource.addEventListener('open', () => {
+        console.log('[SSE] connected');
+    });
 
     kanbanEventSource.addEventListener('kanban', (e) => {
         try {
             const event = JSON.parse(e.data);
-            if (event.project_id === projectId || event.global) {
+            console.log('[SSE] received event', event);
+            if (event.project_id !== projectId && !event.global) return;
+            if (event.type === 'task_changed') {
+                handleKanbanTaskChanged(event, projectId);
+            } else {
+                console.log('[SSE] reloading board');
                 loadKanbanBoard(projectId);
             }
         } catch (err) {
@@ -64,6 +74,55 @@ function connectKanbanEvents(projectId) {
         }
     });
 }
+
+async function handleKanbanTaskChanged(event, projectId) {
+    if (event.deleted) {
+        const card = document.querySelector(`.kanban-card[data-id="${event.task_id}"]`);
+        if (card) {
+            card.remove();
+            updateKanbanColumnCounts();
+        }
+        return;
+    }
+
+    try {
+        const task = await api(`${API_BASE}/projects/${projectId}/tasks/${event.task_id}`);
+        updateKanbanTaskCard(task);
+    } catch (err) {
+        console.error('Failed to fetch updated task:', err);
+    }
+}
+
+function updateKanbanTaskCard(task) {
+    const existingCard = document.querySelector(`.kanban-card[data-id="${task.id}"]`);
+    const columnBody = document.querySelector(`.kanban-column-body[data-status-id="${task.status_id}"]`);
+
+    if (!columnBody) {
+        // Column not found, fallback to full reload.
+        loadKanbanBoard(task.project_id);
+        return;
+    }
+
+    if (existingCard) {
+        const currentStatusId = parseInt(existingCard.closest('.kanban-column-body')?.dataset.statusId, 10);
+        if (currentStatusId === task.status_id) {
+            existingCard.outerHTML = renderTaskCard(task);
+        } else {
+            existingCard.remove();
+            prependTaskCard(columnBody, task);
+        }
+    } else {
+        prependTaskCard(columnBody, task);
+    }
+
+    updateKanbanColumnCounts();
+}
+
+function prependTaskCard(columnBody, task) {
+    const html = renderTaskCard(task);
+    columnBody.insertAdjacentHTML('afterbegin', html);
+}
+
 async function loadProjectHeader(projectId) {
     try {
         const project = await api(`${API_BASE}/projects/${projectId}`);
