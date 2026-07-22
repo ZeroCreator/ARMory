@@ -2498,8 +2498,7 @@ async function loadBackupStats() {
                     <div class="backup-stat-row"><span>Боковые блоки</span><span class="badge bg-brown">${ls.sidebar_blocks}</span></div>
                     <div class="backup-stat-row"><span>Боковые ссылки</span><span class="badge bg-brown">${ls.sidebar_links}</span></div>
                     <div class="backup-stat-row"><span>События календаря</span><span class="badge bg-success">${ls.calendar_events}</span></div>
-                    <div class="backup-stat-row"><span>Колонки канбана</span><span class="badge bg-brown">${ls.task_statuses}</span></div>
-                    <div class="backup-stat-row"><span>Задачи канбана</span><span class="badge bg-brown">${ls.tasks}</span></div>
+                    <div class="backup-stat-row"><span>Задачи канбана</span><span class="badge bg-orange">${ls.tasks}</span></div>
                     <div class="backup-stat-row"><span>Общий размер файлов</span><span class="backup-stat-value backup-size-value">${formatSize(ls.total_files_size)}</span></div>
                 </div>
             </div>
