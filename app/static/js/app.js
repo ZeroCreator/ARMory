@@ -2375,7 +2375,7 @@ function initCalendar() {
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,listWeek'
         },
-        height: 520,
+        height: 'auto',
         eventClick: function(info) {
             editCalendarEvent(parseInt(info.event.id));
         },
