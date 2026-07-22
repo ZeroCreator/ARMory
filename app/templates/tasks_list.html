@@ -191,6 +191,7 @@
         <table class="table table-sm table-hover align-middle tasks-table" id="tasks-table">
             <thead>
                 <tr>
+                    <th class="text-center" title="Закрыть/открыть"><i class="bi bi-check-square"></i></th>
                     <th style="cursor:pointer" onclick="sortTasks('id')"># <i class="bi bi-arrow-down-up text-muted"></i></th>
                     {% if not project_id %}
                     <th class="d-none d-sm-table-cell" style="cursor:pointer" onclick="sortTasks('project_name')">Проект <i class="bi bi-arrow-down-up text-muted"></i></th>
@@ -209,7 +210,7 @@
                 </tr>
             </thead>
             <tbody id="tasks-table-body">
-                <tr><td colspan="13" class="text-center text-muted py-4">Загрузка...</td></tr>
+                <tr><td colspan="14" class="text-center text-muted py-4">Загрузка...</td></tr>
             </tbody>
         </table>
     </div>
@@ -357,5 +358,5 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=2"></script>
+<script src="/static/js/tasks_list.js?v=7"></script>
 {% endblock %}

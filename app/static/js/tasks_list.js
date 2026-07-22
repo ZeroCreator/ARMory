@@ -9,6 +9,7 @@ let assigneesMap = {};
 let projectsMap = {};
 let sortColumn = 'created_at';
 let sortDirection = 'desc';
+const togglingTasks = new Set();
 
 const SAVE_LIST_COLUMNS = [
     { key: 'id', label: '#', default: true },
@@ -38,6 +39,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     await loadFilters();
     await loadTasks();
+
+    const tableBody = document.getElementById('tasks-table-body');
+    if (tableBody) {
+        tableBody.addEventListener('click', (e) => {
+            const checkbox = e.target.closest('[data-action="toggle-closed"]');
+            if (!checkbox) return;
+            e.preventDefault();
+            e.stopPropagation();
+            toggleTaskClosed(
+                parseInt(checkbox.dataset.taskId, 10),
+                parseInt(checkbox.dataset.projectId, 10)
+            );
+        });
+    }
 });
 
 async function loadProjectHeader(projectId) {
@@ -86,14 +101,14 @@ function populateSelect(id, items) {
 
 async function loadTasks() {
     const tbody = document.getElementById('tasks-table-body');
-    tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-4">Загрузка...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4">Загрузка...</td></tr>';
     try {
         const url = IS_GLOBAL ? `${API_BASE}/tasks` : `${API_BASE}/projects/${PROJECT_ID}/tasks`;
         allTasks = await api(url);
         rebuildStatusFilter();
         applyFilters();
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="13" class="text-center text-danger py-4">Ошибка загрузки: ${escapeHtml(e.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="14" class="text-center text-danger py-4">Ошибка загрузки: ${escapeHtml(e.message)}</td></tr>`;
     }
 }
 
@@ -192,7 +207,7 @@ function getSortValue(task, column) {
 function renderTable() {
     const tbody = document.getElementById('tasks-table-body');
     if (filteredTasks.length === 0) {
-        const colspan = IS_GLOBAL ? 13 : 12;
+        const colspan = IS_GLOBAL ? 14 : 13;
         tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-muted py-4">Нет задач</td></tr>`;
         return;
     }
@@ -216,6 +231,9 @@ function renderTable() {
 
         return `
             <tr class="${task.is_closed ? 'table-secondary' : ''}">
+                <td class="text-center">
+                    <input class="form-check-input" type="checkbox" ${task.is_closed ? 'checked' : ''} data-action="toggle-closed" data-task-id="${task.id}" data-project-id="${task.project_id}" title="${task.is_closed ? 'Открыть задачу' : 'Закрыть задачу'}">
+                </td>
                 <td>${task.id}</td>
                 ${projectCell}
                 <td>${escapeHtml(task.title || '')}</td>
@@ -231,6 +249,7 @@ function renderTable() {
                 <td class="actions-cell">
                     <a href="${kanbanUrl}" class="btn btn-sm btn-outline-brown" title="Открыть в канбане"><i class="bi bi-kanban"></i></a>
                     <button class="btn btn-sm btn-outline-secondary" onclick="copyTaskLink(${task.project_id}, ${task.id})" title="Копировать ссылку"><i class="bi bi-link-45deg"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteTask(${task.id}, ${task.project_id})" title="Удалить задачу"><i class="bi bi-trash"></i></button>
                 </td>
             </tr>
         `;
@@ -243,6 +262,42 @@ function copyTaskLink(projectId, taskId) {
     const url = `${window.location.origin}/projects/${projectId}/kanban?task=${taskId}`;
     copyTextToClipboard(url);
     showToast('Ссылка скопирована', 'success');
+}
+
+async function toggleTaskClosed(taskId, projectId) {
+    if (togglingTasks.has(taskId)) return;
+
+    const task = allTasks.find(t => t.id === taskId);
+    if (!task) return;
+    const newClosed = !task.is_closed;
+
+    togglingTasks.add(taskId);
+
+    try {
+        await api(`${API_BASE}/projects/${projectId}/tasks/${taskId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_closed: newClosed }),
+        });
+        task.is_closed = newClosed;
+        applyFilters();
+    } catch (e) {
+        console.error('Ошибка обновления задачи:', e);
+        applyFilters();
+    } finally {
+        togglingTasks.delete(taskId);
+    }
+}
+
+async function deleteTask(taskId, projectId) {
+    try {
+        await api(`${API_BASE}/projects/${projectId}/tasks/${taskId}`, { method: 'DELETE' });
+        allTasks = allTasks.filter(t => t.id !== taskId);
+        applyFilters();
+        showToast('Задача удалена', 'success');
+    } catch (e) {
+        showToast('Ошибка удаления задачи: ' + e.message, 'danger');
+    }
 }
 
 function toMoscowDateParts(date) {
