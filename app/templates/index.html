@@ -50,8 +50,34 @@
                             </select>
                         </div>
                         <div class="scheduler-form-group scheduler-form-group-half">
+                            <label class="form-label">Тип расписания</label>
+                            <div class="btn-group w-100" role="group" id="schedule-type-group">
+                                <input type="radio" class="btn-check" name="schedule_type" id="schedule-type-once" value="once" checked>
+                                <label class="btn btn-outline-secondary btn-sm" for="schedule-type-once">Одноразово</label>
+                                <input type="radio" class="btn-check" name="schedule_type" id="schedule-type-recurring" value="recurring">
+                                <label class="btn btn-outline-secondary btn-sm" for="schedule-type-recurring">Регулярно</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="scheduler-form-row" id="once-fields">
+                        <div class="scheduler-form-group scheduler-form-group-half">
                             <label class="form-label" for="datetime">Дата и время выполнения:</label>
                             <input type="datetime-local" id="datetime" class="form-control">
+                        </div>
+                    </div>
+                    <div class="scheduler-form-row" id="recurring-fields" style="display:none;">
+                        <div class="scheduler-form-group scheduler-form-group-half">
+                            <label class="form-label" for="cron-interval">Интервал</label>
+                            <select id="cron-interval" class="form-select">
+                                <option value="custom" selected>Свой cron</option>
+                                <option value="0 9 * * *">Ежедневно в 9:00</option>
+                                <option value="0 9 * * 1">Еженедельно в понедельник в 9:00</option>
+                                <option value="0 9 1 * *">Ежемесячно 1-го в 9:00</option>
+                            </select>
+                        </div>
+                        <div class="scheduler-form-group scheduler-form-group-half">
+                            <label class="form-label" for="cron-expression">Cron-выражение</label>
+                            <input type="text" id="cron-expression" class="form-control" placeholder="* * * * *">
                         </div>
                     </div>
                     <div class="scheduler-btn-row">
@@ -61,8 +87,10 @@
                     </div>
                     <div id="status-message" class="scheduler-status"></div>
                     <div class="task-queue-group">
-                        <label class="form-label"><i class="bi bi-list-task me-1"></i> Очередь запланированных задач:</label>
+                        <label class="form-label"><i class="bi bi-list-task me-1"></i> Очередь запланированных задач (at):</label>
                         <pre id="atq-output" class="atq-output">Загрузка...</pre>
+                        <label class="form-label mt-3"><i class="bi bi-arrow-repeat me-1"></i> Регулярные задачи (cron):</label>
+                        <div id="cron-jobs-container" class="cron-jobs-container">Загрузка...</div>
                         <div class="scheduler-btn-row">
                             <button id="refresh-atq" class="scheduler-btn scheduler-btn-brown">
                                 <i class="bi bi-arrow-clockwise me-1"></i> Обновить

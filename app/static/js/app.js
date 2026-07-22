@@ -2154,6 +2154,7 @@ function initScheduler() {
     const removeBtn = document.getElementById('remove-btn');
     const statusEl = document.getElementById('status-message');
     const atqEl = document.getElementById('atq-output');
+    const cronContainer = document.getElementById('cron-jobs-container');
     const taskIdInput = document.getElementById('task-id');
 
     if (!scheduleBtn) return;
@@ -2175,18 +2176,98 @@ function initScheduler() {
         }
     };
 
+    const refreshCron = async () => {
+        if (!cronContainer) return;
+        try {
+            const data = await api(`${API_BASE}/scheduler/cron`);
+            const jobs = data.jobs || [];
+            if (jobs.length === 0) {
+                cronContainer.innerHTML = '<span class="text-muted small">Нет регулярных задач</span>';
+                return;
+            }
+            cronContainer.innerHTML = jobs.map(job => `
+                <div class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded mb-1">
+                    <div class="text-truncate small">
+                        <span class="badge bg-secondary">${escapeHtml(job.target)}</span>
+                        <code class="ms-1">${escapeHtml(job.cron)}</code>
+                        <span class="text-muted ms-1">${escapeHtml(job.command)}</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger" onclick="removeCronJob('${escapeHtml(job.job_id)}')" title="Удалить">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+        } catch (error) {
+            cronContainer.innerHTML = '<span class="text-danger small">Ошибка загрузки cron-задач</span>';
+        }
+    };
+
+    window.removeCronJob = async (jobId) => {
+        try {
+            const data = await api(`${API_BASE}/scheduler/remove-cron`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({job_id: jobId})
+            });
+            if (data.error) {
+                showStatus(data.error, true);
+            } else {
+                showStatus(data.message || 'Задача удалена!', false);
+            }
+            refreshCron();
+        } catch (error) {
+            showStatus(error.message, true);
+        }
+    };
+
+    const updateScheduleType = () => {
+        const type = document.querySelector('input[name="schedule_type"]:checked')?.value || 'once';
+        document.getElementById('once-fields').style.display = type === 'once' ? 'flex' : 'none';
+        document.getElementById('recurring-fields').style.display = type === 'recurring' ? 'flex' : 'none';
+    };
+
+    document.querySelectorAll('input[name="schedule_type"]').forEach(radio => {
+        radio.addEventListener('change', updateScheduleType);
+    });
+
+    const cronInterval = document.getElementById('cron-interval');
+    const cronExpression = document.getElementById('cron-expression');
+    if (cronInterval && cronExpression) {
+        cronInterval.addEventListener('change', () => {
+            if (cronInterval.value !== 'custom') {
+                cronExpression.value = cronInterval.value;
+            }
+        });
+    }
+
     scheduleBtn.addEventListener('click', async () => {
         const project = document.getElementById('project-select').value;
-        const datetime = document.getElementById('datetime').value;
-        if (!project || !datetime) {
-            showStatus('Заполните все поля', true);
+        if (!project) {
+            showStatus('Выберите задачу', true);
             return;
+        }
+        const type = document.querySelector('input[name="schedule_type"]:checked')?.value || 'once';
+        const payload = {project, schedule_type: type};
+        if (type === 'once') {
+            const datetime = document.getElementById('datetime').value;
+            if (!datetime) {
+                showStatus('Укажите дату и время', true);
+                return;
+            }
+            payload.datetime = datetime;
+        } else {
+            const cron = cronExpression?.value.trim();
+            if (!cron) {
+                showStatus('Укажите cron-выражение', true);
+                return;
+            }
+            payload.cron = cron;
         }
         try {
             const data = await api(`${API_BASE}/scheduler/schedule`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({project, datetime})
+                body: JSON.stringify(payload)
             });
             if (data.error) {
                 showStatus(data.error, true);
@@ -2194,6 +2275,7 @@ function initScheduler() {
                 showStatus(data.message || 'Задача успешно добавлена!', false);
             }
             refreshAtq();
+            refreshCron();
         } catch (error) {
             showStatus(error.message, true);
         }
@@ -2219,8 +2301,13 @@ function initScheduler() {
         }
     });
 
-    refreshBtn.addEventListener('click', refreshAtq);
+    refreshBtn.addEventListener('click', () => {
+        refreshAtq();
+        refreshCron();
+    });
     refreshAtq();
+    refreshCron();
+    updateScheduleType();
 }
 
 // ═══════════════════════════════════════════════════

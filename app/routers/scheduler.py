@@ -1,15 +1,17 @@
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
+import uuid
 from datetime import datetime
 from pathlib import Path
 from shlex import quote
 from typing import List
 from dotenv import load_dotenv, dotenv_values
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Загружаем .env из корня проекта
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -137,12 +139,24 @@ def _load_tasks():
 
 class ScheduleRequest(BaseModel):
     project: str
-    datetime: str
+    datetime: str | None = None
+    schedule_type: str = Field(default="once", pattern="^(once|recurring)$")
+    cron: str | None = None
     args: List[str] = []
 
 
 class RemoveTaskRequest(BaseModel):
     task_id: str
+
+
+class CronJobRequest(BaseModel):
+    project: str
+    cron: str
+    args: List[str] = []
+
+
+class RemoveCronRequest(BaseModel):
+    job_id: str
 
 
 def run_command(command):
@@ -158,6 +172,120 @@ def run_command(command):
         return result.stdout, None
     except subprocess.CalledProcessError as e:
         return None, f"Error: {e.stderr}"
+
+
+# ── Cron helpers ──
+CRON_MARKER_PREFIX = "# armory-cron-job:"
+
+
+def _cron_marker(job_id: str) -> str:
+    return f"{CRON_MARKER_PREFIX}{job_id}"
+
+
+def _read_crontab(target: str | None) -> tuple[list[str], subprocess.CompletedProcess | None]:
+    """Read current crontab lines. Returns (lines, error_result)."""
+    try:
+        if target is None:
+            result = subprocess.run("crontab -l", shell=True, capture_output=True, text=True)
+        else:
+            result = _run_ssh(target, ["crontab", "-l"])
+        if result.returncode != 0:
+            # no crontab for user is not an error
+            if "no crontab" in result.stderr.lower():
+                return [], None
+            return [], result
+        return result.stdout.splitlines(), None
+    except subprocess.TimeoutExpired:
+        return [], None
+
+
+def _write_crontab(target: str | None, lines: list[str]) -> subprocess.CompletedProcess:
+    """Write crontab lines."""
+    content = "\n".join(lines) + "\n"
+    if target is None:
+        proc = subprocess.run("crontab -", shell=True, input=content, capture_output=True, text=True)
+    else:
+        proc = _run_ssh(target, ["crontab", "-"], stdin=content)
+    return proc
+
+
+def _build_job_command(project_dir_raw: str, script_rel: str, args: list[str]) -> str:
+    project_dir = Path(os.path.expanduser(project_dir_raw))
+    script_path = project_dir / script_rel
+    args_str = " ".join(quote(a) for a in args)
+    return f"cd {quote(str(project_dir))} && {quote(str(script_path))}{' ' + args_str if args_str else ''}"
+
+
+def _add_cron_job(
+    target: str | None,
+    project_dir_raw: str,
+    script_rel: str,
+    cron: str,
+    args: list[str],
+    job_id: str,
+) -> tuple[str | None, str | None]:
+    lines, err = _read_crontab(target)
+    if err is not None:
+        return None, err.stderr.strip() or "crontab read failed"
+    marker = _cron_marker(job_id)
+    job_cmd = _build_job_command(project_dir_raw, script_rel, args)
+    cron_line = f"{cron} {job_cmd}"
+    lines.append(marker)
+    lines.append(cron_line)
+    result = _write_crontab(target, lines)
+    if result.returncode != 0:
+        return None, result.stderr.strip() or "crontab write failed"
+    return job_id, None
+
+
+def _remove_cron_job(target: str | None, job_id: str) -> tuple[bool, str | None]:
+    lines, err = _read_crontab(target)
+    if err is not None:
+        return False, err.stderr.strip() or "crontab read failed"
+    marker = _cron_marker(job_id)
+    new_lines = []
+    skip_next = False
+    removed = False
+    for line in lines:
+        if skip_next:
+            skip_next = False
+            continue
+        if line.strip() == marker:
+            skip_next = True
+            removed = True
+            continue
+        new_lines.append(line)
+    if not removed:
+        return False, f"Задача {job_id} не найдена"
+    result = _write_crontab(target, new_lines)
+    if result.returncode != 0:
+        return False, result.stderr.strip() or "crontab write failed"
+    return True, None
+
+
+def _list_cron_jobs(target: str | None) -> tuple[list[dict], str | None]:
+    lines, err = _read_crontab(target)
+    if err is not None:
+        return [], err.stderr.strip() or "crontab read failed"
+    jobs = []
+    current_job_id = None
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(CRON_MARKER_PREFIX):
+            current_job_id = stripped[len(CRON_MARKER_PREFIX):].strip()
+            continue
+        if current_job_id and stripped and not stripped.startswith("#"):
+            parts = stripped.split(None, 5)
+            if len(parts) >= 6:
+                cron = " ".join(parts[:5])
+                command = parts[5]
+                jobs.append({
+                    "job_id": current_job_id,
+                    "cron": cron,
+                    "command": command,
+                })
+            current_job_id = None
+    return jobs, None
 
 
 @router.get("/tasks")
@@ -179,6 +307,10 @@ def schedule_task(data: ScheduleRequest):
     task = _load_tasks().get(task_key)
     if not task:
         return {"error": f"Таск '{data.project}' не найден"}
+    if data.schedule_type == "recurring":
+        if not data.cron:
+            return {"error": "Missing cron expression for recurring task"}
+        return _schedule_recurring(task, data)
     if not data.datetime:
         return {"error": "Missing datetime"}
     try:
@@ -216,6 +348,34 @@ def schedule_task(data: ScheduleRequest):
         return {"error": f"SSH: таймаут подключения ({SSH_TIMEOUT} c)"}
     except Exception as e:
         return {"error": str(e)}
+
+
+def _schedule_recurring(task: dict, data: ScheduleRequest):
+    project_dir_raw = task["project_dir"]
+    script_rel = task["script"]
+    target = task["target"]
+    if target is None:
+        project_dir = Path(os.path.expanduser(project_dir_raw))
+        script_path = project_dir / script_rel
+        if not script_path.exists():
+            return {"error": f"Скрипт не найден: {script_path}"}
+    else:
+        script_remote = _remote_path(f"{project_dir_raw}/{script_rel}")
+        check = _run_ssh(target, ["test", "-f", script_remote])
+        if check.returncode != 0:
+            return {"error": f"Скрипт не найден на {target}: {project_dir_raw}/{script_rel}"}
+    job_id = str(uuid.uuid4())
+    job_id, error = _add_cron_job(
+        target,
+        project_dir_raw,
+        script_rel,
+        data.cron,
+        data.args or [],
+        job_id,
+    )
+    if error:
+        return {"error": error}
+    return {"message": "Регулярная задача добавлена!", "job_id": job_id}
 
 
 def _project_targets() -> list:
@@ -306,3 +466,74 @@ def remove_task(data: RemoveTaskRequest):
         return {"error": f"SSH: таймаут подключения ({SSH_TIMEOUT} c)"}
     except Exception as e:
         return {"error": str(e)}
+
+
+@router.get("/cron")
+def get_cron_jobs():
+    targets = _project_targets() or [None]
+    jobs = []
+    errors = []
+    for target in targets:
+        label = target or LOCAL_LABEL
+        target_jobs, error = _list_cron_jobs(target)
+        if error:
+            errors.append(f"[{label}] {error}")
+            continue
+        for job in target_jobs:
+            job["target"] = label
+            jobs.append(job)
+    return {"jobs": jobs, "errors": errors}
+
+
+@router.post("/cron")
+def add_cron_job(data: CronJobRequest):
+    task_key = data.project.lower()
+    task = _load_tasks().get(task_key)
+    if not task:
+        return {"error": f"Таск '{data.project}' не найден"}
+    if not data.cron:
+        return {"error": "Missing cron expression"}
+    project_dir_raw = task["project_dir"]
+    script_rel = task["script"]
+    target = task["target"]
+    if target is None:
+        project_dir = Path(os.path.expanduser(project_dir_raw))
+        script_path = project_dir / script_rel
+        if not script_path.exists():
+            return {"error": f"Скрипт не найден: {script_path}"}
+    else:
+        script_remote = _remote_path(f"{project_dir_raw}/{script_rel}")
+        check = _run_ssh(target, ["test", "-f", script_remote])
+        if check.returncode != 0:
+            return {"error": f"Скрипт не найден на {target}: {project_dir_raw}/{script_rel}"}
+    job_id = str(uuid.uuid4())
+    job_id, error = _add_cron_job(
+        target,
+        project_dir_raw,
+        script_rel,
+        data.cron,
+        data.args or [],
+        job_id,
+    )
+    if error:
+        return {"error": error}
+    return {"message": "Регулярная задача добавлена!", "job_id": job_id}
+
+
+@router.post("/remove-cron")
+def remove_cron_job(data: RemoveCronRequest):
+    if not data.job_id:
+        return {"error": "Job ID is required"}
+    targets = _project_targets() or [None]
+    removed_any = False
+    errors = []
+    for target in targets:
+        removed, error = _remove_cron_job(target, data.job_id)
+        if removed:
+            removed_any = True
+            break
+        if error:
+            errors.append(error)
+    if removed_any:
+        return {"message": f"Задача {data.job_id} удалена!"}
+    return {"error": "; ".join(errors) if errors else "Задача не найдена"}

@@ -556,12 +556,88 @@ async function saveListForTelegram() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config),
         });
-        showToast('Список сохранён для Telegram', 'success');
         bootstrap.Modal.getInstance(document.getElementById('saveListModal'))?.hide();
+        openTelegramScheduleModal();
     } catch (e) {
         showToast('Ошибка сохранения: ' + e.message, 'danger');
     }
 }
+
+function openTelegramScheduleModal() {
+    const modalEl = document.getElementById('telegramScheduleModal');
+    if (!modalEl) return;
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    const datetimeInput = document.getElementById('telegram-schedule-datetime');
+    if (datetimeInput) datetimeInput.value = now.toISOString().slice(0, 16);
+    document.querySelectorAll('input[name="telegram-schedule-type"]').forEach(r => {
+        r.checked = r.value === 'once';
+    });
+    updateTelegramScheduleFields();
+    const cronInput = document.getElementById('telegram-schedule-cron');
+    if (cronInput) cronInput.value = '';
+    const intervalSelect = document.getElementById('telegram-schedule-interval');
+    if (intervalSelect) intervalSelect.value = 'custom';
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+function updateTelegramScheduleFields() {
+    const type = document.querySelector('input[name="telegram-schedule-type"]:checked')?.value || 'once';
+    const onceField = document.getElementById('telegram-schedule-once-field');
+    const recurringField = document.getElementById('telegram-schedule-recurring-field');
+    if (onceField) onceField.style.display = type === 'once' ? 'block' : 'none';
+    if (recurringField) recurringField.style.display = type === 'recurring' ? 'block' : 'none';
+}
+
+async function scheduleTelegramSend() {
+    const type = document.querySelector('input[name="telegram-schedule-type"]:checked')?.value || 'once';
+    const payload = { project: 'armory:todo-telegram', schedule_type: type };
+    if (type === 'once') {
+        const datetime = document.getElementById('telegram-schedule-datetime')?.value;
+        if (!datetime) {
+            showToast('Укажите дату и время', 'warning');
+            return;
+        }
+        payload.datetime = datetime;
+    } else {
+        const cron = document.getElementById('telegram-schedule-cron')?.value.trim();
+        if (!cron) {
+            showToast('Укажите cron-выражение', 'warning');
+            return;
+        }
+        payload.cron = cron;
+    }
+    try {
+        const data = await api(`${API_BASE}/scheduler/schedule`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (data.error) {
+            showToast(data.error, 'danger');
+        } else {
+            showToast(data.message || 'Задача запланирована', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('telegramScheduleModal'))?.hide();
+        }
+    } catch (e) {
+        showToast('Ошибка планирования: ' + e.message, 'danger');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('input[name="telegram-schedule-type"]').forEach(radio => {
+        radio.addEventListener('change', updateTelegramScheduleFields);
+    });
+    const intervalSelect = document.getElementById('telegram-schedule-interval');
+    const cronInput = document.getElementById('telegram-schedule-cron');
+    if (intervalSelect && cronInput) {
+        intervalSelect.addEventListener('change', () => {
+            if (intervalSelect.value !== 'custom') {
+                cronInput.value = intervalSelect.value;
+            }
+        });
+    }
+});
 
 function setupTopScroll() {
     const wrapper = document.getElementById('tasks-table-wrapper');

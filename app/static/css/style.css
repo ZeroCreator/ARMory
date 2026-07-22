@@ -1919,6 +1919,11 @@ footer {
     overflow: auto;
 }
 
+.cron-jobs-container {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
 /* ── Широкие экраны: широкие боковые панели ── */
 @media (min-width: 1400px) {
     .sidebar {

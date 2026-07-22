@@ -251,9 +251,56 @@
                     <i class="bi bi-copy me-1"></i> Копировать
                 </button>
                 <button type="button" class="btn btn-outline-success" onclick="saveListForTelegram()">
-                    <i class="bi bi-telegram me-1"></i> Сохранить для Telegram
+                    <i class="bi bi-calendar-check me-1"></i> Сохранить и запланировать
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модал планирования отправки списка -->
+<div class="modal fade" id="telegramScheduleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-calendar-check me-1"></i> Запланировать отправку списка</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Конфигурация сохранена.</label>
+                    <p class="text-muted small mb-0">Выберите, когда отправлять список задач.</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Тип расписания</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="telegram-schedule-type" id="telegram-schedule-once" value="once" checked>
+                        <label class="btn btn-outline-secondary btn-sm" for="telegram-schedule-once">Одноразово</label>
+                        <input type="radio" class="btn-check" name="telegram-schedule-type" id="telegram-schedule-recurring" value="recurring">
+                        <label class="btn btn-outline-secondary btn-sm" for="telegram-schedule-recurring">Регулярно</label>
+                    </div>
+                </div>
+                <div class="mb-3" id="telegram-schedule-once-field">
+                    <label class="form-label" for="telegram-schedule-datetime">Дата и время</label>
+                    <input type="datetime-local" class="form-control" id="telegram-schedule-datetime">
+                </div>
+                <div class="mb-3" id="telegram-schedule-recurring-field" style="display:none;">
+                    <label class="form-label" for="telegram-schedule-cron">Cron-выражение</label>
+                    <select class="form-select form-select-sm mb-2" id="telegram-schedule-interval">
+                        <option value="custom" selected>Свой cron</option>
+                        <option value="0 9 * * *">Ежедневно в 9:00</option>
+                        <option value="0 9 * * 1">Еженедельно в понедельник в 9:00</option>
+                        <option value="0 9 1 * *">Ежемесячно 1-го в 9:00</option>
+                    </select>
+                    <input type="text" class="form-control" id="telegram-schedule-cron" placeholder="* * * * *">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-success" onclick="scheduleTelegramSend()">
+                    <i class="bi bi-calendar-check me-1"></i> Запланировать
+                </button>
             </div>
         </div>
     </div>
@@ -358,5 +405,5 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=8"></script>
+<script src="/static/js/tasks_list.js?v=9"></script>
 {% endblock %}
