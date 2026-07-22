@@ -1004,12 +1004,16 @@ function showTaskAssigneeSubmenu() {
 async function setTaskAssignee(taskId, email) {
     hideContextMenu();
     try {
-        await api(`${API_BASE}/projects/${PROJECT_ID}/tasks/${taskId}`, {
+        const updatedTask = await api(`${API_BASE}/projects/${PROJECT_ID}/tasks/${taskId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ assignee_email: email || null }),
         });
-        loadKanbanBoard(PROJECT_ID);
+        const idx = kanbanData.tasks.findIndex(t => t.id === taskId);
+        if (idx !== -1) {
+            kanbanData.tasks[idx] = updatedTask;
+        }
+        updateTaskCardInBoard(updatedTask);
     } catch (e) {
         alert('Ошибка установки ответственного: ' + e.message);
     }

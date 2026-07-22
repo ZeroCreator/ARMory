@@ -1015,12 +1015,16 @@ async function setTaskAssignee(taskId, email) {
     const task = kanbanData.tasks.find(t => t.id === taskId);
     if (!task) return;
     try {
-        await api(`${API_BASE}/projects/${task.project_id}/tasks/${taskId}`, {
+        const updatedTask = await api(`${API_BASE}/projects/${task.project_id}/tasks/${taskId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ assignee_email: email || null }),
         });
-        loadKanbanBoard();
+        const idx = kanbanData.tasks.findIndex(t => t.id === taskId);
+        if (idx !== -1) {
+            kanbanData.tasks[idx] = updatedTask;
+        }
+        updateTaskCardInBoard(updatedTask);
     } catch (e) {
         alert('Ошибка установки ответственного: ' + e.message);
     }
