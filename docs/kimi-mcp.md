@@ -83,7 +83,7 @@ cp .kimi-code/mcp.json.example .kimi-code/mcp.json
 {
   "mcpServers": {
     "armory": {
-      "url": "http://localhost:8067/mcp",
+      "url": "http://localhost:<порт-ARMory>/mcp",
       "headers": {
         "X-MCP-API-Key": "YOUR_MCP_API_KEY"
       }
@@ -112,8 +112,6 @@ cp .kimi-code/mcp.json.example .kimi-code/mcp.json
   }
 }
 ```
-
-Если сервер ARMory доступен локально, используй `http://localhost:8067/mcp`.
 
 Также скопируй skill на user-level:
 

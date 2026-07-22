@@ -37,7 +37,8 @@ def _verify_mcp_key(request: Request):
 async def mcp_endpoint(request: Request):
     """JSON-RPC endpoint для MCP over HTTP."""
     msg = await request.json()
-    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    host, port = request.scope.get("server", ("localhost", 80))
+    base_url = f"http://127.0.0.1:{port}"
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, handle_message, msg, base_url)
     id_ = msg.get("id")
