@@ -64,5 +64,8 @@ Thumbs.db
 *.log
 AGENTS.md
 
+# Kimi Code CLI local configuration
+.kimi-code/mcp.json
+
 # Директория `site` для GitHub Pages
 site/

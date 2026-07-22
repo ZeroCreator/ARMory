@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "armory": {
+      "command": ".venv/bin/python",
+      "args": ["mcp/armory_mcp.py"],
+      "env": {
+        "ARMORY_BASE_URL": "https://armory.example.com"
+      }
+    }
+  }
+}
