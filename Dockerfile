@@ -35,6 +35,7 @@ RUN uv sync --no-dev
 
 # Copy application code
 COPY app/ ./app/
+COPY mcp/ ./mcp/
 
 # Copy built documentation site from the first stage
 COPY --from=docs-builder /app/site ./site/
