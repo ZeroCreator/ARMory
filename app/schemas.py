@@ -402,6 +402,11 @@ class TaskBulkOut(BaseModel):
     count: int
 
 
+class TaskBulkAddAttachmentsRequest(BaseModel):
+    task_ids: List[int]
+    attachments: List[TaskBulkAttachment] = []
+
+
 class KanbanBoardOut(BaseModel):
     statuses: List[TaskStatusOut]
     tasks: List[TaskOut]

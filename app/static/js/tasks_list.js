@@ -12,6 +12,9 @@ let sortColumn = 'created_at';
 let sortDirection = 'desc';
 let selectedTaskIds = new Set();
 
+// ── Массовое добавление вложений к выбранным задачам ──
+let bulkAttachments = [];
+
 const SAVE_LIST_COLUMNS = [
     { key: 'id', label: '#', default: true },
     { key: 'project_name', label: 'Проект', default: true, globalOnly: true },
@@ -410,8 +413,9 @@ async function deleteSelectedTasks() {
 function updateSelectionToolbar() {
     const countEl = document.getElementById('selected-tasks-count');
     const deleteBtn = document.getElementById('delete-selected-btn');
+    const attachmentsBtn = document.getElementById('add-attachments-selected-btn');
     const selectAllCheckbox = document.getElementById('select-all-tasks');
-    if (!countEl || !deleteBtn || !selectAllCheckbox) return;
+    if (!countEl || !deleteBtn || !attachmentsBtn || !selectAllCheckbox) return;
 
     const visibleIds = filteredTasks.map(t => t.id);
     const selectedVisible = visibleIds.filter(id => selectedTaskIds.has(id));
@@ -419,7 +423,138 @@ function updateSelectionToolbar() {
 
     countEl.textContent = selectedTaskIds.size > 0 ? `Выбрано: ${selectedTaskIds.size}` : '';
     deleteBtn.disabled = selectedTaskIds.size === 0;
+    attachmentsBtn.disabled = selectedTaskIds.size === 0;
     selectAllCheckbox.checked = allVisibleSelected;
+}
+
+function openAddAttachmentsModal() {
+    if (selectedTaskIds.size === 0) return;
+    bulkAttachments = [];
+    document.getElementById('add-attachments-task-count').textContent = selectedTaskIds.size;
+    hideBulkAttachmentForm();
+    renderBulkAttachmentsList();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('addAttachmentsModal')).show();
+}
+
+function showBulkAttachmentForm(type) {
+    const form = document.getElementById('bulk-attachment-form');
+    const typeInput = document.getElementById('bulk-attachment-type');
+    const titleInput = document.getElementById('bulk-attachment-title');
+    const urlInput = document.getElementById('bulk-attachment-url');
+    const urlWrap = document.getElementById('bulk-attachment-url-wrap');
+
+    typeInput.value = type;
+    titleInput.value = '';
+    urlInput.value = '';
+    urlWrap.style.display = type === 'file' ? 'none' : 'block';
+    urlInput.placeholder = type === 'git' ? 'URL репозитория' : 'URL';
+    form.style.display = 'block';
+}
+
+function hideBulkAttachmentForm() {
+    const form = document.getElementById('bulk-attachment-form');
+    if (form) form.style.display = 'none';
+}
+
+function submitBulkAttachmentForm() {
+    const type = document.getElementById('bulk-attachment-type').value;
+    const title = document.getElementById('bulk-attachment-title').value.trim() || null;
+    const url = document.getElementById('bulk-attachment-url').value.trim();
+
+    if (type !== 'file' && !url) {
+        alert('Введите URL');
+        return;
+    }
+
+    bulkAttachments.push({ attachment_type: type, title, url });
+    hideBulkAttachmentForm();
+    renderBulkAttachmentsList();
+}
+
+async function submitBulkAttachmentFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    const uploadUrl = IS_GLOBAL
+        ? `${API_BASE}/tasks/attachments/upload`
+        : `${API_BASE}/projects/${PROJECT_ID}/attachments/upload`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const attachment = await api(uploadUrl, {
+            method: 'POST',
+            body: formData,
+        });
+        bulkAttachments.push({
+            attachment_type: 'file',
+            title: attachment.title || file.name,
+            file_path: attachment.file_path,
+        });
+        renderBulkAttachmentsList();
+    } catch (e) {
+        alert('Ошибка загрузки файла: ' + e.message);
+    }
+}
+
+function deleteBulkAttachment(index) {
+    bulkAttachments.splice(index, 1);
+    renderBulkAttachmentsList();
+}
+
+function renderBulkAttachmentsList() {
+    const container = document.getElementById('bulk-attachments-list');
+    if (!container) return;
+    if (bulkAttachments.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
+        return;
+    }
+
+    container.innerHTML = bulkAttachments.map((a, idx) => {
+        const icon = a.attachment_type === 'git' ? 'bi-git' : (a.attachment_type === 'link' ? 'bi-link-45deg' : 'bi-file-earmark');
+        const display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
+        return `
+            <div class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded mb-1">
+                <div class="text-truncate">
+                    <i class="bi ${icon} me-1"></i> ${display}
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteBulkAttachment(${idx})" title="Удалить"><i class="bi bi-trash"></i></button>
+            </div>
+        `;
+    }).join('');
+}
+
+async function addAttachmentsToSelectedTasks() {
+    if (selectedTaskIds.size === 0) return;
+    if (bulkAttachments.length === 0) {
+        showToast('Добавьте хотя бы одно вложение', 'warning');
+        return;
+    }
+
+    const taskIds = Array.from(selectedTaskIds);
+    const payload = {
+        task_ids: taskIds,
+        attachments: bulkAttachments,
+    };
+
+    const url = IS_GLOBAL
+        ? `${API_BASE}/tasks/attachments/bulk`
+        : `${API_BASE}/projects/${PROJECT_ID}/tasks/attachments/bulk`;
+
+    try {
+        await api(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('addAttachmentsModal')).hide();
+        showToast(`Вложения добавлены к ${taskIds.length} задачам`, 'success');
+        await loadTasks();
+    } catch (e) {
+        showToast('Ошибка добавления вложений: ' + e.message, 'danger');
+    }
 }
 
 function toMoscowDateParts(date) {

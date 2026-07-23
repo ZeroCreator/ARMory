@@ -37,6 +37,7 @@ from app.schemas import (
     TaskAttachmentOut,
     TaskAttachmentUpdate,
     TaskBulkAttachment,
+    TaskBulkAddAttachmentsRequest,
     TaskBulkCreate,
     TaskBulkOut,
     TaskBulkRequest,
@@ -444,6 +445,72 @@ async def create_tasks_bulk_global(
 
     broadcast({"type": "board_changed", "global": True})
     return TaskBulkOut(created=created, count=len(created))
+
+
+@global_router.post("/tasks/attachments/upload", response_model=TaskAttachmentOut, status_code=201)
+async def upload_global_attachment_file(
+    title: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+):
+    """Загрузить файл для последующего массового прикрепления к задачам (глобально)."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File name is required")
+
+    uploads_dir = _task_uploads_dir()
+    ext = Path(file.filename).suffix
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = uploads_dir / unique_name
+
+    contents = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    rel_path = f"tasks/{unique_name}"
+    return TaskAttachmentOut(
+        id=0,
+        task_id=0,
+        attachment_type="file",
+        title=title or file.filename,
+        file_path=rel_path,
+        created_at=datetime.utcnow(),
+    )
+
+
+@global_router.post("/tasks/attachments/bulk", status_code=204)
+async def add_attachments_to_selected_tasks_global(
+    data: TaskBulkAddAttachmentsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Добавить общие вложения к выбранным задачам (глобально, задачи из разных проектов)."""
+    if not data.task_ids:
+        raise HTTPException(status_code=400, detail="No task IDs provided")
+    if not data.attachments:
+        raise HTTPException(status_code=400, detail="No attachments provided")
+
+    tasks_result = await db.execute(
+        select(Task).where(Task.id.in_(data.task_ids))
+    )
+    tasks = tasks_result.scalars().all()
+    found_ids = {t.id for t in tasks}
+    missing = set(data.task_ids) - found_ids
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Tasks not found: {sorted(missing)}")
+
+    for task in tasks:
+        for attachment_data in data.attachments:
+            attachment = TaskAttachment(
+                task_id=task.id,
+                attachment_type=attachment_data.attachment_type,
+                title=attachment_data.title,
+                url=attachment_data.url,
+                file_path=attachment_data.file_path,
+            )
+            db.add(attachment)
+
+    await db.commit()
+    for task in tasks:
+        broadcast({"type": "task_changed", "project_id": task.project_id, "task_id": task.id, "status_id": task.status_id})
+    return None
 
 
 @global_router.get("/tasks", response_model=list[TaskOut])
@@ -1042,6 +1109,45 @@ async def update_task_attachment(
     await db.commit()
     await db.refresh(attachment)
     return attachment
+
+
+@router.post("/tasks/attachments/bulk", status_code=204)
+async def add_attachments_to_selected_tasks(
+    project_id: int,
+    data: TaskBulkAddAttachmentsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Добавить общие вложения к выбранным задачам проекта."""
+    await _get_project(project_id, db)
+    if not data.task_ids:
+        raise HTTPException(status_code=400, detail="No task IDs provided")
+    if not data.attachments:
+        raise HTTPException(status_code=400, detail="No attachments provided")
+
+    tasks_result = await db.execute(
+        select(Task).where(Task.project_id == project_id, Task.id.in_(data.task_ids))
+    )
+    tasks = tasks_result.scalars().all()
+    found_ids = {t.id for t in tasks}
+    missing = set(data.task_ids) - found_ids
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Tasks not found: {sorted(missing)}")
+
+    for task in tasks:
+        for attachment_data in data.attachments:
+            attachment = TaskAttachment(
+                task_id=task.id,
+                attachment_type=attachment_data.attachment_type,
+                title=attachment_data.title,
+                url=attachment_data.url,
+                file_path=attachment_data.file_path,
+            )
+            db.add(attachment)
+
+    await db.commit()
+    for task in tasks:
+        broadcast({"type": "task_changed", "project_id": project_id, "task_id": task.id, "status_id": task.status_id})
+    return None
 
 
 # ═══════════════════════════════════════════════════

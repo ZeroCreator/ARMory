@@ -191,9 +191,14 @@
         </div>
         <span class="text-muted small" id="selected-tasks-count"></span>
     </div>
-    <button class="btn btn-sm btn-danger" id="delete-selected-btn" onclick="deleteSelectedTasks()" disabled style="color: #fff !important;">
-        <i class="bi bi-trash me-1"></i> Удалить выбранные
-    </button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-primary" id="add-attachments-selected-btn" onclick="openAddAttachmentsModal()" disabled>
+            <i class="bi bi-paperclip me-1"></i> Добавить вложения
+        </button>
+        <button class="btn btn-sm btn-danger" id="delete-selected-btn" onclick="deleteSelectedTasks()" disabled style="color: #fff !important;">
+            <i class="bi bi-trash me-1"></i> Удалить выбранные
+        </button>
+    </div>
 </div>
 
 <!-- Таблица -->
@@ -424,9 +429,56 @@
     </div>
 </div>
 
+<!-- Модал массового добавления вложений к выбранным задачам -->
+<div class="modal fade" id="addAttachmentsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-paperclip me-1"></i> Добавить вложения к выбранным задачам</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">Вложения будут добавлены ко всем выбранным задачам (<span id="add-attachments-task-count">0</span>).</p>
+                <div class="mb-3">
+                    <label class="form-label">Общие вложения</label>
+                    <div class="d-flex gap-2 mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showBulkAttachmentForm('link')">Ссылка</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showBulkAttachmentForm('git')">Git</button>
+                        <label class="btn btn-sm btn-outline-secondary mb-0">
+                            Файл
+                            <input type="file" id="bulk-attachment-file-input" style="display:none" onchange="submitBulkAttachmentFile(this)">
+                        </label>
+                    </div>
+                    <div id="bulk-attachment-form" style="display:none" class="border rounded p-2 mb-2">
+                        <input type="hidden" id="bulk-attachment-type">
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control form-control-sm" id="bulk-attachment-title" placeholder="Название">
+                            </div>
+                            <div class="col-md-6" id="bulk-attachment-url-wrap">
+                                <input type="text" class="form-control form-control-sm" id="bulk-attachment-url" placeholder="URL">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-sm btn-primary w-100" onclick="submitBulkAttachmentForm()">Добавить</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="bulk-attachments-list"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="addAttachmentsToSelectedTasks()">
+                    <i class="bi bi-paperclip me-1"></i> Добавить ко всем выбранным
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=15"></script>
+<script src="/static/js/tasks_list.js?v=16"></script>
 {% endblock %}
