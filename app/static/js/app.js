@@ -53,6 +53,116 @@ function showToast(message, type = 'success') {
     toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
 }
 
+function showConfirm(message, title = 'Подтверждение') {
+    return new Promise((resolve) => {
+        const modalEl = document.getElementById('customDialogModal');
+        const titleEl = document.getElementById('custom-dialog-title');
+        const messageEl = document.getElementById('custom-dialog-message');
+        const inputEl = document.getElementById('custom-dialog-input');
+        const confirmBtn = document.getElementById('custom-dialog-confirm');
+        const cancelBtn = document.getElementById('custom-dialog-cancel');
+        const closeBtn = document.getElementById('custom-dialog-close');
+        if (!modalEl || !messageEl || !confirmBtn || !cancelBtn) {
+            resolve(false);
+            return;
+        }
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        inputEl.style.display = 'none';
+        inputEl.value = '';
+        confirmBtn.textContent = 'OK';
+
+        const cleanup = () => {
+            confirmBtn.onclick = null;
+            cancelBtn.onclick = null;
+            closeBtn.onclick = null;
+            modalEl.removeEventListener('hidden.bs.modal', onHidden);
+        };
+        const onHidden = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        confirmBtn.onclick = () => {
+            cleanup();
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            resolve(true);
+        };
+        cancelBtn.onclick = () => {
+            cleanup();
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            resolve(false);
+        };
+        closeBtn.onclick = () => {
+            cleanup();
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            resolve(false);
+        };
+        modalEl.addEventListener('hidden.bs.modal', onHidden);
+
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    });
+}
+
+function showPrompt(message, defaultValue = '', title = 'Ввод') {
+    return new Promise((resolve) => {
+        const modalEl = document.getElementById('customDialogModal');
+        const titleEl = document.getElementById('custom-dialog-title');
+        const messageEl = document.getElementById('custom-dialog-message');
+        const inputEl = document.getElementById('custom-dialog-input');
+        const confirmBtn = document.getElementById('custom-dialog-confirm');
+        const cancelBtn = document.getElementById('custom-dialog-cancel');
+        const closeBtn = document.getElementById('custom-dialog-close');
+        if (!modalEl || !messageEl || !inputEl || !confirmBtn || !cancelBtn) {
+            resolve(null);
+            return;
+        }
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        inputEl.style.display = 'block';
+        inputEl.value = defaultValue || '';
+        confirmBtn.textContent = 'Сохранить';
+
+        const cleanup = () => {
+            confirmBtn.onclick = null;
+            cancelBtn.onclick = null;
+            closeBtn.onclick = null;
+            modalEl.removeEventListener('hidden.bs.modal', onHidden);
+        };
+        const onHidden = () => {
+            cleanup();
+            resolve(null);
+        };
+        const submit = () => {
+            const value = inputEl.value.trim();
+            cleanup();
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            resolve(value || null);
+        };
+
+        confirmBtn.onclick = submit;
+        cancelBtn.onclick = () => {
+            cleanup();
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            resolve(null);
+        };
+        closeBtn.onclick = () => {
+            cleanup();
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            resolve(null);
+        };
+        inputEl.onkeydown = (e) => {
+            if (e.key === 'Enter') submit();
+        };
+        modalEl.addEventListener('hidden.bs.modal', onHidden);
+
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        setTimeout(() => inputEl.focus(), 100);
+    });
+}
+
 function isLocalhost() {
     const host = window.location.hostname;
     return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0';
@@ -356,7 +466,10 @@ async function reorderProjects(projectIds) {
 async function createProject() {
     const form = document.getElementById('project-form');
     const data = Object.fromEntries(new FormData(form));
-    if (!data.name.trim()) return alert('Введите название проекта');
+    if (!data.name.trim()) {
+        showToast('Введите название проекта', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/projects`, {
             method: 'POST',
@@ -367,7 +480,7 @@ async function createProject() {
         bootstrap.Modal.getInstance(document.getElementById('projectModal')).hide();
         loadProjects();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -415,19 +528,19 @@ async function updateProject() {
         bootstrap.Modal.getInstance(document.getElementById('editProjectModal')).hide();
         loadProject(id);
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
 async function deleteProject() {
-    if (!confirm('Удалить проект и все документы?')) return;
+    if (!(await showConfirm('Удалить проект и все документы?'))) return;
     const f = document.getElementById('edit-project-form');
     const id = f.dataset.id;
     try {
         await api(`${API_BASE}/projects/${id}`, { method: 'DELETE' });
         location.href = '/';
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -849,7 +962,10 @@ function copyTextToClipboard(text) {
 async function createSection() {
     const form = document.getElementById('section-form');
     const data = new FormData(form);
-    if (!data.get('name').trim()) return alert('Введите название раздела');
+    if (!data.get('name').trim()) {
+        showToast('Введите название раздела', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/sections`, {
             method: 'POST',
@@ -859,7 +975,7 @@ async function createSection() {
         bootstrap.Modal.getInstance(document.getElementById('sectionModal')).hide();
         loadSections(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -876,7 +992,10 @@ async function updateSection() {
     const sectionId = f.section_id.value;
     const name = f.name.value;
     const description = f.description.value;
-    if (!name.trim()) return alert('Введите название');
+    if (!name.trim()) {
+        showToast('Введите название', 'warning');
+        return;
+    }
     const fd = new FormData();
     fd.append('name', name);
     if (description) fd.append('description', description);
@@ -888,17 +1007,17 @@ async function updateSection() {
         bootstrap.Modal.getInstance(document.getElementById('editSectionModal')).hide();
         loadSections(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
 async function deleteSection(sectionId) {
-    if (!confirm('Удалить раздел и всё его содержимое? Это действие нельзя отменить.')) return;
+    if (!(await showConfirm('Удалить раздел и всё его содержимое? Это действие нельзя отменить.'))) return;
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/sections/${sectionId}`, { method: 'DELETE' });
         loadSections(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -1047,7 +1166,10 @@ function showAddGroupModal(sectionId) {
 async function createGroup() {
     const form = document.getElementById('group-form');
     const data = new FormData(form);
-    if (!data.get('title').trim()) return alert('Введите название группы');
+    if (!data.get('title').trim()) {
+        showToast('Введите название группы', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/documents`, {
             method: 'POST',
@@ -1057,7 +1179,7 @@ async function createGroup() {
         bootstrap.Modal.getInstance(document.getElementById('groupModal')).hide();
         loadSections(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -1077,7 +1199,10 @@ async function updateGroup() {
     const title = f.title.value;
     const description = f.querySelector('[name="description"]').value;
     const sectionId = f.querySelector('[name="section_id"]').value;
-    if (!title.trim()) return alert('Введите название');
+    if (!title.trim()) {
+        showToast('Введите название', 'warning');
+        return;
+    }
     const fd = new FormData();
     fd.append('title', title);
     if (description) fd.append('description', description);
@@ -1090,17 +1215,17 @@ async function updateGroup() {
         bootstrap.Modal.getInstance(document.getElementById('editGroupModal')).hide();
         loadSections(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
 async function deleteGroup(docId) {
-    if (!confirm('Удалить группу и все материалы в ней?')) return;
+    if (!(await showConfirm('Удалить группу и все материалы в ней?'))) return;
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/documents/${docId}`, { method: 'DELETE' });
         loadSections(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -1134,9 +1259,18 @@ async function createItem() {
     const fd = new FormData(form);
     const docId = fd.get('document_id');
     const type = fd.get('item_type');
-    if (type === 'link' && !fd.get('url').trim()) return alert('Введите ссылку');
-    if (type === 'file' && !fd.get('file').size) return alert('Выберите файл');
-    if (type === 'note' && !fd.get('content').trim()) return alert('Введите текст заметки');
+    if (type === 'link' && !fd.get('url').trim()) {
+        showToast('Введите ссылку', 'warning');
+        return;
+    }
+    if (type === 'file' && !fd.get('file').size) {
+        showToast('Выберите файл', 'warning');
+        return;
+    }
+    if (type === 'note' && !fd.get('content').trim()) {
+        showToast('Введите текст заметки', 'warning');
+        return;
+    }
 
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/documents/${docId}/items`, {
@@ -1148,7 +1282,7 @@ async function createItem() {
         bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
         loadSections(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -1207,7 +1341,7 @@ async function updateItem() {
         loadSections(PROJECT_ID);
         showToast('Изменения сохранены');
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -1220,17 +1354,20 @@ function deleteItemFromEditModal() {
 }
 
 async function deleteItem(docId, itemId) {
-    if (!confirm('Удалить этот элемент?')) return;
+    if (!(await showConfirm('Удалить этот элемент?'))) return;
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/documents/${docId}/items/${itemId}`, { method: 'DELETE' });
         loadSections(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
 function openItemInAlexandrite(item) {
-    if (!item.file_path) return alert('Файл не найден');
+    if (!item.file_path) {
+        showToast('Файл не найден', 'warning');
+        return;
+    }
     const root = encodeURIComponent(LOCAL_STORAGE_PATH || './data/uploads');
     const path = encodeURIComponent(item.file_path);
     window.open(`/alexandrite?root=${root}&open=${path}`, '_blank');
@@ -1238,7 +1375,10 @@ function openItemInAlexandrite(item) {
 
 function openTaskAttachmentInAlexandrite(attachmentId) {
     const attachment = window.kanbanAttachments?.[attachmentId];
-    if (!attachment || !attachment.file_path) return alert('Файл не найден');
+    if (!attachment || !attachment.file_path) {
+        showToast('Файл не найден', 'warning');
+        return;
+    }
     const root = encodeURIComponent(LOCAL_STORAGE_PATH || './data/uploads');
     const path = encodeURIComponent(attachment.file_path);
     window.open(`/alexandrite?root=${root}&open=${path}`, '_blank');
@@ -1728,7 +1868,10 @@ function showAddBlockModal(position) {
 async function createSidebarBlock() {
     const form = document.getElementById('sidebar-block-form');
     const data = Object.fromEntries(new FormData(form));
-    if (!data.title.trim()) return alert('Введите название блока');
+    if (!data.title.trim()) {
+        showToast('Введите название блока', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/sidebar/blocks`, {
             method: 'POST',
@@ -1738,17 +1881,17 @@ async function createSidebarBlock() {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('sidebarBlockModal')).hide();
         loadSidebars();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
 async function deleteSidebarBlock(blockId) {
-    if (!confirm('Удалить блок и все ссылки в нем?')) return;
+    if (!(await showConfirm('Удалить блок и все ссылки в нем?'))) return;
     try {
         await api(`${API_BASE}/sidebar/blocks/${blockId}`, { method: 'DELETE' });
         loadSidebars();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -1764,7 +1907,10 @@ async function createSidebarLink() {
     const form = document.getElementById('sidebar-link-form');
     const data = Object.fromEntries(new FormData(form));
     const blockId = data.block_id;
-    if (!data.title.trim() || !data.url.trim()) return alert('Заполните все поля');
+    if (!data.title.trim() || !data.url.trim()) {
+        showToast('Заполните все поля', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/sidebar/blocks/${blockId}/links`, {
             method: 'POST',
@@ -1774,17 +1920,17 @@ async function createSidebarLink() {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('sidebarLinkModal')).hide();
         loadSidebars();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
 async function deleteSidebarLink(linkId) {
-    if (!confirm('Удалить ссылку?')) return;
+    if (!(await showConfirm('Удалить ссылку?'))) return;
     try {
         await api(`${API_BASE}/sidebar/links/${linkId}`, { method: 'DELETE' });
         loadSidebars();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -2013,19 +2159,25 @@ async function openEditBlockModal(blockId) {
     try {
         const blocks = await api(`${API_BASE}/sidebar/blocks`);
         const block = blocks.find(b => b.id === blockId);
-        if (!block) return alert('Блок не найден');
+        if (!block) {
+            showToast('Блок не найден', 'warning');
+            return;
+        }
         document.getElementById('edit-sidebar-block-id').value = blockId;
         document.getElementById('edit-sidebar-block-title').value = block.title || '';
         new bootstrap.Modal(document.getElementById('editSidebarBlockModal')).show();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
 async function updateSidebarBlock() {
     const id = document.getElementById('edit-sidebar-block-id').value;
     const title = document.getElementById('edit-sidebar-block-title').value;
-    if (!title.trim()) return alert('Введите название');
+    if (!title.trim()) {
+        showToast('Введите название', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/sidebar/blocks/${id}`, {
             method: 'PATCH',
@@ -2035,7 +2187,7 @@ async function updateSidebarBlock() {
         bootstrap.Modal.getInstance(document.getElementById('editSidebarBlockModal')).hide();
         loadSidebars();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -2049,13 +2201,16 @@ async function openEditLinkModal(linkId) {
             link = (block.links || []).find(l => l.id === linkId);
             if (link) break;
         }
-        if (!link) return alert('Ссылка не найдена');
+        if (!link) {
+            showToast('Ссылка не найдена', 'warning');
+            return;
+        }
         document.getElementById('edit-sidebar-link-id').value = linkId;
         document.getElementById('edit-sidebar-link-title').value = link.title || '';
         document.getElementById('edit-sidebar-link-url').value = link.url || '';
         new bootstrap.Modal(document.getElementById('editSidebarLinkModal')).show();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -2063,7 +2218,10 @@ async function updateSidebarLink() {
     const id = document.getElementById('edit-sidebar-link-id').value;
     const title = document.getElementById('edit-sidebar-link-title').value;
     const url = document.getElementById('edit-sidebar-link-url').value;
-    if (!title.trim() || !url.trim()) return alert('Заполните все поля');
+    if (!title.trim() || !url.trim()) {
+        showToast('Заполните все поля', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/sidebar/links/${id}`, {
             method: 'PATCH',
@@ -2073,7 +2231,7 @@ async function updateSidebarLink() {
         bootstrap.Modal.getInstance(document.getElementById('editSidebarLinkModal')).hide();
         loadSidebars();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -2098,7 +2256,7 @@ async function openSidebarNoteModal(type, id) {
         document.getElementById('sidebar-note-text').value = note;
         new bootstrap.Modal(document.getElementById('sidebarNoteModal')).show();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -2123,7 +2281,7 @@ async function saveSidebarNote() {
         bootstrap.Modal.getInstance(document.getElementById('sidebarNoteModal')).hide();
         loadSidebars();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -2523,7 +2681,7 @@ async function saveCalendarEvent() {
     const reminderRaw = document.getElementById('calendar-event-reminder').value;
     const reminderMinutes = reminderRaw === '' ? null : parseInt(reminderRaw, 10);
     if (!title.trim() || !start) {
-        alert('Введите название и дату начала');
+        showToast('Введите название и дату начала', 'warning');
         return;
     }
     const payload = { title, description, start_date: start, end_date: end || null, color, all_day: allDay, reminder_minutes: reminderMinutes };
@@ -2544,19 +2702,19 @@ async function saveCalendarEvent() {
         bootstrap.Modal.getInstance(document.getElementById('calendarEventModal')).hide();
         loadCalendarEvents();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
 async function deleteCalendarEvent() {
     const id = document.getElementById('calendar-event-id').value;
-    if (!id || !confirm('Удалить событие?')) return;
+    if (!id || !(await showConfirm('Удалить событие?'))) return;
     try {
         await api(`${API_BASE}/calendar/events/${id}`, { method: 'DELETE' });
         bootstrap.Modal.getInstance(document.getElementById('calendarEventModal')).hide();
         loadCalendarEvents();
     } catch (e) {
-        alert('Ошибка: ' + e.message);
+        showToast('Ошибка: ' + e.message, 'danger');
     }
 }
 
@@ -2738,7 +2896,7 @@ async function syncExport() {
 }
 
 async function syncImport() {
-    if (!confirm('Загрузить данные с Яндекс.Диска?\nТекущие локальные данные будут заменены!')) return;
+    if (!(await showConfirm('Загрузить данные с Яндекс.Диска?\nТекущие локальные данные будут заменены!'))) return;
     const btn = document.getElementById('sync-import-btn');
     btn.disabled = true;
     setBackupStatus('Загрузка базы данных и файлов с Яндекс.Диска...', false);
@@ -2808,7 +2966,7 @@ async function createArchive() {
 }
 
 async function restoreArchive(name) {
-    if (!confirm(`Восстановить данные из архива ${name}?\nТекущие локальные данные будут заменены!`)) return;
+    if (!(await showConfirm(`Восстановить данные из архива ${name}?\nТекущие локальные данные будут заменены!`))) return;
     setBackupStatus('Восстановление из архива...', false);
     try {
         const res = await api(`${API_BASE}/backup/restore`, {
@@ -2828,7 +2986,7 @@ async function restoreArchive(name) {
 }
 
 async function deleteArchive(name) {
-    if (!confirm(`Удалить архив ${name} с Яндекс.Диска?`)) return;
+    if (!(await showConfirm(`Удалить архив ${name} с Яндекс.Диска?`))) return;
     try {
         await api(`${API_BASE}/backup/delete`, {
             method: 'POST',
@@ -2914,7 +3072,7 @@ async function syncAlexandriteExport() {
 }
 
 async function syncAlexandriteImport() {
-    if (!confirm('Загрузить папку Alexandrite с Яндекс.Диска?\nТекущие локальные файлы Alexandrite будут заменены!')) return;
+    if (!(await showConfirm('Загрузить папку Alexandrite с Яндекс.Диска?\nТекущие локальные файлы Alexandrite будут заменены!'))) return;
     const btn = document.getElementById('alexandrite-sync-import-btn');
     btn.disabled = true;
     setBackupStatus('Загрузка папки Alexandrite с Яндекс.Диска...', false);
@@ -2983,7 +3141,7 @@ async function loadAlexandriteArchives() {
 }
 
 async function restoreAlexandriteArchive(name) {
-    if (!confirm(`Восстановить папку Alexandrite из архива ${name}?\nТекущие локальные файлы Alexandrite будут заменены!`)) return;
+    if (!(await showConfirm(`Восстановить папку Alexandrite из архива ${name}?\nТекущие локальные файлы Alexandrite будут заменены!`))) return;
     setBackupStatus('Восстановление папки Alexandrite из архива...', false);
     try {
         const res = await api(`${API_BASE}/backup/alexandrite/restore`, {
@@ -3003,7 +3161,7 @@ async function restoreAlexandriteArchive(name) {
 }
 
 async function deleteAlexandriteArchive(name) {
-    if (!confirm(`Удалить архив Alexandrite ${name} с Яндекс.Диска?`)) return;
+    if (!(await showConfirm(`Удалить архив Alexandrite ${name} с Яндекс.Диска?`))) return;
     try {
         await api(`${API_BASE}/backup/alexandrite/delete`, {
             method: 'POST',

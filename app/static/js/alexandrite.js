@@ -538,7 +538,7 @@ async function saveAlexandriteFile() {
 async function deleteAlexandriteFile() {
     if (!alexandriteCurrentFile || !alexandriteRoot) return;
     const filePath = alexandriteCurrentFile;
-    if (!confirm(`Удалить файл «${filePath.split('/').pop()}»?`)) return;
+    if (!(await showConfirm(`Удалить файл «${filePath.split('/').pop()}»?`))) return;
 
     try {
         await api(`${API_BASE}/alexandrite/file?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(filePath)}`, {
@@ -685,7 +685,7 @@ async function createAlexandriteFolder() {
 async function renameAlexandriteFolder(folderPath) {
     if (!alexandriteRoot || !folderPath) return;
     const currentName = folderPath.split('/').pop();
-    const newName = prompt('Новое имя папки:', currentName);
+    const newName = await showPrompt('Новое имя папки:', currentName);
     if (!newName || newName.trim() === currentName) return;
 
     try {
@@ -734,7 +734,7 @@ function removeAlexandriteTreeItem(itemPath, itemType) {
 async function deleteAlexandriteFolder(folderPath) {
     if (!alexandriteRoot || !folderPath) return;
     const name = folderPath.split('/').pop();
-    if (!confirm(`Удалить папку «${name}» и всё её содержимое?`)) return;
+    if (!(await showConfirm(`Удалить папку «${name}» и всё её содержимое?`))) return;
 
     try {
         await api(`${API_BASE}/alexandrite/directory?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(folderPath)}`, {
@@ -750,7 +750,7 @@ async function deleteAlexandriteFolder(folderPath) {
 async function renameAlexandriteFile(filePath) {
     if (!alexandriteRoot || !filePath) return;
     const currentName = filePath.split('/').pop();
-    const newName = prompt('Новое имя файла:', currentName);
+    const newName = await showPrompt('Новое имя файла:', currentName);
     if (!newName || newName.trim() === currentName) return;
 
     try {
@@ -775,7 +775,7 @@ async function renameAlexandriteFile(filePath) {
 async function deleteAlexandriteFileFromContext(filePath) {
     if (!filePath) return;
     const name = filePath.split('/').pop();
-    if (!confirm(`Удалить файл «${name}»?`)) return;
+    if (!(await showConfirm(`Удалить файл «${name}»?`))) return;
 
     try {
         await api(`${API_BASE}/alexandrite/file?root=${encodeURIComponent(alexandriteRoot)}&path=${encodeURIComponent(filePath)}`, {

@@ -207,7 +207,10 @@ function showGlossaryTopicModal() {
 
 async function saveGlossaryTopic() {
     const name = document.getElementById('glossary-topic-name').value.trim();
-    if (!name) return alert('Введите название темы');
+    if (!name) {
+        showToast('Введите название темы', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/glossary/topics`, {
             method: 'POST',
@@ -217,7 +220,7 @@ async function saveGlossaryTopic() {
         bootstrap.Modal.getInstance(document.getElementById('glossaryTopicModal')).hide();
         loadGlossaryTopics();
     } catch (e) {
-        alert('Ошибка создания темы: ' + e.message);
+        showToast('Ошибка создания темы: ' + e.message, 'danger');
     }
 }
 
@@ -232,7 +235,10 @@ function showEditGlossaryTopicModal(topicId) {
 async function updateGlossaryTopic() {
     const topicId = document.getElementById('edit-glossary-topic-id').value;
     const name = document.getElementById('edit-glossary-topic-name').value.trim();
-    if (!topicId || !name) return alert('Введите название темы');
+    if (!topicId || !name) {
+        showToast('Введите название темы', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/glossary/topics/${topicId}`, {
             method: 'PATCH',
@@ -243,12 +249,12 @@ async function updateGlossaryTopic() {
         loadGlossaryTopics();
         loadGlossary();
     } catch (e) {
-        alert('Ошибка обновления темы: ' + e.message);
+        showToast('Ошибка обновления темы: ' + e.message, 'danger');
     }
 }
 
 async function deleteGlossaryTopic(topicId) {
-    if (!confirm('Удалить тему и все её подтемы? Термины станут "без темы".')) return;
+    if (!(await showConfirm('Удалить тему и все её подтемы? Термины станут "без темы".'))) return;
     try {
         await api(`${API_BASE}/glossary/topics/${topicId}`, { method: 'DELETE' });
         if (glossaryFilter.type === 'topic' && glossaryFilter.id === topicId) {
@@ -257,7 +263,7 @@ async function deleteGlossaryTopic(topicId) {
         loadGlossaryTopics();
         loadGlossary();
     } catch (e) {
-        alert('Ошибка удаления темы: ' + e.message);
+        showToast('Ошибка удаления темы: ' + e.message, 'danger');
     }
 }
 
@@ -281,7 +287,10 @@ function showGlossarySubtopicModal(topicId) {
 async function saveGlossarySubtopic() {
     const topicId = parseInt(document.getElementById('glossary-subtopic-topic-id').value, 10);
     const name = document.getElementById('glossary-subtopic-name').value.trim();
-    if (!topicId || !name) return alert('Введите название подтемы');
+    if (!topicId || !name) {
+        showToast('Введите название подтемы', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/glossary/subtopics`, {
             method: 'POST',
@@ -292,7 +301,7 @@ async function saveGlossarySubtopic() {
         glossaryExpandedTopics.add(topicId);
         loadGlossaryTopics();
     } catch (e) {
-        alert('Ошибка создания подтемы: ' + e.message);
+        showToast('Ошибка создания подтемы: ' + e.message, 'danger');
     }
 }
 
@@ -308,7 +317,10 @@ function showEditGlossarySubtopicModal(subtopicId, topicId) {
 async function updateGlossarySubtopic() {
     const subtopicId = document.getElementById('edit-glossary-subtopic-id').value;
     const name = document.getElementById('edit-glossary-subtopic-name').value.trim();
-    if (!subtopicId || !name) return alert('Введите название подтемы');
+    if (!subtopicId || !name) {
+        showToast('Введите название подтемы', 'warning');
+        return;
+    }
     try {
         await api(`${API_BASE}/glossary/subtopics/${subtopicId}`, {
             method: 'PATCH',
@@ -319,12 +331,12 @@ async function updateGlossarySubtopic() {
         loadGlossaryTopics();
         loadGlossary();
     } catch (e) {
-        alert('Ошибка обновления подтемы: ' + e.message);
+        showToast('Ошибка обновления подтемы: ' + e.message, 'danger');
     }
 }
 
 async function deleteGlossarySubtopic(subtopicId) {
-    if (!confirm('Удалить подтему? Термины из этой подтемы потеряют привязку к ней.')) return;
+    if (!(await showConfirm('Удалить подтему? Термины из этой подтемы потеряют привязку к ней.'))) return;
     try {
         await api(`${API_BASE}/glossary/subtopics/${subtopicId}`, { method: 'DELETE' });
         if (glossaryFilter.type === 'subtopic' && glossaryFilter.id === subtopicId) {
@@ -333,7 +345,7 @@ async function deleteGlossarySubtopic(subtopicId) {
         loadGlossaryTopics();
         loadGlossary();
     } catch (e) {
-        alert('Ошибка удаления подтемы: ' + e.message);
+        showToast('Ошибка удаления подтемы: ' + e.message, 'danger');
     }
 }
 
@@ -468,7 +480,7 @@ async function editGlossaryTerm(termId) {
         fillSubtopicSelect(term.topic_id || 0, term.subtopic_id);
         new bootstrap.Modal(document.getElementById('glossaryModal')).show();
     } catch (e) {
-        alert('Ошибка загрузки термина: ' + e.message);
+        showToast('Ошибка загрузки термина: ' + e.message, 'danger');
     }
 }
 
@@ -480,7 +492,10 @@ async function saveGlossaryTerm() {
     const topicId = parseInt(document.getElementById('glossary-topic-select').value, 10) || 0;
     const subtopicId = parseInt(document.getElementById('glossary-subtopic-select').value, 10) || 0;
 
-    if (!term) return alert('Введите термин');
+    if (!term) {
+        showToast('Введите термин', 'warning');
+        return;
+    }
 
     const payload = { term, short_definition: shortDefinition, definition, topic_id: topicId, subtopic_id: subtopicId };
 
@@ -502,7 +517,7 @@ async function saveGlossaryTerm() {
         loadGlossary();
         loadGlossaryTopics();
     } catch (e) {
-        alert('Ошибка сохранения: ' + e.message);
+        showToast('Ошибка сохранения: ' + e.message, 'danger');
     }
 }
 
@@ -514,13 +529,13 @@ async function deleteGlossaryTerm() {
 }
 
 async function deleteGlossaryTermById(termId) {
-    if (!confirm('Удалить этот термин?')) return;
+    if (!(await showConfirm('Удалить этот термин?'))) return;
     try {
         await api(`${API_BASE}/glossary/${termId}`, { method: 'DELETE' });
         loadGlossary();
         loadGlossaryTopics();
     } catch (e) {
-        alert('Ошибка удаления: ' + e.message);
+        showToast('Ошибка удаления: ' + e.message, 'danger');
     }
 }
 
@@ -538,7 +553,7 @@ async function exportGlossary() {
         a.remove();
         window.URL.revokeObjectURL(url);
     } catch (e) {
-        alert('Ошибка экспорта: ' + e.message);
+        showToast('Ошибка экспорта: ' + e.message, 'danger');
     }
 }
 
@@ -546,7 +561,7 @@ async function importGlossary(input) {
     const file = input.files[0];
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.xlsx')) {
-        alert('Выберите файл .xlsx');
+        showToast('Выберите файл .xlsx', 'warning');
         input.value = '';
         return;
     }
@@ -561,12 +576,12 @@ async function importGlossary(input) {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-        alert(`Импорт завершён:\n- тем создано: ${data.created_topics}\n- подтем создано: ${data.created_subtopics}\n- терминов создано: ${data.created_terms}\n- терминов обновлено: ${data.updated_terms}`);
+        showToast(`Импорт завершён:\n- тем создано: ${data.created_topics}\n- подтем создано: ${data.created_subtopics}\n- терминов создано: ${data.created_terms}\n- терминов обновлено: ${data.updated_terms}`, 'success');
         input.value = '';
         loadGlossary();
         loadGlossaryTopics();
     } catch (e) {
-        alert('Ошибка импорта: ' + e.message);
+        showToast('Ошибка импорта: ' + e.message, 'danger');
         input.value = '';
     }
 }

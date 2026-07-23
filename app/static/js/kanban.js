@@ -481,7 +481,7 @@ async function updateTaskStatus(taskId, statusId, taskIds) {
         });
         updateKanbanColumnCounts();
     } catch (e) {
-        alert('Ошибка обновления статуса: ' + e.message);
+        showToast('Ошибка обновления статуса: ' + e.message, 'danger');
         loadKanbanBoard(PROJECT_ID);
     }
 }
@@ -494,7 +494,7 @@ async function reorderStatuses(statusIds) {
             body: JSON.stringify({ status_ids: statusIds }),
         });
     } catch (e) {
-        alert('Ошибка изменения порядка колонок: ' + e.message);
+        showToast('Ошибка изменения порядка колонок: ' + e.message, 'danger');
         loadKanbanBoard(PROJECT_ID);
     }
 }
@@ -590,7 +590,7 @@ async function saveTask() {
         } else {
             const statusId = parseInt(document.getElementById('task-status-id').value, 10);
             if (!statusId) {
-                alert('Не выбрана колонка');
+                showToast('Не выбрана колонка', 'warning');
                 return;
             }
             await api(`${API_BASE}/projects/${PROJECT_ID}/tasks`, {
@@ -602,7 +602,7 @@ async function saveTask() {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('taskModal')).hide();
         loadKanbanBoard(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка сохранения задачи: ' + e.message);
+        showToast('Ошибка сохранения задачи: ' + e.message, 'danger');
     }
 }
 
@@ -627,7 +627,7 @@ async function deleteTaskFromModal() {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('taskModal')).hide();
         loadKanbanBoard(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка удаления задачи: ' + e.message);
+        showToast('Ошибка удаления задачи: ' + e.message, 'danger');
     }
 }
 
@@ -755,13 +755,13 @@ async function saveTaskAttachmentEdit() {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('editTaskAttachmentModal')).hide();
         await reloadCurrentTask();
     } catch (e) {
-        alert('Ошибка изменения вложения: ' + e.message);
+        showToast('Ошибка изменения вложения: ' + e.message, 'danger');
     }
 }
 
 function showAttachmentForm(type) {
     if (!currentTaskId) {
-        alert('Сначала сохраните задачу, чтобы добавить вложение');
+        showToast('Сначала сохраните задачу, чтобы добавить вложение', 'warning');
         return;
     }
     const form = document.getElementById('task-attachment-form');
@@ -805,7 +805,7 @@ async function submitAttachmentForm() {
     const url = document.getElementById('attachment-form-url').value.trim();
 
     if (type !== 'file' && !url) {
-        alert('Введите URL');
+        showToast('Введите URL', 'warning');
         return;
     }
 
@@ -818,13 +818,13 @@ async function submitAttachmentForm() {
         hideAttachmentForm();
         await reloadCurrentTask();
     } catch (e) {
-        alert('Ошибка добавления вложения: ' + e.message);
+        showToast('Ошибка добавления вложения: ' + e.message, 'danger');
     }
 }
 
 async function submitAttachmentFile(input) {
     if (!currentTaskId) {
-        alert('Сначала сохраните задачу, чтобы добавить вложение');
+        showToast('Сначала сохраните задачу, чтобы добавить вложение', 'warning');
         input.value = '';
         return;
     }
@@ -848,13 +848,13 @@ async function submitAttachmentFile(input) {
         hideAttachmentForm();
         await reloadCurrentTask();
     } catch (e) {
-        alert('Ошибка загрузки файла: ' + e.message);
+        showToast('Ошибка загрузки файла: ' + e.message, 'danger');
     }
 }
 
 async function deleteTaskAttachment(attachmentId) {
     if (!currentTaskId) return;
-    if (!confirm('Удалить вложение?')) return;
+    if (!(await showConfirm('Удалить вложение?'))) return;
 
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/tasks/${currentTaskId}/attachments/${attachmentId}`, {
@@ -862,7 +862,7 @@ async function deleteTaskAttachment(attachmentId) {
         });
         await reloadCurrentTask();
     } catch (e) {
-        alert('Ошибка удаления вложения: ' + e.message);
+        showToast('Ошибка удаления вложения: ' + e.message, 'danger');
     }
 }
 
@@ -895,7 +895,7 @@ function openAssigneeModal() {
 async function saveAssignee() {
     const form = document.getElementById('assignee-form');
     if (!form.name.value.trim() || !form.email.value.trim()) {
-        alert('Введите имя и email');
+        showToast('Введите имя и email', 'warning');
         return;
     }
 
@@ -912,7 +912,7 @@ async function saveAssignee() {
         kanbanAssignees = await api(`${API_BASE}/assignees`);
         populateAssigneeSelects(kanbanAssignees);
     } catch (e) {
-        alert('Ошибка добавления ответственного: ' + e.message);
+        showToast('Ошибка добавления ответственного: ' + e.message, 'danger');
     }
 }
 
@@ -951,7 +951,7 @@ function openStatusModal(statusId) {
 async function saveStatus() {
     const form = document.getElementById('status-form');
     if (!form.name.value.trim()) {
-        alert('Введите название колонки');
+        showToast('Введите название колонки', 'warning');
         return;
     }
 
@@ -977,7 +977,7 @@ async function saveStatus() {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('statusModal')).hide();
         loadKanbanBoard(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка сохранения колонки: ' + e.message);
+        showToast('Ошибка сохранения колонки: ' + e.message, 'danger');
     }
 }
 
@@ -986,17 +986,17 @@ async function deleteStatusFromModal() {
     const status = kanbanData.statuses.find(s => s.id === currentStatusId);
     const hasTasks = kanbanData.tasks.some(t => t.status_id === currentStatusId);
     if (hasTasks) {
-        alert('Нельзя удалить колонку с задачами. Переместите или удалите задачи сначала.');
+        showToast('Нельзя удалить колонку с задачами. Переместите или удалите задачи сначала.', 'warning');
         return;
     }
-    if (!confirm(`Удалить колонку "${status?.name || ''}"?`)) return;
+    if (!(await showConfirm(`Удалить колонку "${status?.name || ''}"?`))) return;
 
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/task-statuses/${currentStatusId}`, { method: 'DELETE' });
         bootstrap.Modal.getOrCreateInstance(document.getElementById('statusModal')).hide();
         loadKanbanBoard(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка удаления колонки: ' + e.message);
+        showToast('Ошибка удаления колонки: ' + e.message, 'danger');
     }
 }
 
@@ -1162,7 +1162,7 @@ async function setTaskAssignee(taskId, email) {
         }
         updateTaskCardInBoard(updatedTask);
     } catch (e) {
-        alert('Ошибка установки ответственного: ' + e.message);
+        showToast('Ошибка установки ответственного: ' + e.message, 'danger');
     }
 }
 
@@ -1180,12 +1180,12 @@ function editTaskFromContext(taskId) {
 
 async function deleteTaskFromContext(taskId) {
     hideContextMenu();
-    if (!confirm('Удалить задачу?')) return;
+    if (!(await showConfirm('Удалить задачу?'))) return;
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/tasks/${taskId}`, { method: 'DELETE' });
         loadKanbanBoard(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка удаления задачи: ' + e.message);
+        showToast('Ошибка удаления задачи: ' + e.message, 'danger');
     }
 }
 
@@ -1399,7 +1399,7 @@ function submitImportBulkAttachmentForm() {
     const url = document.getElementById('import-bulk-attachment-url').value.trim();
 
     if (type !== 'file' && !url) {
-        alert('Введите URL');
+        showToast('Введите URL', 'warning');
         return;
     }
 
@@ -1428,7 +1428,7 @@ async function submitImportBulkAttachmentFile(input) {
         });
         renderImportBulkAttachmentsList();
     } catch (e) {
-        alert('Ошибка загрузки файла: ' + e.message);
+        showToast('Ошибка загрузки файла: ' + e.message, 'danger');
     }
 }
 
@@ -1480,7 +1480,7 @@ function applyBulkToSelectedImportTasks() {
 async function createTasksBulk() {
     const validTasks = importTasksState.filter(t => t.title.trim() || t.description.trim());
     if (validTasks.length === 0) {
-        alert('Нет задач для создания');
+        showToast('Нет задач для создания', 'warning');
         return;
     }
 
@@ -1506,7 +1506,7 @@ async function createTasksBulk() {
         showToast(`Создано задач: ${result.count}`, 'success');
         loadKanbanBoard(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка создания задач: ' + e.message);
+        showToast('Ошибка создания задач: ' + e.message, 'danger');
     }
 }
 
@@ -1525,7 +1525,7 @@ async function exportProjectKanban() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     } catch (e) {
-        alert('Ошибка экспорта канбана проекта: ' + e.message);
+        showToast('Ошибка экспорта канбана проекта: ' + e.message, 'danger');
     }
 }
 
@@ -1534,7 +1534,7 @@ async function importProjectKanban(input) {
     if (!file) return;
     input.value = '';
 
-    if (!confirm('Импорт заменит существующие колонки и задачи с совпадающими названиями в этом проекте. Продолжить?')) {
+    if (!(await showConfirm('Импорт заменит существующие колонки и задачи с совпадающими названиями в этом проекте. Продолжить?'))) {
         return;
     }
 
@@ -1546,10 +1546,10 @@ async function importProjectKanban(input) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
-        alert(`Импорт завершён. Колонок: ${result.imported_statuses}, задач: ${result.imported_tasks}`);
+        showToast(`Импорт завершён. Колонок: ${result.imported_statuses}, задач: ${result.imported_tasks}`, 'success');
         loadKanbanBoard(PROJECT_ID);
     } catch (e) {
-        alert('Ошибка импорта канбана проекта: ' + e.message);
+        showToast('Ошибка импорта канбана проекта: ' + e.message, 'danger');
     }
 }
 

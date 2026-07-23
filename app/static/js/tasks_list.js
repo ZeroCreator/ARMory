@@ -383,7 +383,7 @@ function toggleSelectAll(selectAll) {
 
 async function deleteSelectedTasks() {
     if (selectedTaskIds.size === 0) return;
-    if (!confirm(`Удалить ${selectedTaskIds.size} выбранных задач?`)) return;
+    if (!(await showConfirm(`Удалить ${selectedTaskIds.size} выбранных задач?`))) return;
 
     const ids = Array.from(selectedTaskIds);
     const toDelete = allTasks.filter(t => selectedTaskIds.has(t.id));
@@ -462,7 +462,7 @@ function submitBulkAttachmentForm() {
     const url = document.getElementById('bulk-attachment-url').value.trim();
 
     if (type !== 'file' && !url) {
-        alert('Введите URL');
+        showToast('Введите URL', 'warning');
         return;
     }
 
@@ -495,7 +495,7 @@ async function submitBulkAttachmentFile(input) {
         });
         renderBulkAttachmentsList();
     } catch (e) {
-        alert('Ошибка загрузки файла: ' + e.message);
+        showToast('Ошибка загрузки файла: ' + e.message, 'danger');
     }
 }
 
@@ -585,7 +585,7 @@ function formatNowMoscowForFilename() {
 
 function exportTasks(format) {
     if (filteredTasks.length === 0) {
-        alert('Нет задач для экспорта');
+        showToast('Нет задач для экспорта', 'warning');
         return;
     }
     const projectName = IS_GLOBAL
@@ -1079,7 +1079,7 @@ function submitImportBulkAttachmentForm() {
     const url = document.getElementById('import-bulk-attachment-url').value.trim();
 
     if (type !== 'file' && !url) {
-        alert('Введите URL');
+        showToast('Введите URL', 'warning');
         return;
     }
 
@@ -1095,7 +1095,7 @@ async function submitImportBulkAttachmentFile(input) {
 
     const projectId = getImportProjectId();
     if (!projectId) {
-        alert('Выберите проект для загрузки файла');
+        showToast('Выберите проект для загрузки файла', 'warning');
         return;
     }
 
@@ -1114,7 +1114,7 @@ async function submitImportBulkAttachmentFile(input) {
         });
         renderImportBulkAttachmentsList();
     } catch (e) {
-        alert('Ошибка загрузки файла: ' + e.message);
+        showToast('Ошибка загрузки файла: ' + e.message, 'danger');
     }
 }
 
@@ -1176,14 +1176,14 @@ async function createTasksBulk() {
 
     const validTasks = importTasksState.filter(t => t.title.trim() || t.description.trim());
     if (validTasks.length === 0) {
-        alert('Нет задач для создания');
+        showToast('Нет задач для создания', 'warning');
         return;
     }
 
     if (IS_GLOBAL) {
         const withoutProject = validTasks.filter(t => !t.project_id);
         if (withoutProject.length > 0) {
-            alert('Укажите проект для всех задач (через массовое редактирование)');
+            showToast('Укажите проект для всех задач (через массовое редактирование)', 'warning');
             return;
         }
     }
@@ -1214,6 +1214,6 @@ async function createTasksBulk() {
         await loadTasks();
         await loadFilters();
     } catch (e) {
-        alert('Ошибка создания задач: ' + e.message);
+        showToast('Ошибка создания задач: ' + e.message, 'danger');
     }
 }
