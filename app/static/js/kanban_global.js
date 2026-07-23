@@ -12,7 +12,17 @@ let currentStatusId = null;
 let pendingTaskColumnName = null;
 let editingTaskAttachmentId = null;
 let kanbanEventSource = null;
+let kanbanSseReconnectDelay = 1000;
+let kanbanIgnoreReloadUntil = 0;
 window.kanbanAttachments = window.kanbanAttachments || {};
+
+function shouldIgnoreKanbanReload() {
+    return Date.now() < kanbanIgnoreReloadUntil || (kanbanDragController && kanbanDragController.dragging);
+}
+
+function markKanbanReloadIgnored(durationMs = 1500) {
+    kanbanIgnoreReloadUntil = Date.now() + durationMs;
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadFilters();
@@ -40,6 +50,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            loadKanbanBoard();
+        }
+    });
 });
 
 async function loadFilters() {
@@ -65,6 +81,7 @@ async function loadFilters() {
 function connectGlobalKanbanEvents() {
     if (kanbanEventSource) {
         kanbanEventSource.close();
+        kanbanEventSource = null;
     }
 
     kanbanEventSource = new EventSource('/api/events');
@@ -72,6 +89,7 @@ function connectGlobalKanbanEvents() {
 
     kanbanEventSource.addEventListener('open', () => {
         console.log('[SSE] connected');
+        kanbanSseReconnectDelay = 1000;
     });
 
     kanbanEventSource.addEventListener('kanban', (e) => {
@@ -79,6 +97,10 @@ function connectGlobalKanbanEvents() {
             const event = JSON.parse(e.data);
             console.log('[SSE] received event', event);
             if (!event.global && !event.project_id) return;
+            if (shouldIgnoreKanbanReload()) {
+                console.log('[SSE] reload ignored: drag/recent local change in progress');
+                return;
+            }
             if (event.type === 'task_changed') {
                 handleGlobalKanbanTaskChanged(event);
             } else {
@@ -90,13 +112,20 @@ function connectGlobalKanbanEvents() {
         }
     });
 
-    kanbanEventSource.addEventListener('error', (e) => {
-        console.warn('SSE error, will reconnect automatically:', e);
+    kanbanEventSource.addEventListener('error', () => {
+        console.warn('[SSE] connection error, reconnecting in', kanbanSseReconnectDelay, 'ms');
+        if (kanbanEventSource) {
+            kanbanEventSource.close();
+            kanbanEventSource = null;
+        }
+        setTimeout(() => connectGlobalKanbanEvents(), kanbanSseReconnectDelay);
+        kanbanSseReconnectDelay = Math.min(kanbanSseReconnectDelay * 2, 30000);
     });
 
     window.addEventListener('beforeunload', () => {
         if (kanbanEventSource) {
             kanbanEventSource.close();
+            kanbanEventSource = null;
         }
     });
 }
@@ -404,9 +433,11 @@ function initKanbanSortable() {
         getColumnId: (body) => body.dataset.columnName,
         onUpdateCounts: updateKanbanColumnCounts,
         onSameColumnReorder: (taskIds, columnName) => {
+            markKanbanReloadIgnored();
             reorderGlobalTasks(taskIds, columnName);
         },
         onCrossColumnMove: (taskId, columnName, targetBody) => {
+            markKanbanReloadIgnored();
             updateTaskColumn(taskId, columnName, targetBody);
         },
     });
