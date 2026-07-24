@@ -116,6 +116,13 @@ async function handleKanbanTaskChanged(event, projectId) {
 
     try {
         const task = await api(`${API_BASE}/projects/${projectId}/tasks/${event.task_id}`);
+        const idx = kanbanData.tasks.findIndex(t => t.id === task.id);
+        if (idx !== -1) {
+            kanbanData.tasks[idx] = task;
+        } else {
+            kanbanData.tasks.unshift(task);
+        }
+        task._isNew = true;
         updateKanbanTaskCard(task);
     } catch (err) {
         console.error('Failed to fetch updated task:', err);
@@ -150,6 +157,12 @@ function updateKanbanTaskCard(task) {
 function prependTaskCard(columnBody, task) {
     const html = renderTaskCard(task);
     columnBody.insertAdjacentHTML('afterbegin', html);
+
+    const card = columnBody.querySelector(`.kanban-card[data-id="${task.id}"]`);
+    if (card) {
+        requestAnimationFrame(() => card.classList.add('kanban-card-new'));
+        setTimeout(() => card.classList.remove('kanban-card-new'), 300);
+    }
 }
 
 async function loadProjectHeader(projectId) {
@@ -314,10 +327,11 @@ function renderTaskCard(task) {
 
     const attachmentsHtml = renderCardAttachments(task.attachments);
     const closedClass = task.is_closed ? 'kanban-card-closed' : '';
+    const newClass = task._isNew ? 'kanban-card-new' : '';
     const closedBadge = task.is_closed ? '<span class="badge bg-secondary ms-2"><i class="bi bi-check-circle"></i> Закрыто</span>' : '';
 
     return `
-        <div class="kanban-card ${closedClass}" data-id="${task.id}" data-status-id="${task.status_id}" onclick="handleCardClick(${task.id}, this)">
+        <div class="kanban-card ${closedClass} ${newClass}" data-id="${task.id}" data-status-id="${task.status_id}" onclick="handleCardClick(${task.id}, this)">
             <div class="d-flex justify-content-between align-items-center mb-1">
                 <span class="badge bg-orange">#${task.id}</span>
                 <span class="badge ${priorityClass} priority-badge">${priorityLabel}</span>

@@ -6,6 +6,7 @@
 """
 
 import asyncio
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -37,8 +38,7 @@ def _verify_mcp_key(request: Request):
 async def mcp_endpoint(request: Request):
     """JSON-RPC endpoint для MCP over HTTP."""
     msg = await request.json()
-    host, port = request.scope.get("server", ("localhost", 80))
-    base_url = f"http://127.0.0.1:{port}"
+    base_url = os.environ.get("ARMORY_BASE_URL") or str(request.base_url).rstrip("/")
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, handle_message, msg, base_url)
     id_ = msg.get("id")

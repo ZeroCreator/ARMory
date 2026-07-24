@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-ARMORY_BASE_URL = os.environ.get("ARMORY_BASE_URL", "http://localhost:8067").rstrip("/")
+ARMORY_BASE_URL = os.environ.get("ARMORY_BASE_URL")
 
 KIMI_ASSIGNEE_EMAIL = "kimi@armory.local"
 KIMI_ASSIGNEE_NAME = "Kimi"
@@ -102,7 +102,10 @@ TOOLS = [
 
 
 def _base_url(override: str | None = None) -> str:
-    return (override or ARMORY_BASE_URL).rstrip("/")
+    url = override or ARMORY_BASE_URL
+    if not url:
+        raise ValueError("ARMORY_BASE_URL environment variable is not set")
+    return url.rstrip("/")
 
 
 def _api_request(method: str, path: str, json_body: dict[str, Any] | None = None, base_url: str | None = None) -> dict[str, Any]:
