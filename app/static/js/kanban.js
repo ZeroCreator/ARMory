@@ -75,7 +75,9 @@ function connectKanbanEvents(projectId) {
                 console.log('[SSE] reload ignored: drag/recent local change in progress');
                 return;
             }
-            if (event.type === 'task_changed') {
+            if (event.type === 'task_completed') {
+                showToast(event.message || `Задача №${event.task_id} выполнена`, 'success');
+            } else if (event.type === 'task_changed') {
                 handleKanbanTaskChanged(event, projectId);
             } else {
                 console.log('[SSE] reloading board');

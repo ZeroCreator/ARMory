@@ -72,6 +72,7 @@ TOOLS = [
                 "list_name": {"type": ["string", "null"]},
                 "due_date": {"type": ["string", "null"]},
                 "assignee_email": {"type": ["string", "null"]},
+                "result": {"type": ["string", "null"]},
             },
             "required": ["project_id", "task_id"],
         },
@@ -89,11 +90,12 @@ TOOLS = [
     },
     {
         "name": "complete_task",
-        "description": "Отметить задачу как выполненную: перевести в финальную колонку и закрыть. task_id сквозной.",
+        "description": "Отметить задачу как выполненную: перевести в финальную колонку, закрыть и записать результат работы. task_id сквозной.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "task_id": {"type": "integer"},
+                "result": {"type": ["string", "null"]},
             },
             "required": ["task_id"],
         },
@@ -200,7 +202,7 @@ def _take_task_into_work(task_id: int, base_url: str | None = None) -> dict[str,
     }
 
 
-def _complete_task(task_id: int, base_url: str | None = None) -> dict[str, Any]:
+def _complete_task(task_id: int, result: str | None = None, base_url: str | None = None) -> dict[str, Any]:
     task = _api_request("GET", f"/api/tasks/{task_id}", base_url=base_url)
     if isinstance(task, dict) and "error" in task:
         return task
@@ -225,6 +227,8 @@ def _complete_task(task_id: int, base_url: str | None = None) -> dict[str, Any]:
     done_id = done.get("id")
     if done_id is not None:
         payload["status_id"] = done_id
+    if result is not None:
+        payload["result"] = result
 
     updated = _api_request(
         "PATCH",
@@ -280,7 +284,8 @@ def handle_tool_call(params: dict[str, Any], base_url: str | None = None) -> dic
     elif name == "take_task_into_work":
         result = _take_task_into_work(arguments["task_id"], base_url=base_url)
     elif name == "complete_task":
-        result = _complete_task(arguments["task_id"], base_url=base_url)
+        result = arguments.get("result")
+        result = _complete_task(arguments["task_id"], result=result, base_url=base_url)
     else:
         return {"error": f"Unknown tool: {name}"}
 

@@ -599,6 +599,7 @@ async def update_task(
         task.tags = update_data["tags"]
     if "list_name" in update_data:
         task.list_name = update_data["list_name"]
+    old_result = task.result
     if "result" in update_data:
         task.result = update_data["result"]
 
@@ -645,6 +646,9 @@ async def update_task(
     await db.commit()
     await db.refresh(task)
     broadcast({"type": "task_changed", "project_id": project_id, "task_id": task.id, "status_id": task.status_id})
+    new_result = update_data.get("result")
+    if new_result and not old_result:
+        broadcast({"type": "task_completed", "project_id": project_id, "task_id": task.id, "message": f"Задача №{task.id} выполнена"})
     return task
 
 
