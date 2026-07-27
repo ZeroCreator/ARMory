@@ -176,7 +176,7 @@ function updateGlobalKanbanTaskCard(task) {
     if (existingCard) {
         const currentColumnName = existingCard.closest('.kanban-column-body')?.dataset.columnName;
         if (currentColumnName === statusName) {
-            existingCard.outerHTML = renderGlobalTaskCard(task);
+            existingCard.outerHTML = renderTaskCard(task);
         } else {
             existingCard.remove();
             prependGlobalTaskCard(columnBody, task);
@@ -189,7 +189,7 @@ function updateGlobalKanbanTaskCard(task) {
 }
 
 function prependGlobalTaskCard(columnBody, task) {
-    const html = renderGlobalTaskCard(task);
+    const html = renderTaskCard(task);
     columnBody.insertAdjacentHTML('afterbegin', html);
 
     const card = columnBody.querySelector(`.kanban-card[data-id="${task.id}"]`);
