@@ -1,10 +1,11 @@
 // ═══════════════════════════════════════════════════
-// ОБЩИЙ КАНБАН
+// ОБЩИЙ KANBAN
 // ═══════════════════════════════════════════════════
 
 let kanbanData = { columns: [], tasks: [] };
 let filterOptions = { projects: [], priorities: [], assignees: [], tags: [] };
 let kanbanAssignees = [];
+let projectsMap = {};
 let projectStatuses = {};
 let kanbanDragController = null;
 let currentTaskId = null;
@@ -64,6 +65,8 @@ async function loadFilters() {
             api(`${API_BASE}/kanban/filters`),
             api(`${API_BASE}/assignees`),
         ]);
+        projectsMap = {};
+        (filterOptions.projects || []).forEach(p => { projectsMap[p.id] = p.name; });
         populateSelect('filter-project', filterOptions.projects, 'id', 'name');
         populateSelect('filter-priority', filterOptions.priorities.map(p => ({ value: p, label: priorityLabel(p) })), 'value', 'label');
         populateSelect('filter-tag', filterOptions.tags.map(t => ({ value: t, label: t })), 'value', 'label');
@@ -244,7 +247,7 @@ function onTaskProjectChange() {
         option.textContent = status.name;
         statusSelect.appendChild(option);
     });
-    // Если задача создаётся из колонки общего канбана — подставить статус с таким же именем
+    // Если задача создаётся из колонки общего kanban — подставить статус с таким же именем
     if (pendingTaskColumnName) {
         const match = statuses.find(s => s.name === pendingTaskColumnName);
         if (match) statusSelect.value = match.id;
@@ -284,7 +287,7 @@ async function loadKanbanBoard() {
         renderBoard(kanbanData);
         initKanbanSortable();
     } catch (e) {
-        board.innerHTML = `<div class="text-center text-danger py-5">Не удалось загрузить канбан: ${escapeHtml(e.message)}</div>`;
+        board.innerHTML = `<div class="text-center text-danger py-5">Не удалось загрузить kanban: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -489,7 +492,7 @@ async function reorderGlobalTasks(taskIds, columnName) {
         }
     });
 
-    // Группируем по project_id, так как в одной колонке общего канбана могут быть задачи из разных проектов
+    // Группируем по project_id, так как в одной колонке общего kanban могут быть задачи из разных проектов
     const byProject = new Map();
     taskIds.forEach(id => {
         const task = kanbanData.tasks.find(t => t.id === id);
@@ -538,7 +541,7 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
     form.reset();
     document.getElementById('task-id').value = '';
 
-    // При создании из колонки общего канбана проект не заполняем —
+    // При создании из колонки общего kanban проект не заполняем —
     // статус подставится по имени колонки после выбора проекта (onTaskProjectChange).
     pendingTaskColumnName = (!taskId && defaultColumnName) ? defaultColumnName : null;
 
@@ -548,7 +551,8 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
     if (taskId) {
         const task = kanbanData.tasks.find(t => t.id === taskId);
         if (!task) return;
-        titleEl.textContent = `Заявка #${task.id}`;
+        const taskProjectName = projectsMap[task.project_id] || `Проект #${task.project_id}`;
+        titleEl.textContent = `#${task.id} · ${escapeHtml(taskProjectName)}`;
         document.getElementById('task-id').value = task.id;
         document.getElementById('task-project-id').value = task.project_id;
         onTaskProjectChange();
@@ -561,11 +565,15 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
         form.assignee_email.value = task.assignee_email || '';
         form.tags.value = task.tags || '';
         form.list_name.value = task.list_name || '';
+        form.result.value = task.result || '';
+        setTaskResultVisible(!!task.result);
         deleteBtn.style.display = 'inline-block';
         renderTaskAttachments(task.attachments || []);
     } else {
         titleEl.textContent = 'Новая задача';
         form.priority.value = 'medium';
+        form.result.value = '';
+        setTaskResultVisible(false);
         deleteBtn.style.display = 'none';
         renderTaskAttachments([]);
     }
@@ -605,6 +613,7 @@ async function saveTask() {
             assignee_email: form.assignee_email.value.trim() || null,
             tags: form.tags.value.trim() || null,
             list_name: form.list_name.value.trim() || null,
+            result: form.result.value.trim() || null,
         };
 
         if (currentTaskId) {
@@ -662,6 +671,20 @@ async function deleteTaskFromModal() {
     } catch (e) {
         showToast('Ошибка удаления задачи: ' + e.message, 'danger');
     }
+}
+
+function setTaskResultVisible(visible) {
+    const wrap = document.getElementById('task-result-wrap');
+    const btn = document.getElementById('task-result-toggle');
+    if (!wrap) return;
+    wrap.style.display = visible ? 'block' : 'none';
+    if (btn) btn.classList.toggle('active', visible);
+}
+
+function toggleTaskResultField() {
+    const wrap = document.getElementById('task-result-wrap');
+    if (!wrap) return;
+    setTaskResultVisible(wrap.style.display === 'none');
 }
 
 function getCurrentTaskProjectId() {
@@ -1624,7 +1647,7 @@ async function exportKanban() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     } catch (e) {
-        showToast('Ошибка экспорта канбана: ' + e.message, 'danger');
+        showToast('Ошибка экспорта kanban: ' + e.message, 'danger');
     }
 }
 
@@ -1649,6 +1672,6 @@ async function importKanban(input) {
         await loadFilters();
         await loadKanbanBoard();
     } catch (e) {
-        showToast('Ошибка импорта канбана: ' + e.message, 'danger');
+        showToast('Ошибка импорта kanban: ' + e.message, 'danger');
     }
 }

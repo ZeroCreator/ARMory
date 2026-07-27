@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════
-// КАНБАН
+// KANBAN
 // ═══════════════════════════════════════════════════
 
 let kanbanData = { statuses: [], tasks: [] };
@@ -252,7 +252,7 @@ async function loadKanbanBoard(projectId) {
         renderBoard(data);
         initKanbanSortable();
     } catch (e) {
-        board.innerHTML = `<div class="text-center text-danger py-5">Не удалось загрузить канбан: ${escapeHtml(e.message)}</div>`;
+        board.innerHTML = `<div class="text-center text-danger py-5">Не удалось загрузить kanban: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -552,7 +552,7 @@ function openTaskModal(taskId, defaultStatusId) {
     if (taskId) {
         const task = kanbanData.tasks.find(t => t.id === taskId);
         if (!task) return;
-        titleEl.textContent = `Заявка #${task.id}`;
+        titleEl.textContent = `#${task.id} · ${escapeHtml(projectName || `Проект #${task.project_id}`)}`;
         document.getElementById('task-id').value = task.id;
         document.getElementById('task-status-id').value = task.status_id;
         if (statusDisplay && statusDisplayName) {
@@ -567,11 +567,15 @@ function openTaskModal(taskId, defaultStatusId) {
         form.assignee_email.value = task.assignee_email || '';
         form.tags.value = task.tags || '';
         form.list_name.value = task.list_name || '';
+        form.result.value = task.result || '';
+        setTaskResultVisible(!!task.result);
         deleteBtn.style.display = 'inline-block';
         renderTaskAttachments(task.attachments || []);
     } else {
         titleEl.textContent = 'Новая задача';
         form.priority.value = 'medium';
+        form.result.value = '';
+        setTaskResultVisible(false);
         deleteBtn.style.display = 'none';
         renderTaskAttachments([]);
     }
@@ -592,6 +596,7 @@ async function saveTask() {
         assignee_email: form.assignee_email.value.trim() || null,
         tags: form.tags.value.trim() || null,
         list_name: form.list_name.value.trim() || null,
+        result: form.result.value.trim() || null,
     };
 
     try {
@@ -643,6 +648,20 @@ async function deleteTaskFromModal() {
     } catch (e) {
         showToast('Ошибка удаления задачи: ' + e.message, 'danger');
     }
+}
+
+function setTaskResultVisible(visible) {
+    const wrap = document.getElementById('task-result-wrap');
+    const btn = document.getElementById('task-result-toggle');
+    if (!wrap) return;
+    wrap.style.display = visible ? 'block' : 'none';
+    if (btn) btn.classList.toggle('active', visible);
+}
+
+function toggleTaskResultField() {
+    const wrap = document.getElementById('task-result-wrap');
+    if (!wrap) return;
+    setTaskResultVisible(wrap.style.display === 'none');
 }
 
 
@@ -1539,7 +1558,7 @@ async function exportProjectKanban() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     } catch (e) {
-        showToast('Ошибка экспорта канбана проекта: ' + e.message, 'danger');
+        showToast('Ошибка экспорта kanban проекта: ' + e.message, 'danger');
     }
 }
 
@@ -1563,7 +1582,7 @@ async function importProjectKanban(input) {
         showToast(`Импорт завершён. Колонок: ${result.imported_statuses}, задач: ${result.imported_tasks}`, 'success');
         loadKanbanBoard(PROJECT_ID);
     } catch (e) {
-        showToast('Ошибка импорта канбана проекта: ' + e.message, 'danger');
+        showToast('Ошибка импорта kanban проекта: ' + e.message, 'danger');
     }
 }
 

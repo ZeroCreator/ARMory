@@ -244,7 +244,7 @@ async def get_kanban_board(
 
 @router.get("/kanban/filters", response_model=KanbanFiltersOut)
 async def project_kanban_filters(project_id: int, db: AsyncSession = Depends(get_db)):
-    """Доступные значения фильтров для канбана проекта."""
+    """Доступные значения фильтров для kanban проекта."""
     await _get_project(project_id, db)
 
     priorities_result = await db.execute(
@@ -309,6 +309,7 @@ async def create_task(
         assignee_email=data.assignee_email,
         tags=data.tags,
         list_name=data.list_name,
+        result=data.result,
         sort_order=max_val + 1,
     )
     db.add(task)
@@ -424,7 +425,7 @@ async def create_tasks_bulk_global(
     data: TaskBulkRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Массовое создание задач в общем канбане. Каждая задача должна содержать project_id."""
+    """Массовое создание задач в общем kanban. Каждая задача должна содержать project_id."""
     if not data.tasks:
         raise HTTPException(status_code=400, detail="No tasks provided")
 
@@ -598,6 +599,8 @@ async def update_task(
         task.tags = update_data["tags"]
     if "list_name" in update_data:
         task.list_name = update_data["list_name"]
+    if "result" in update_data:
+        task.result = update_data["result"]
 
     if "is_closed" in update_data:
         was_closed = task.is_closed
@@ -678,6 +681,7 @@ async def export_single_task(
         "assignee_email": task.assignee_email,
         "tags": task.tags,
         "list_name": task.list_name,
+        "result": task.result,
         "sort_order": task.sort_order,
         "status_name": status.name,
         "attachments": [
@@ -742,6 +746,7 @@ async def import_single_task(
         "assignee_email": data.assignee_email,
         "tags": data.tags,
         "list_name": data.list_name,
+        "result": data.result,
         "sort_order": data.sort_order,
     }
     if task_id_to_use:
@@ -1151,7 +1156,7 @@ async def add_attachments_to_selected_tasks(
 
 
 # ═══════════════════════════════════════════════════
-# Экспорт / импорт канбана проекта
+# Экспорт / импорт kanban проекта
 # ═══════════════════════════════════════════════════
 
 async def _build_project_export(project_id: int, db: AsyncSession) -> dict:
@@ -1329,7 +1334,7 @@ async def _import_project_data(
 
 @router.get("/kanban/export", response_model=KanbanExportOut)
 async def export_project_kanban(project_id: int, db: AsyncSession = Depends(get_db)):
-    """Экспорт колонок и задач канбана конкретного проекта."""
+    """Экспорт колонок и задач kanban конкретного проекта."""
     project_export = await _build_project_export(project_id, db)
     return {
         "version": 1,
@@ -1344,7 +1349,7 @@ async def import_project_kanban(
     data: KanbanImportIn,
     db: AsyncSession = Depends(get_db),
 ):
-    """Импорт колонок и задач канбана в конкретный проект."""
+    """Импорт колонок и задач kanban в конкретный проект."""
     await _get_project(project_id, db)
 
     imported_statuses = 0
@@ -1364,7 +1369,7 @@ async def import_project_kanban(
 
 
 # ═══════════════════════════════════════════════════
-# Общий канбан
+# Общий kanban
 # ═══════════════════════════════════════════════════
 
 @global_router.get("/kanban", response_model=KanbanGlobalOut)
@@ -1379,7 +1384,7 @@ async def global_kanban(
     due_before: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """Все задачи всех проектов с фильтрами для общего канбана."""
+    """Все задачи всех проектов с фильтрами для общего kanban."""
     query = select(Task).options(selectinload(Task.status), selectinload(Task.attachments))
 
     if project_id is not None:
@@ -1430,7 +1435,7 @@ async def global_kanban(
 
 @global_router.get("/kanban/filters", response_model=KanbanFiltersOut)
 async def global_kanban_filters(db: AsyncSession = Depends(get_db)):
-    """Доступные значения фильтров для общего канбана."""
+    """Доступные значения фильтров для общего kanban."""
     projects_result = await db.execute(select(Project).order_by(Project.name.asc()))
     projects = projects_result.scalars().all()
 
@@ -1464,7 +1469,7 @@ async def global_kanban_filters(db: AsyncSession = Depends(get_db)):
 
 @global_router.get("/kanban/columns", response_model=list[KanbanColumnOut])
 async def list_global_kanban_columns(db: AsyncSession = Depends(get_db)):
-    """Уникальные колонки общего канбана с самым частым цветом."""
+    """Уникальные колонки общего kanban с самым частым цветом."""
     color_query = select(TaskStatus.name, TaskStatus.color, func.count(TaskStatus.id).label("cnt")).group_by(
         TaskStatus.name, TaskStatus.color
     )
@@ -1654,7 +1659,7 @@ async def save_telegram_task_list_config(data: TaskListTelegramConfig):
 
 @global_router.get("/kanban/export", response_model=KanbanExportOut)
 async def export_global_kanban(db: AsyncSession = Depends(get_db)):
-    """Экспорт всех колонок и задач канбана по проектам."""
+    """Экспорт всех колонок и задач kanban по проектам."""
     projects_result = await db.execute(select(Project).order_by(Project.name.asc()))
     projects = projects_result.scalars().all()
 
@@ -1674,7 +1679,7 @@ async def import_global_kanban(
     data: KanbanImportIn,
     db: AsyncSession = Depends(get_db),
 ):
-    """Импорт колонок и задач канбана из JSON-дампа."""
+    """Импорт колонок и задач kanban из JSON-дампа."""
     imported_projects = 0
     imported_statuses = 0
     imported_tasks = 0

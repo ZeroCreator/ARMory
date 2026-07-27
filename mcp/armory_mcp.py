@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""stdio MCP-сервер для интеграции Kimi Code CLI с канбаном ARMory."""
+"""stdio MCP-сервер для интеграции Kimi Code CLI с kanbanм ARMory."""
 
 import json
 import os

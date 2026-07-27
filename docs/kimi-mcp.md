@@ -1,6 +1,6 @@
 # Интеграция с Kimi Code CLI (MCP)
 
-ARMory можно подключить к [Kimi Code CLI](https://www.kimi.com/code/) через протокол MCP (Model Context Protocol). Это позволяет ассистенту Kimi работать с задачами канбана прямо из терминала: получать задачу по номеру или ссылке, создавать новые задачи и обновлять статус.
+ARMory можно подключить к [Kimi Code CLI](https://www.kimi.com/code/) через протокол MCP (Model Context Protocol). Это позволяет ассистенту Kimi работать с задачами kanban прямо из терминала: получать задачу по номеру или ссылке, создавать новые задачи и обновлять статус.
 
 Важно: задачи могут относиться к разным проектам. Например, тикет `https://armory.team-73.ru/projects/2/kanban?task=39` создан в ARMory, но доработка выполняется в коде другого проекта (Intraservice). MCP позволяет Kimi прочитать задачу из ARMory и работать с файлами текущего проекта.
 
@@ -19,7 +19,7 @@ mcp/mcp_logic.py                     # общая логика MCP (tools, JSON-
 mcp/armory_mcp.py                    # stdio-обёртка (не используется в Kimi 0.28.1)
 app/routers/mcp.py                   # HTTP endpoint /mcp
 app/config.py                        # настройка MCP_API_KEY
-.kimi-code/skills/kanban/SKILL.md    # prompt-скилл для работы с канбаном
+.kimi-code/skills/kanban/SKILL.md    # prompt-скилл для работы с kanbanм
 .kimi-code/mcp.json.example          # шаблон локальной конфигурации
 docs/kimi-mcp.md                     # эта документация
 ```

@@ -35,7 +35,7 @@ nav:
   - Календарь: calendar.md
   - Планировщик: scheduler.md
   - Бэкапы: backup.md
-  - Канбан: kanban.md
+  - Kanban: kanban.md
   - Kimi MCP: kimi-mcp.md
   - PocketBase: pocketbase.md
   - Деплой: deployment.md

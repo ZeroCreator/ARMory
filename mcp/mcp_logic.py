@@ -17,7 +17,7 @@ KIMI_ASSIGNEE_NAME = "Kimi"
 TOOLS = [
     {
         "name": "get_task",
-        "description": "Получить задачу канбана по task_id. project_id можно не указывать — номера задач сквозные.",
+        "description": "Получить задачу kanban по task_id. project_id можно не указывать — номера задач сквозные.",
         "inputSchema": {
             "type": "object",
             "properties": {

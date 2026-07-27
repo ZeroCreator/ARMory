@@ -7,9 +7,9 @@
     <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
     {% if project_id %}
     <a href="/projects/{{ project_id }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-folder"></i> К проекту</a>
-    <a href="/projects/{{ project_id }}/kanban" class="btn btn-sm btn-outline-brown"><i class="bi bi-kanban"></i> Канбан</a>
+    <a href="/projects/{{ project_id }}/kanban" class="btn btn-sm btn-outline-brown"><i class="bi bi-kanban"></i> Kanban</a>
     {% else %}
-    <a href="/kanban" class="btn btn-sm btn-outline-brown"><i class="bi bi-kanban"></i> Канбан</a>
+    <a href="/kanban" class="btn btn-sm btn-outline-brown"><i class="bi bi-kanban"></i> Kanban</a>
     {% endif %}
 </div>
 
@@ -179,6 +179,15 @@
     }
     .tasks-table tbody tr:hover {
         background-color: rgba(167, 139, 250, 0.08);
+    }
+    .tasks-table tbody tr.task-row-highlighted td {
+        background-color: rgba(167, 139, 250, 0.30) !important;
+        box-shadow: none !important;
+        border-top: 1px solid rgba(107, 70, 193, 0.50) !important;
+        border-bottom: 1px solid rgba(107, 70, 193, 0.50) !important;
+    }
+    .tasks-table tbody tr.task-row-highlighted:hover td {
+        background-color: rgba(167, 139, 250, 0.40) !important;
     }
 </style>
 
@@ -476,9 +485,191 @@
     </div>
 </div>
 
+<!-- Модал задачи -->
+<div class="modal fade" id="taskViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="task-modal-title"># <span id="task-id-display"></span> · <span id="task-project-display"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <form id="task-form">
+                    <input type="hidden" id="task-id">
+                    <input type="hidden" id="task-project-id">
+                    <div class="mb-3">
+                        <label class="form-label" for="task-status-id">Статус (колонка) <span class="text-danger">*</span></label>
+                        <select class="form-select" id="task-status-id" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="task-title">Название</label>
+                        <input type="text" class="form-control" id="task-title" placeholder="Название (необязательно)">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="task-description">Описание</label>
+                        <textarea class="form-control" id="task-description" rows="3" placeholder="Описание..."></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="task-priority">Приоритет</label>
+                            <select class="form-select" id="task-priority">
+                                <option value="low">Низкий</option>
+                                <option value="medium" selected>Средний</option>
+                                <option value="high">Высокий</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="task-due-date">Дедлайн</label>
+                            <input type="datetime-local" class="form-control" id="task-due-date">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="task-assignee-email">Ответственный</label>
+                            <div class="input-group">
+                                <select class="form-select" id="task-assignee-email">
+                                    <option value="">Не назначен</option>
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary" onclick="openAssigneeModal()" title="Добавить ответственного">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox" id="task-is-closed">
+                        <label class="form-check-label" for="task-is-closed">
+                            Закрыто <span class="text-muted">(дедлайн будет сброшен)</span>
+                        </label>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="task-tags">Теги (через запятую)</label>
+                            <input type="text" class="form-control text-truncate" id="task-tags">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="task-list-name">Список</label>
+                            <input type="text" class="form-control text-truncate" id="task-list-name">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-secondary mb-2" onclick="toggleTaskResultField()" id="task-result-toggle">
+                            <i class="bi bi-journal-text me-1"></i> Результат работы
+                        </button>
+                        <div id="task-result-wrap" style="display:none;">
+                            <textarea class="form-control" id="task-result" rows="3" placeholder="Результат работы..."></textarea>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Вложения</label>
+                        <div id="task-attachments-list" class="mb-2">
+                            <span class="text-muted small">Нет вложений</span>
+                        </div>
+                        <div class="d-flex gap-2 align-items-center">
+                            <div class="dropdown">
+                                <button id="task-add-attachment-btn" class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-plus-lg"></i> Добавить вложение
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('link'); return false;"><i class="bi bi-link-45deg me-2"></i> Ссылка</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('git'); return false;"><i class="bi bi-git me-2"></i> Git-репозиторий</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('file'); return false;"><i class="bi bi-paperclip me-2"></i> Файл</a></li>
+                                </ul>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-success" id="task-export-btn" onclick="exportCurrentTask()" title="Экспорт задачи" style="display:none;">
+                                <i class="bi bi-download"></i> Экспорт
+                            </button>
+                        </div>
+                        <div id="task-attachment-form" class="kanban-attachment-form mt-2" style="display:none;">
+                            <input type="hidden" id="attachment-form-type">
+                            <div class="mb-2">
+                                <input type="text" class="form-control form-control-sm" id="attachment-form-title" placeholder="Название (необязательно)">
+                            </div>
+                            <div class="mb-2" id="attachment-form-url-wrap">
+                                <input type="text" class="form-control form-control-sm" id="attachment-form-url" placeholder="URL">
+                            </div>
+                            <div class="mb-2" id="attachment-form-file-wrap" style="display:none;">
+                                <input type="file" class="form-control form-control-sm" id="attachment-form-file" onchange="submitAttachmentFile(this)">
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-primary" onclick="submitAttachmentForm()">Добавить</button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="hideAttachmentForm()">Отмена</button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger me-auto" id="task-delete-btn" onclick="deleteTaskFromModal()" style="display:none;">Удалить</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" onclick="saveTaskFromModal()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модал ответственного -->
+<div class="modal fade" id="assigneeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Новый ответственный</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="assignee-form">
+                    <div class="mb-3">
+                        <label class="form-label">Имя <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name" required placeholder="Иван Иванов">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" name="email" required placeholder="user@example.com">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveAssignee()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модал редактирования вложения -->
+<div class="modal fade" id="editTaskAttachmentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="edit-task-attachment-modal-title">Редактировать вложение</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-task-attachment-form">
+                    <input type="hidden" id="edit-task-attachment-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" id="edit-task-attachment-title">
+                    </div>
+                    <div class="mb-3" id="edit-task-attachment-url-wrap" style="display:none;">
+                        <label class="form-label">URL</label>
+                        <input type="url" class="form-control" id="edit-task-attachment-url">
+                    </div>
+                    <div class="mb-3" id="edit-task-attachment-file-wrap" style="display:none;">
+                        <label class="form-label">Заменить файл</label>
+                        <input type="file" class="form-control" id="edit-task-attachment-file">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveTaskAttachmentEdit()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=17"></script>
+<script src="/static/js/tasks_list.js?v=19"></script>
 {% endblock %}

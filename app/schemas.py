@@ -262,7 +262,7 @@ class GlossaryTermUpdate(BaseModel):
 
 
 # ═══════════════════════════════════════════════════
-# Канбан
+# Kanban
 # ═══════════════════════════════════════════════════
 
 class AssigneeOut(BaseModel):
@@ -338,6 +338,7 @@ class TaskOut(BaseModel):
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
     list_name: Optional[str] = None
+    result: Optional[str] = None
     sort_order: int = 0
     created_at: datetime
     updated_at: datetime
@@ -355,6 +356,7 @@ class TaskCreate(BaseModel):
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
     list_name: Optional[str] = None
+    result: Optional[str] = None
 
 
 class TaskUpdate(BaseModel):
@@ -367,6 +369,7 @@ class TaskUpdate(BaseModel):
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
     list_name: Optional[str] = None
+    result: Optional[str] = None
 
 
 class TaskReorderRequest(BaseModel):
@@ -473,6 +476,7 @@ class KanbanTaskExport(BaseModel):
     assignee_email: Optional[str] = None
     tags: Optional[str] = None
     list_name: Optional[str] = None
+    result: Optional[str] = None
     sort_order: int = 0
     status_name: str
     attachments: List[KanbanAttachmentExport] = []

@@ -11,6 +11,13 @@ let lastStatusIds = {};
 let sortColumn = 'created_at';
 let sortDirection = 'desc';
 let selectedTaskIds = new Set();
+let highlightedTaskId = null;
+let currentTaskId = null;
+let currentTaskProjectId = null;
+let editingTaskAttachmentId = null;
+let taskAttachments = {};
+window.kanbanAttachments = window.kanbanAttachments || {};
+let taskStatusCache = {};
 
 // ── Массовое добавление вложений к выбранным задачам ──
 let bulkAttachments = [];
@@ -48,13 +55,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tableBody) {
         tableBody.addEventListener('click', (e) => {
             const checkbox = e.target.closest('[data-action="select-task"]');
-            if (!checkbox) return;
-            e.preventDefault();
-            e.stopPropagation();
-            toggleTaskSelected(parseInt(checkbox.dataset.taskId, 10));
+            if (checkbox) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleTaskSelected(parseInt(checkbox.dataset.taskId, 10));
+                return;
+            }
+
+            if (e.target.closest('a, button, input, textarea, select, .actions-cell')) return;
+
+            const row = e.target.closest('tr[data-task-id]');
+            if (!row) return;
+
+            const taskId = parseInt(row.dataset.taskId, 10);
+            highlightedTaskId = taskId;
+            renderTable();
+            openTaskViewModal(taskId);
         });
     }
+
+    document.addEventListener('keydown', handleTasksListKeydown);
 });
+
+function handleTasksListKeydown(e) {
+    const modalEl = document.getElementById('taskViewModal');
+    const modalOpen = modalEl && modalEl.classList.contains('show');
+
+    if (modalOpen) {
+        if (e.key === 'Escape') {
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+        }
+        return;
+    }
+
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) return;
+
+    if (filteredTasks.length === 0) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        let idx = filteredTasks.findIndex(t => t.id === highlightedTaskId);
+        if (e.key === 'ArrowDown') {
+            idx = (idx >= filteredTasks.length - 1 || idx === -1) ? 0 : idx + 1;
+        } else {
+            idx = (idx <= 0 || idx === -1) ? filteredTasks.length - 1 : idx - 1;
+        }
+        highlightedTaskId = filteredTasks[idx].id;
+        renderTable();
+        scrollHighlightedTaskIntoView();
+    } else if (e.key === 'Enter' && highlightedTaskId !== null) {
+        e.preventDefault();
+        openTaskViewModal(highlightedTaskId);
+    }
+}
+
+function scrollHighlightedTaskIntoView() {
+    const row = document.querySelector(`#tasks-table-body tr[data-task-id="${highlightedTaskId}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
 
 async function loadProjectHeader(projectId) {
     try {
@@ -90,11 +149,11 @@ async function loadFilters() {
     }
 }
 
-function populateSelect(id, items) {
+function populateSelect(id, items, defaultLabel = 'Все') {
     const select = document.getElementById(id);
     if (!select) return;
     const currentValue = select.value;
-    const defaultText = select.options[0]?.text || 'Все';
+    const defaultText = select.options[0]?.text || defaultLabel;
     select.innerHTML = `<option value="">${defaultText}</option>` +
         items.map(item => `<option value="${escapeHtml(String(item.value))}">${escapeHtml(String(item.label))}</option>`).join('');
     select.value = currentValue;
@@ -252,7 +311,7 @@ function renderTable() {
         const kanbanUrl = `/projects/${task.project_id}/kanban?task=${task.id}`;
 
         return `
-            <tr class="${task.is_closed ? 'table-secondary' : ''}">
+            <tr class="${task.is_closed ? 'table-secondary' : ''}${highlightedTaskId === task.id ? ' task-row-highlighted' : ''}" data-task-id="${task.id}" style="cursor:pointer;">
                 <td class="text-center">
                     <input class="form-check-input" type="checkbox" ${selectedTaskIds.has(task.id) ? 'checked' : ''} data-action="select-task" data-task-id="${task.id}" title="Выбрать задачу">
                 </td>
@@ -269,7 +328,7 @@ function renderTable() {
                 <td class="d-none d-lg-table-cell">${formatDateTime(task.created_at)}</td>
                 <td class="d-none d-sm-table-cell">${task.is_closed ? '<i class="bi bi-check-circle text-success"></i>' : '—'}</td>
                 <td class="actions-cell">
-                    <a href="${kanbanUrl}" class="btn btn-sm btn-outline-brown" title="Открыть в канбане"><i class="bi bi-kanban"></i></a>
+                    <a href="${kanbanUrl}" class="btn btn-sm btn-outline-brown" title="Открыть в kanban"><i class="bi bi-kanban"></i></a>
                     <button class="btn btn-sm btn-outline-secondary" onclick="copyTaskLink(${task.project_id}, ${task.id})" title="Копировать ссылку"><i class="bi bi-link-45deg"></i></button>
                     <button class="btn btn-sm btn-outline-success" onclick="exportSingleTask(${task.project_id}, ${task.id})" title="Экспорт задачи"><i class="bi bi-download"></i></button>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteTask(${task.id}, ${task.project_id})" title="Удалить задачу"><i class="bi bi-trash"></i></button>
@@ -280,6 +339,430 @@ function renderTable() {
 
     setupTopScroll();
     updateSelectionToolbar();
+}
+
+// ═══════════════════════════════════════════════════
+// ПРОСМОТР/РЕДАКТИРОВАНИЕ ЗАДАЧИ В СПИСКЕ
+// ═══════════════════════════════════════════════════
+
+async function openTaskViewModal(taskId) {
+    try {
+        const task = await api(`${API_BASE}/tasks/${taskId}`);
+        currentTaskId = task.id;
+        currentTaskProjectId = task.project_id;
+        taskAttachments = {};
+
+        document.getElementById('task-id').value = task.id;
+        document.getElementById('task-project-id').value = task.project_id;
+        document.getElementById('task-id-display').textContent = task.id;
+        document.getElementById('task-project-display').textContent = escapeHtml(projectsMap[task.project_id] || `Проект #${task.project_id}`);
+
+        document.getElementById('task-title').value = task.title || '';
+        document.getElementById('task-description').value = task.description || '';
+        document.getElementById('task-priority').value = task.priority || 'medium';
+        document.getElementById('task-is-closed').checked = !!task.is_closed;
+        document.getElementById('task-due-date').value = isoToDatetimeLocal(task.due_date);
+        document.getElementById('task-tags').value = task.tags || '';
+        document.getElementById('task-list-name').value = task.list_name || '';
+        document.getElementById('task-result').value = task.result || '';
+        setTaskResultVisible(!!task.result);
+
+        populateAssigneeSelect();
+        document.getElementById('task-assignee-email').value = task.assignee_email || '';
+
+        const statuses = await loadTaskStatuses(task.project_id);
+        populateSelect('task-status-id', statuses.map(s => ({ value: s.id, label: s.name })), 'Выберите статус');
+        document.getElementById('task-status-id').value = task.status_id;
+
+        document.getElementById('task-delete-btn').style.display = 'inline-block';
+        document.getElementById('task-export-btn').style.display = 'inline-block';
+        document.getElementById('task-add-attachment-btn').disabled = false;
+        hideAttachmentForm();
+        renderTaskAttachments(task.attachments || []);
+
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('taskViewModal')).show();
+    } catch (e) {
+        showToast('Ошибка открытия задачи: ' + e.message, 'danger');
+    }
+}
+
+async function loadTaskStatuses(projectId) {
+    if (taskStatusCache[projectId]) return taskStatusCache[projectId];
+    try {
+        const statuses = await api(`${API_BASE}/projects/${projectId}/task-statuses`);
+        taskStatusCache[projectId] = statuses || [];
+        return taskStatusCache[projectId];
+    } catch (e) {
+        console.error('Failed to load statuses:', e);
+        return [];
+    }
+}
+
+function populateAssigneeSelect() {
+    const assignees = (filterOptions.assignees || []).map(a => ({ value: a.email, label: a.name }));
+    populateSelect('task-assignee-email', assignees, 'Не назначен');
+}
+
+function setTaskResultVisible(visible) {
+    const wrap = document.getElementById('task-result-wrap');
+    const btn = document.getElementById('task-result-toggle');
+    if (!wrap) return;
+    wrap.style.display = visible ? 'block' : 'none';
+    if (btn) btn.classList.toggle('active', visible);
+}
+
+function toggleTaskResultField() {
+    const wrap = document.getElementById('task-result-wrap');
+    if (!wrap) return;
+    setTaskResultVisible(wrap.style.display === 'none');
+}
+
+async function saveTaskFromModal() {
+    if (!currentTaskId || !currentTaskProjectId) return;
+
+    const statusSelect = document.getElementById('task-status-id');
+    const statusId = statusSelect.value ? parseInt(statusSelect.value, 10) : null;
+    if (!statusId) {
+        showToast('Выберите статус', 'warning');
+        return;
+    }
+
+    const dueInput = document.getElementById('task-due-date').value;
+    const payload = {
+        title: document.getElementById('task-title').value.trim() || null,
+        description: document.getElementById('task-description').value.trim() || null,
+        status_id: statusId,
+        priority: document.getElementById('task-priority').value,
+        is_closed: document.getElementById('task-is-closed').checked,
+        due_date: dueInput ? new Date(dueInput).toISOString() : null,
+        assignee_email: document.getElementById('task-assignee-email').value.trim() || null,
+        tags: document.getElementById('task-tags').value.trim() || null,
+        list_name: document.getElementById('task-list-name').value.trim() || null,
+        result: document.getElementById('task-result').value.trim() || null,
+    };
+
+    try {
+        const updated = await api(`${API_BASE}/projects/${currentTaskProjectId}/tasks/${currentTaskId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        const idx = allTasks.findIndex(t => t.id === updated.id);
+        if (idx !== -1) {
+            allTasks[idx] = updated;
+        }
+        applyFilters();
+        bootstrap.Modal.getInstance(document.getElementById('taskViewModal'))?.hide();
+        showToast('Задача сохранена', 'success');
+    } catch (e) {
+        showToast('Ошибка сохранения: ' + e.message, 'danger');
+    }
+}
+
+async function exportCurrentTask() {
+    if (!currentTaskId || !currentTaskProjectId) return;
+    try {
+        const task = await api(`${API_BASE}/projects/${currentTaskProjectId}/tasks/${currentTaskId}/export`);
+        const blob = new Blob([JSON.stringify(task, null, 2)], { type: 'application/json' });
+        const filename = `task_${currentTaskId}_${formatNowMoscowForFilename()}.json`;
+        downloadBlob(blob, filename);
+        showToast('Задача экспортирована', 'success');
+    } catch (e) {
+        showToast('Ошибка экспорта: ' + e.message, 'danger');
+    }
+}
+
+async function deleteTaskFromModal() {
+    if (!currentTaskId || !currentTaskProjectId) return;
+    if (!(await showConfirm('Удалить задачу?'))) return;
+
+    try {
+        await api(`${API_BASE}/projects/${currentTaskProjectId}/tasks/${currentTaskId}`, { method: 'DELETE' });
+        allTasks = allTasks.filter(t => t.id !== currentTaskId);
+        selectedTaskIds.delete(currentTaskId);
+        applyFilters();
+        bootstrap.Modal.getInstance(document.getElementById('taskViewModal'))?.hide();
+        showToast('Задача удалена', 'success');
+    } catch (e) {
+        showToast('Ошибка удаления: ' + e.message, 'danger');
+    }
+}
+
+// ── Ответственные ──
+
+function openAssigneeModal() {
+    const modalEl = document.getElementById('assigneeModal');
+    const form = document.getElementById('assignee-form');
+    if (form) form.reset();
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+async function saveAssignee() {
+    const form = document.getElementById('assignee-form');
+    if (!form.name.value.trim() || !form.email.value.trim()) {
+        showToast('Введите имя и email', 'warning');
+        return;
+    }
+
+    try {
+        await api(`${API_BASE}/assignees`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: form.name.value.trim(), email: form.email.value.trim() }),
+        });
+        bootstrap.Modal.getInstance(document.getElementById('assigneeModal'))?.hide();
+        showToast('Ответственный добавлен', 'success');
+        await loadFilters();
+        populateAssigneeSelect();
+    } catch (e) {
+        showToast('Ошибка добавления ответственного: ' + e.message, 'danger');
+    }
+}
+
+// ── Вложения ──
+
+function showAttachmentForm(type) {
+    if (!currentTaskId || !currentTaskProjectId) {
+        showToast('Сначала сохраните задачу', 'warning');
+        return;
+    }
+    const form = document.getElementById('task-attachment-form');
+    const typeInput = document.getElementById('attachment-form-type');
+    const titleInput = document.getElementById('attachment-form-title');
+    const urlWrap = document.getElementById('attachment-form-url-wrap');
+    const urlInput = document.getElementById('attachment-form-url');
+    const fileWrap = document.getElementById('attachment-form-file-wrap');
+    const fileInput = document.getElementById('attachment-form-file');
+
+    if (!form || !typeInput) return;
+
+    typeInput.value = type;
+    titleInput.value = '';
+    urlInput.value = '';
+    fileInput.value = '';
+
+    if (type === 'file') {
+        urlWrap.style.display = 'none';
+        fileWrap.style.display = 'block';
+    } else {
+        urlWrap.style.display = 'block';
+        fileWrap.style.display = 'none';
+        urlInput.placeholder = type === 'git' ? 'URL репозитория' : 'URL';
+    }
+    form.style.display = 'block';
+}
+
+function hideAttachmentForm() {
+    const form = document.getElementById('task-attachment-form');
+    if (form) form.style.display = 'none';
+}
+
+async function submitAttachmentForm() {
+    if (!currentTaskId || !currentTaskProjectId) return;
+
+    const type = document.getElementById('attachment-form-type').value;
+    const title = document.getElementById('attachment-form-title').value.trim() || null;
+    const url = document.getElementById('attachment-form-url').value.trim();
+
+    if (type !== 'file' && !url) {
+        showToast('Введите URL', 'warning');
+        return;
+    }
+
+    try {
+        await api(`${API_BASE}/projects/${currentTaskProjectId}/tasks/${currentTaskId}/attachments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachment_type: type, title, url }),
+        });
+        hideAttachmentForm();
+        await reloadCurrentTask();
+    } catch (e) {
+        showToast('Ошибка добавления вложения: ' + e.message, 'danger');
+    }
+}
+
+async function submitAttachmentFile(input) {
+    if (!currentTaskId || !currentTaskProjectId) {
+        showToast('Сначала сохраните задачу', 'warning');
+        input.value = '';
+        return;
+    }
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        await api(`${API_BASE}/projects/${currentTaskProjectId}/tasks/${currentTaskId}/attachments/upload`, {
+            method: 'POST',
+            body: formData,
+        });
+        hideAttachmentForm();
+        await reloadCurrentTask();
+    } catch (e) {
+        showToast('Ошибка загрузки файла: ' + e.message, 'danger');
+    }
+}
+
+function renderTaskAttachments(attachments) {
+    const container = document.getElementById('task-attachments-list');
+    if (!container) return;
+
+    if (!currentTaskId || !currentTaskProjectId) {
+        container.innerHTML = '<span class="text-muted small">Сохраните задачу, чтобы добавить вложения</span>';
+        return;
+    }
+
+    if (!attachments || attachments.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
+        return;
+    }
+
+    attachments.forEach(a => {
+        taskAttachments[a.id] = { ...a, project_id: currentTaskProjectId, task_id: currentTaskId };
+        window.kanbanAttachments[a.id] = taskAttachments[a.id];
+    });
+
+    container.innerHTML = attachments.map(a => {
+        const cat = detectCategoryFromAttachment(a);
+        const icon = getCategoryIcon(cat);
+        const display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
+        let link = '';
+        let actionBtn = '';
+        if (a.attachment_type === 'link' || a.attachment_type === 'git') {
+            link = `<a href="${escapeHtml(a.url || '#')}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
+            actionBtn = `
+                <a href="${escapeHtml(a.url || '#')}" target="_blank" class="btn btn-sm btn-outline-brown" title="Открыть" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right"></i></a>
+                <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); copyTaskAttachmentById(${a.id})" title="Копировать ссылку"><i class="bi bi-link-45deg"></i></button>
+            `;
+        } else if (a.attachment_type === 'file') {
+            link = `<span class="text-decoration-none" style="cursor:pointer" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})">${display}</span>`;
+            actionBtn = `
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); openTaskAttachmentInAlexandrite(${a.id})" title="Открыть в Alexandrite"><i class="bi bi-gem"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-brown" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})" title="Предпросмотр"><i class="bi bi-eye"></i></button>
+                <a href="/uploads/${encodeURIComponent(a.file_path || '')}" class="btn btn-sm btn-outline-success" title="Скачать" download onclick="event.stopPropagation()"><i class="bi bi-download"></i></a>
+            `;
+        } else {
+            link = `<span>${display}</span>`;
+        }
+        return `
+            <div class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded mb-1">
+                <div class="text-truncate">
+                    <i class="bi ${icon} me-1"></i> ${link}
+                </div>
+                <div class="d-flex gap-1 align-items-center">
+                    ${actionBtn}
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); editTaskAttachment(${a.id})" title="Изменить"><i class="bi bi-pencil"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); deleteTaskAttachment(${a.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function editTaskAttachment(attachmentId) {
+    const attachment = taskAttachments[attachmentId];
+    if (!attachment) return;
+    editingTaskAttachmentId = attachmentId;
+    const modalEl = document.getElementById('editTaskAttachmentModal');
+    const modalTitle = document.getElementById('edit-task-attachment-modal-title');
+    const titleInput = document.getElementById('edit-task-attachment-title');
+    const urlWrap = document.getElementById('edit-task-attachment-url-wrap');
+    const urlInput = document.getElementById('edit-task-attachment-url');
+    const fileWrap = document.getElementById('edit-task-attachment-file-wrap');
+    const fileInput = document.getElementById('edit-task-attachment-file');
+
+    titleInput.value = attachment.title || '';
+    fileInput.value = '';
+    if (attachment.attachment_type === 'link' || attachment.attachment_type === 'git') {
+        modalTitle.textContent = attachment.attachment_type === 'git' ? 'Редактировать git-репозиторий' : 'Редактировать ссылку';
+        urlWrap.style.display = 'block';
+        urlInput.value = attachment.url || '';
+        fileWrap.style.display = 'none';
+    } else {
+        modalTitle.textContent = 'Редактировать файл';
+        urlWrap.style.display = 'none';
+        urlInput.value = '';
+        fileWrap.style.display = 'block';
+    }
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+async function saveTaskAttachmentEdit() {
+    if (!editingTaskAttachmentId || !currentTaskId || !currentTaskProjectId) return;
+    const attachment = taskAttachments[editingTaskAttachmentId];
+    if (!attachment) return;
+
+    const titleInput = document.getElementById('edit-task-attachment-title');
+    const fileInput = document.getElementById('edit-task-attachment-file');
+    const formData = new FormData();
+    const title = titleInput.value.trim();
+    if (title) formData.append('title', title);
+    if (attachment.attachment_type === 'link' || attachment.attachment_type === 'git') {
+        const url = document.getElementById('edit-task-attachment-url').value.trim();
+        if (url) formData.append('url', url);
+    } else if (fileInput.files && fileInput.files[0]) {
+        formData.append('file', fileInput.files[0]);
+    }
+
+    try {
+        await api(`${API_BASE}/projects/${currentTaskProjectId}/tasks/${currentTaskId}/attachments/${editingTaskAttachmentId}`, {
+            method: 'PATCH',
+            body: formData,
+        });
+        bootstrap.Modal.getInstance(document.getElementById('editTaskAttachmentModal'))?.hide();
+        await reloadCurrentTask();
+    } catch (e) {
+        showToast('Ошибка изменения вложения: ' + e.message, 'danger');
+    }
+}
+
+async function deleteTaskAttachment(attachmentId) {
+    if (!currentTaskId || !currentTaskProjectId) return;
+    if (!(await showConfirm('Удалить вложение?'))) return;
+
+    try {
+        await api(`${API_BASE}/projects/${currentTaskProjectId}/tasks/${currentTaskId}/attachments/${attachmentId}`, {
+            method: 'DELETE',
+        });
+        await reloadCurrentTask();
+    } catch (e) {
+        showToast('Ошибка удаления вложения: ' + e.message, 'danger');
+    }
+}
+
+async function reloadCurrentTask() {
+    if (!currentTaskId) return;
+    try {
+        const task = await api(`${API_BASE}/tasks/${currentTaskId}`);
+        renderTaskAttachments(task.attachments || []);
+        const idx = allTasks.findIndex(t => t.id === currentTaskId);
+        if (idx !== -1) {
+            allTasks[idx] = task;
+        }
+        applyFilters();
+    } catch (e) {
+        console.error('Failed to reload task:', e);
+    }
+}
+
+function copyTaskAttachmentById(attachmentId) {
+    const attachment = taskAttachments[attachmentId];
+    if (!attachment || !attachment.url) return showToast('Ссылка пуста', 'warning');
+    copyTextToClipboard(attachment.url);
+    showToast('Ссылка скопирована в буфер обмена', 'success');
+}
+
+function isoToDatetimeLocal(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return '';
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().slice(0, 16);
 }
 
 function copyTaskLink(projectId, taskId) {

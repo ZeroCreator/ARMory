@@ -66,12 +66,12 @@
 | GET | `/api/scheduler/atq` | Список запланированных задач |
 | POST | `/api/scheduler/remove-task` | Удалить задачу из очереди |
 
-## Канбан и задачи
+## Kanban и задачи
 
 | Метод | Путь | Описание |
 |-------|------|----------|
 | GET | `/api/projects/{id}/tasks` | Задачи проекта |
-| GET | `/api/projects/{id}/tasks/board` | Доска канбана проекта |
+| GET | `/api/projects/{id}/tasks/board` | Доска kanban проекта |
 | POST | `/api/projects/{id}/tasks` | Создать задачу |
 | POST | `/api/projects/{id}/tasks/bulk` | Массовое создание задач (импорт ToDo) |
 | GET | `/api/projects/{id}/tasks/{task_id}` | Получить задачу |
@@ -83,8 +83,8 @@
 | POST | `/api/projects/{id}/kanban/import` | Импорт доски проекта из JSON |
 | GET | `/api/tasks?project_id=` | Список задач всех проектов (фильтр по проекту) |
 | GET | `/api/kanban` | Общая доска по всем проектам |
-| GET | `/api/kanban/filters` | Опции фильтров общего канбана |
-| POST | `/api/kanban/tasks/bulk` | Массовое создание задач в общем канбане |
+| GET | `/api/kanban/filters` | Опции фильтров общего kanban |
+| POST | `/api/kanban/tasks/bulk` | Массовое создание задач в общем kanban |
 | PATCH | `/api/kanban/tasks/{task_id}/status` | Перемещение задачи между колонками |
 | GET | `/api/kanban/export` | Экспорт общей доски в JSON |
 | POST | `/api/kanban/import` | Импорт общей доски из JSON |
