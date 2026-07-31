@@ -18,6 +18,12 @@ let editingTaskAttachmentId = null;
 let taskAttachments = {};
 window.kanbanAttachments = window.kanbanAttachments || {};
 let taskStatusCache = {};
+let ganttView = false;
+let ganttHideNoDeadline = false;
+let ganttMinDate = null;
+let ganttMaxDate = null;
+let ganttTotalDays = 0;
+let ganttTimelineWidth = 0;
 
 // ── Массовое добавление вложений к выбранным задачам ──
 let bulkAttachments = [];
@@ -228,6 +234,7 @@ function applyFilters() {
     });
 
     sortTasks(null);
+    if (ganttView) renderGantt();
 }
 
 function resetFilters() {
@@ -1397,6 +1404,7 @@ function setupTopScroll() {
 
 window.addEventListener('resize', () => {
     setupTopScroll();
+    if (ganttView) syncGanttRowHeights();
 });
 
 function priorityLabel(priority) {
@@ -1698,5 +1706,366 @@ async function createTasksBulk() {
         await loadFilters();
     } catch (e) {
         showToast('Ошибка создания задач: ' + e.message, 'danger');
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// ДИАГРАММА ГАНТА
+// ═══════════════════════════════════════════════════
+
+function toggleGanttView() {
+    ganttView = !ganttView;
+    const tableView = document.getElementById('tasks-table-view');
+    const selectionToolbar = document.getElementById('tasks-selection-toolbar');
+    const ganttViewEl = document.getElementById('gantt-view');
+    const label = document.getElementById('gantt-toggle-label');
+    const icon = document.getElementById('gantt-toggle-icon');
+    const btn = document.getElementById('gantt-toggle-btn');
+
+    if (ganttView) {
+        if (tableView) tableView.style.display = 'none';
+        if (selectionToolbar) selectionToolbar.style.display = 'none';
+        if (ganttViewEl) ganttViewEl.style.display = 'block';
+        if (label) label.textContent = 'Список';
+        if (icon) icon.className = 'bi bi-list-task me-1';
+        if (btn) {
+            btn.classList.remove('btn-outline-success');
+            btn.classList.add('btn-success');
+        }
+        renderGantt();
+    } else {
+        if (tableView) tableView.style.display = 'block';
+        if (selectionToolbar) selectionToolbar.style.display = 'flex';
+        if (ganttViewEl) ganttViewEl.style.display = 'none';
+        if (label) label.textContent = 'Гант';
+        if (icon) icon.className = 'bi bi-bar-chart-steps me-1';
+        if (btn) {
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-success');
+        }
+        renderTable();
+    }
+}
+
+function scrollGanttToStart() {
+    const wrapper = document.getElementById('gantt-right-wrapper');
+    if (wrapper) wrapper.scrollTo({ left: 0, behavior: 'smooth' });
+}
+
+function scrollGanttToEnd() {
+    const wrapper = document.getElementById('gantt-right-wrapper');
+    if (wrapper) wrapper.scrollTo({ left: wrapper.scrollWidth, behavior: 'smooth' });
+}
+
+function scrollGanttToToday() {
+    const wrapper = document.getElementById('gantt-right-wrapper');
+    if (!wrapper || !ganttMinDate || !ganttTimelineWidth || ganttTotalDays === 0) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let left;
+    if (today < ganttMinDate) {
+        left = 0;
+    } else if (today > ganttMaxDate) {
+        left = wrapper.scrollWidth;
+    } else {
+        const dayIndex = daysDiff(ganttMinDate, today);
+        left = dayIndex * 36;
+    }
+    wrapper.scrollTo({ left, behavior: 'smooth' });
+}
+
+function parseDatePart(iso) {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+function daysDiff(a, b) {
+    return Math.round((b - a) / (1000 * 60 * 60 * 24));
+}
+
+function ganttBarClass(task) {
+    if (task.is_closed) return 'gantt-fill-closed';
+    return {
+        low: 'gantt-fill-priority-low',
+        medium: 'gantt-fill-priority-medium',
+        high: 'gantt-fill-priority-high',
+    }[task.priority] || 'gantt-fill-priority-medium';
+}
+
+function ganttRowClass(task) {
+    if (task.is_closed) return 'gantt-row-closed';
+    return {
+        low: 'gantt-row-low',
+        medium: 'gantt-row-medium',
+        high: 'gantt-row-high',
+    }[task.priority] || 'gantt-row-medium';
+}
+
+function toggleGanttHideNoDeadline() {
+    const cb = document.getElementById('gantt-hide-no-deadline');
+    ganttHideNoDeadline = cb ? cb.checked : false;
+    renderGantt();
+}
+
+function renderGantt() {
+    const theadLeft = document.getElementById('gantt-thead-left');
+    const tbodyLeft = document.getElementById('gantt-tbody-left');
+    const theadRight = document.getElementById('gantt-thead-right');
+    const tbodyRight = document.getElementById('gantt-tbody-right');
+    const rangeLabel = document.getElementById('gantt-range-label');
+    if (!theadLeft || !tbodyLeft || !theadRight || !tbodyRight) return;
+
+    const tasksToRender = ganttHideNoDeadline
+        ? filteredTasks.filter(t => t.due_date)
+        : filteredTasks;
+
+    if (tasksToRender.length === 0) {
+        tbodyLeft.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Нет задач</td></tr>`;
+        tbodyRight.innerHTML = '';
+        if (theadRight) theadRight.innerHTML = '';
+        if (rangeLabel) rangeLabel.textContent = '';
+        return;
+    }
+
+    const allDates = [];
+    tasksToRender.forEach(t => {
+        const s = parseDatePart(t.created_at);
+        const e = parseDatePart(t.due_date);
+        if (s) allDates.push(s);
+        if (e) allDates.push(e);
+    });
+
+    if (allDates.length === 0) {
+        tbodyLeft.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">У отфильтрованных задач отсутствуют даты</td></tr>`;
+        tbodyRight.innerHTML = '';
+        if (theadRight) theadRight.innerHTML = '';
+        if (rangeLabel) rangeLabel.textContent = '';
+        return;
+    }
+
+    let minDate = new Date(Math.min(...allDates));
+    let maxDate = new Date(Math.max(...allDates));
+    minDate.setHours(0, 0, 0, 0);
+    maxDate.setHours(0, 0, 0, 0);
+    minDate.setDate(minDate.getDate() - 2);
+    maxDate.setDate(maxDate.getDate() + 2);
+
+    const totalDays = daysDiff(minDate, maxDate) + 1;
+    const dayWidth = 36;
+    const timelineWidth = totalDays * dayWidth;
+
+    ganttMinDate = minDate;
+    ganttMaxDate = maxDate;
+    ganttTotalDays = totalDays;
+    ganttTimelineWidth = timelineWidth;
+
+    if (rangeLabel) {
+        rangeLabel.textContent = `${minDate.toLocaleDateString('ru-RU')} — ${maxDate.toLocaleDateString('ru-RU')}`;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const rightTable = document.querySelector('.gantt-table-right');
+    if (rightTable) {
+        rightTable.style.width = `${timelineWidth}px`;
+        rightTable.style.tableLayout = 'fixed';
+        let colgroup = rightTable.querySelector('colgroup');
+        if (!colgroup) {
+            colgroup = document.createElement('colgroup');
+            rightTable.insertBefore(colgroup, rightTable.firstChild);
+        }
+        colgroup.innerHTML = `<col style="width:${timelineWidth}px;">`;
+    }
+
+    theadLeft.innerHTML = `
+        <tr>
+            <th class="gantt-col-num"><div class="gantt-cell-content">#</div></th>
+            <th class="gantt-col-title"><div class="gantt-cell-content">Название</div></th>
+            <th class="gantt-col-assignee"><div class="gantt-cell-content">Исполнитель</div></th>
+            <th class="gantt-col-start"><div class="gantt-cell-content">Начало</div></th>
+            <th class="gantt-col-end"><div class="gantt-cell-content">Конец</div></th>
+            <th class="gantt-col-duration"><div class="gantt-cell-content">Длит.</div></th>
+        </tr>`;
+
+    let rightHeaderHtml = `<tr><th class="gantt-col-timeline"><div class="d-flex" style="width:${timelineWidth}px;">`;
+    for (let i = 0; i < totalDays; i++) {
+        const d = new Date(minDate);
+        d.setDate(d.getDate() + i);
+        const isToday = d.getTime() === today.getTime();
+        const showMonth = i === 0 || d.getDate() === 1;
+        const month = showMonth ? d.toLocaleDateString('ru-RU', { month: 'short' }).replace(/\.$/, '') : '';
+        rightHeaderHtml += `<div class="gantt-day-header${isToday ? ' today' : ''}" title="${d.toLocaleDateString('ru-RU')}">${month ? `<small>${month}</small>` : ''}${d.getDate()}</div>`;
+    }
+    rightHeaderHtml += `</div></th></tr>`;
+    theadRight.innerHTML = rightHeaderHtml;
+
+    let leftRowsHtml = '';
+    let rightRowsHtml = '';
+
+    tasksToRender.forEach((t, idx) => {
+        let start = parseDatePart(t.created_at);
+        const end = parseDatePart(t.due_date);
+        if (!start && !end) return;
+        if (!start) start = end;
+
+        const startStr = start.toLocaleDateString('ru-RU');
+        const endStr = end ? end.toLocaleDateString('ru-RU') : '—';
+        const duration = end ? (daysDiff(start, end) + 1) : '—';
+        const assignee = escapeHtml(assigneesMap[t.assignee_email] || t.assignee_email || '—');
+        const titleDisplay = escapeHtml((t.title && t.title.trim()) || (t.description && t.description.trim()) || '—');
+
+        const fillClass = ganttBarClass(t);
+        const rowClass = ganttRowClass(t);
+        const hoverAttrs = `data-gantt-idx="${idx}" onmouseenter="hoverGanttRow(${idx})" onmouseleave="unhoverGanttRow(${idx})"`;
+
+        let daysHtml = '';
+        for (let i = 0; i < totalDays; i++) {
+            const dayDate = new Date(minDate);
+            dayDate.setDate(dayDate.getDate() + i);
+            let isActive = false;
+            if (end) {
+                const visibleStart = start < minDate ? minDate : start;
+                const visibleEnd = end > maxDate ? maxDate : end;
+                isActive = dayDate >= visibleStart && dayDate <= visibleEnd;
+            }
+            const isToday = dayDate.getTime() === today.getTime();
+            const dayClass = isActive ? ` ${fillClass}` : '';
+            const weekendClass = [0, 6].includes(dayDate.getDay()) ? ' weekend' : '';
+            const todayClass = isToday ? ' today' : '';
+            daysHtml += `<div class="gantt-day-cell${dayClass}${weekendClass}${todayClass}" title="#${t.id} ${escapeHtml(t.title || '')}\n${startStr} — ${endStr}"></div>`;
+        }
+
+        leftRowsHtml += `
+            <tr ${hoverAttrs} class="${rowClass}" style="cursor:pointer;" onclick="openTaskViewModal(${t.id})">
+                <td class="gantt-col-num"><div class="gantt-cell-content">${t.id}</div></td>
+                <td class="gantt-col-title"><div class="gantt-cell-content" title="${escapeHtml(t.title || t.description || '')}">${titleDisplay}</div></td>
+                <td class="gantt-col-assignee"><div class="gantt-cell-content">${assignee}</div></td>
+                <td class="gantt-col-start"><div class="gantt-cell-content">${startStr}</div></td>
+                <td class="gantt-col-end"><div class="gantt-cell-content">${endStr}</div></td>
+                <td class="gantt-col-duration"><div class="gantt-cell-content">${duration}</div></td>
+            </tr>`;
+
+        rightRowsHtml += `
+            <tr ${hoverAttrs} class="${rowClass}" style="cursor:pointer;" onclick="openTaskViewModal(${t.id})">
+                <td class="gantt-col-timeline">
+                    <div class="gantt-timeline-track" style="width:${timelineWidth}px;">${daysHtml}</div>
+                </td>
+            </tr>`;
+    });
+
+    if (!leftRowsHtml.trim()) {
+        tbodyLeft.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">У отфильтрованных задач отсутствуют даты</td></tr>`;
+        tbodyRight.innerHTML = '';
+        if (theadRight) theadRight.innerHTML = '';
+        return;
+    }
+
+    tbodyLeft.innerHTML = leftRowsHtml;
+    tbodyRight.innerHTML = rightRowsHtml;
+    syncGanttRowHeights();
+}
+
+function syncGanttRowHeights() {
+    const leftRows = document.querySelectorAll('#gantt-tbody-left tr, #gantt-thead-left tr');
+    const rightRows = document.querySelectorAll('#gantt-tbody-right tr, #gantt-thead-right tr');
+    const count = Math.max(leftRows.length, rightRows.length);
+    for (let i = 0; i < count; i++) {
+        const left = leftRows[i];
+        const right = rightRows[i];
+        if (!left || !right) continue;
+        left.style.height = '';
+        right.style.height = '';
+    }
+    for (let i = 0; i < count; i++) {
+        const left = leftRows[i];
+        const right = rightRows[i];
+        if (!left || !right) continue;
+        const maxHeight = Math.max(left.offsetHeight, right.offsetHeight);
+        left.style.height = `${maxHeight}px`;
+        right.style.height = `${maxHeight}px`;
+    }
+}
+
+function hoverGanttRow(idx) {
+    document.querySelectorAll(`[data-gantt-idx="${idx}"]`).forEach(r => r.classList.add('gantt-row-hover'));
+}
+
+function unhoverGanttRow(idx) {
+    document.querySelectorAll(`[data-gantt-idx="${idx}"]`).forEach(r => r.classList.remove('gantt-row-hover'));
+}
+
+
+async function exportGanttXlsx() {
+    const params = new URLSearchParams();
+
+    if (!IS_GLOBAL) {
+        params.set('project_id', PROJECT_ID);
+    } else {
+        const projectEl = document.getElementById('filter-project');
+        if (projectEl?.value) params.set('project_id', projectEl.value);
+    }
+
+    const search = document.getElementById('filter-search')?.value;
+    if (search) params.set('search', search);
+
+    const status = document.getElementById('filter-status')?.value;
+    if (status) params.set('status', status);
+
+    const priority = document.getElementById('filter-priority')?.value;
+    if (priority) params.set('priority', priority);
+
+    const assignee = document.getElementById('filter-assignee')?.value;
+    if (assignee) params.set('assignee_email', assignee);
+
+    const listName = document.getElementById('filter-list')?.value;
+    if (listName) params.set('list_name', listName);
+
+    const closed = document.getElementById('filter-closed')?.value;
+    if (closed !== '' && closed !== null && closed !== undefined) {
+        params.set('closed', closed);
+    }
+
+    const tags = document.getElementById('filter-tags')?.value;
+    if (tags) params.set('tags', tags);
+
+    if (ganttHideNoDeadline) {
+        params.set('hide_no_deadline', '1');
+    }
+
+    const url = `${API_BASE}/gantt/export/xlsx?${params.toString()}`;
+
+    try {
+        const response = await fetch(url, { credentials: 'same-origin' });
+        if (!response.ok) {
+            let detail = `Ошибка ${response.status}`;
+            try {
+                const err = await response.json();
+                if (err.detail) detail = err.detail;
+            } catch (e) {}
+            showToast(detail, 'danger');
+            return;
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get('content-disposition');
+        let filename = 'gantt_export.xlsx';
+        if (disposition) {
+            const match = disposition.match(/filename="?([^"]+)"?/);
+            if (match) filename = match[1];
+        }
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(downloadUrl);
+        showToast('Гант выгружен в XLSX', 'success');
+    } catch (e) {
+        showToast('Ошибка выгрузки: ' + e.message, 'danger');
     }
 }

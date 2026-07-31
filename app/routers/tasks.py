@@ -1,15 +1,19 @@
 from datetime import datetime
 from typing import Optional
 
+import io
 import os
 import platform
 import subprocess
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from sqlalchemy import select, update, delete, func, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -1715,3 +1719,234 @@ async def import_global_kanban(
         "imported_statuses": imported_statuses,
         "imported_tasks": imported_tasks,
     }
+
+
+# ═══════════════════════════════════════════════════
+# Экспорт диаграммы Ганта в Excel
+# ═══════════════════════════════════════════════════
+
+@global_router.get("/gantt/export/xlsx")
+async def export_gantt_xlsx(
+    project_id: Optional[int] = None,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    assignee_email: Optional[str] = None,
+    list_name: Optional[str] = None,
+    closed: Optional[int] = None,
+    tags: Optional[str] = None,
+    hide_no_deadline: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """Экспорт диаграммы Ганта в .xlsx с учётом фильтров."""
+    try:
+        query = select(Task).options(
+            selectinload(Task.status),
+            selectinload(Task.project),
+        )
+
+        if project_id is not None:
+            await _get_project(project_id, db)
+            query = query.where(Task.project_id == project_id)
+        if priority is not None:
+            query = query.where(Task.priority == priority)
+        if assignee_email is not None:
+            query = query.where(Task.assignee_email.ilike(f"%{assignee_email}%"))
+        if list_name is not None:
+            query = query.where(Task.list_name.ilike(f"%{list_name}%"))
+        if closed is not None:
+            query = query.where(Task.is_closed == bool(closed))
+        if status is not None:
+            query = query.join(TaskStatus, Task.status_id == TaskStatus.id)
+            query = query.where(TaskStatus.name.ilike(f"%{status}%"))
+        if search is not None:
+            search_lower = f"%{search.lower()}%"
+            query = query.where(
+                func.lower(Task.title).ilike(search_lower)
+                | func.lower(Task.description).ilike(search_lower)
+            )
+        if tags is not None:
+            tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
+            for tag in tag_list:
+                query = query.where(func.lower(Task.tags).ilike(f"%{tag}%"))
+        if hide_no_deadline:
+            query = query.where(Task.due_date.isnot(None))
+
+        result = await db.execute(query.order_by(Task.is_closed.asc(), Task.created_at.asc()))
+        tasks = result.scalars().all()
+
+        if not tasks:
+            raise HTTPException(status_code=404, detail="Нет задач для экспорта")
+
+        # Карта имён ответственных
+        assignees_result = await db.execute(select(Assignee))
+        assignees = {a.email: a.name for a in assignees_result.scalars().all()}
+
+        # Даты
+        def date_part(dt):
+            if not dt:
+                return None
+            return dt.date() if hasattr(dt, "date") else dt
+
+        all_dates = []
+        for t in tasks:
+            s = date_part(t.created_at)
+            e = date_part(t.due_date)
+            if s:
+                all_dates.append(s)
+            if e:
+                all_dates.append(e)
+
+        if not all_dates:
+            raise HTTPException(status_code=400, detail="У отфильтрованных задач отсутствуют даты")
+
+        min_date = min(all_dates) - timedelta(days=2)
+        max_date = max(all_dates) + timedelta(days=2)
+        total_days = (max_date - min_date).days + 1
+
+        wb = Workbook()
+        wb.remove(wb.active)
+
+        # ── Лист Гант ──
+        ws = wb.create_sheet("Гант")
+
+        header_fill = PatternFill(start_color="E9ECEF", end_color="E9ECEF", fill_type="solid")
+        today_fill = PatternFill(start_color="DEE2E6", end_color="DEE2E6", fill_type="solid")
+        fills = {
+            "low": PatternFill(start_color="C3E6CB", end_color="C3E6CB", fill_type="solid"),
+            "medium": PatternFill(start_color="FFECB5", end_color="FFECB5", fill_type="solid"),
+            "high": PatternFill(start_color="F5C6CB", end_color="F5C6CB", fill_type="solid"),
+            "closed": PatternFill(start_color="D6D8DB", end_color="D6D8DB", fill_type="solid"),
+        }
+
+        thin_border_side = Side(style="thin", color="DEE2E6")
+        thin_border = Border(
+            left=thin_border_side, right=thin_border_side,
+            top=thin_border_side, bottom=thin_border_side
+        )
+
+        # Заголовки
+        headers = ["#", "Название", "Исполнитель", "Начало", "Конец", "Длит."]
+        day_headers = []
+        day_dates = []
+        for i in range(total_days):
+            d = min_date + timedelta(days=i)
+            day_dates.append(d)
+            month = d.strftime("%b").lower().rstrip(".")
+            day_headers.append(f"{month}\n{d.day}")
+        ws.append(headers + day_headers)
+
+        today = datetime.utcnow().date()
+
+        for col_idx, cell in enumerate(ws[1], start=1):
+            cell.fill = header_fill
+            cell.font = Font(bold=True, color="212529")
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            if col_idx > 6:
+                cell.number_format = "DD.MM"
+                ws.column_dimensions[cell.column_letter].width = 4.5
+
+        ws.column_dimensions["A"].width = 6
+        ws.column_dimensions["B"].width = 35
+        ws.column_dimensions["C"].width = 20
+        ws.column_dimensions["D"].width = 12
+        ws.column_dimensions["E"].width = 12
+        ws.column_dimensions["F"].width = 10
+
+        for t in tasks:
+            start = date_part(t.created_at)
+            end = date_part(t.due_date)
+            if not start and not end:
+                continue
+            if not start:
+                start = end
+
+            title = (t.title or "").strip() or (t.description or "").strip() or "—"
+            assignee = assignees.get(t.assignee_email) or t.assignee_email or "—"
+            start_str = start.strftime("%d.%m.%Y") if start else ""
+            end_str = end.strftime("%d.%m.%Y") if end else ""
+            duration = (end - start).days + 1 if end else ""
+
+            row_cells = [t.id, title, assignee, start_str, end_str, duration]
+            ws.append(row_cells)
+            row_num = ws.max_row
+
+            fill = fills["closed"] if t.is_closed else fills.get(t.priority, fills["medium"])
+
+            for i, d in enumerate(day_dates):
+                col_num = 7 + i
+                cell = ws.cell(row=row_num, column=col_num)
+                cell.border = thin_border
+                is_active = False
+                if end:
+                    visible_start = max(start, min_date)
+                    visible_end = min(end, max_date)
+                    is_active = visible_start <= d <= visible_end
+                if is_active:
+                    cell.fill = fill
+                elif d == today:
+                    cell.fill = today_fill
+
+        # Форматирование строк
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=6):
+            for cell in row:
+                cell.alignment = Alignment(vertical="center")
+                if cell.column == 2:
+                    cell.alignment = Alignment(vertical="center", wrap_text=True)
+
+        ws.freeze_panes = "G2"
+
+        # ── Лист Задачи ──
+        ws_tasks = wb.create_sheet("Задачи")
+        ws_tasks.append([
+            "#", "Проект", "Название", "Описание", "Статус", "Приоритет",
+            "Ответственный", "Дедлайн", "Теги", "Список", "Создано", "Закрыто"
+        ])
+        for row in ws_tasks[1]:
+            row.fill = header_fill
+            row.font = Font(bold=True)
+            row.alignment = Alignment(horizontal="center", vertical="center")
+
+        for t in tasks:
+            ws_tasks.append([
+                t.id,
+                t.project.name if t.project else "",
+                (t.title or "").strip() or (t.description or "").strip() or "—",
+                t.description or "",
+                t.status.name if t.status else "",
+                t.priority or "",
+                assignees.get(t.assignee_email) or t.assignee_email or "—",
+                t.due_date.strftime("%d.%m.%Y %H:%M") if t.due_date else "",
+                t.tags or "",
+                t.list_name or "",
+                t.created_at.strftime("%d.%m.%Y %H:%M") if t.created_at else "",
+                "Да" if t.is_closed else "Нет",
+            ])
+
+        for col in ws_tasks.columns:
+            max_length = 0
+            col_letter = col[0].column_letter
+            for cell in col:
+                try:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                except Exception:
+                    pass
+            ws_tasks.column_dimensions[col_letter].width = min(max_length + 2, 50)
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"gantt_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.exception("Gantt XLSX export failed")
+        raise HTTPException(status_code=500, detail=f"Ошибка формирования XLSX: {e}")

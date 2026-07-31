@@ -1185,6 +1185,16 @@ footer {
     min-height: 0;
 }
 
+#toast-container,
+.toast-container {
+    position: fixed !important;
+    top: auto !important;
+    right: 1rem !important;
+    bottom: 1rem !important;
+    left: auto !important;
+    z-index: 9999 !important;
+}
+
 /* ── Боковые панели ── */
 .sidebar {
     width: 300px;

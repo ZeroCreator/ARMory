@@ -88,6 +88,7 @@
 | PATCH | `/api/kanban/tasks/{task_id}/status` | Перемещение задачи между колонками |
 | GET | `/api/kanban/export` | Экспорт общей доски в JSON |
 | POST | `/api/kanban/import` | Импорт общей доски из JSON |
+| GET | `/api/gantt/export/xlsx` | Экспорт диаграммы Ганта в `.xlsx` с учётом фильтров и флага `hide_no_deadline` |
 
 ## Глоссарий
 

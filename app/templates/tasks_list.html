@@ -1,5 +1,8 @@
 {% extends "base_project.html" %}
 
+{% block extra_css %}
+{% endblock %}
+
 {% block main_class %}container-fluid py-4{% endblock %}
 
 {% block content %}
@@ -24,6 +27,9 @@
         </button>
         <button class="btn btn-outline-secondary" onclick="exportTasks('csv')">
             <i class="bi bi-filetype-csv me-1"></i> CSV
+        </button>
+        <button class="btn btn-outline-success" id="gantt-toggle-btn" onclick="toggleGanttView()" style="border-width:2px; font-weight:600;">
+            <i class="bi bi-bar-chart-steps me-1" id="gantt-toggle-icon"></i> <span id="gantt-toggle-label">Гант</span>
         </button>
     </div>
 </div>
@@ -189,6 +195,213 @@
     .tasks-table tbody tr.task-row-highlighted:hover td {
         background-color: rgba(167, 139, 250, 0.40) !important;
     }
+
+    /* Диаграмма Ганта */
+    .gantt-flex {
+        display: flex;
+        background: #fff;
+        min-width: 0;
+    }
+    .gantt-left {
+        width: auto;
+        max-width: 55%;
+        min-width: 320px;
+        flex: 0 0 auto;
+        min-width: 0;
+        border-right: 2px solid #495057;
+        background: #fff;
+        overflow: hidden;
+    }
+    .gantt-table-left {
+        width: 100%;
+        table-layout: auto;
+    }
+    .gantt-right-wrapper {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        background: #fff;
+    }
+    .gantt-right-wrapper::-webkit-scrollbar {
+        height: 18px;
+    }
+    .gantt-right-wrapper::-webkit-scrollbar-track {
+        background: rgba(167, 139, 250, 0.12);
+        border-radius: 9px;
+    }
+    .gantt-right-wrapper::-webkit-scrollbar-thumb {
+        background: rgba(167, 139, 250, 0.55);
+        border-radius: 9px;
+        border: 3px solid rgba(167, 139, 250, 0.08);
+    }
+    .gantt-right-wrapper::-webkit-scrollbar-thumb:hover {
+        background: rgba(167, 139, 250, 0.75);
+    }
+    .gantt-table-left,
+    .gantt-table-right {
+        border-collapse: collapse;
+        margin-bottom: 0;
+        font-size: 0.85rem;
+    }
+    .gantt-table-right {
+        table-layout: fixed;
+        width: auto;
+    }
+    .gantt-table-left th,
+    .gantt-table-left td,
+    .gantt-table-right th,
+    .gantt-table-right td {
+        border: 1px solid #dee2e6;
+        vertical-align: middle;
+        padding: 0;
+        height: 36px;
+        white-space: nowrap;
+        box-sizing: border-box;
+    }
+    .gantt-table-left thead th,
+    .gantt-table-right thead th {
+        background: #e9ecef;
+        font-weight: 700;
+        color: #212529;
+    }
+    .gantt-table-left tbody td,
+    .gantt-table-right tbody td {
+        background: #fff;
+    }
+    .gantt-table-left tbody tr:nth-child(even) td,
+    .gantt-table-right tbody tr:nth-child(even) td {
+        background: #f8f9fa;
+    }
+    .gantt-col-num { width: 45px; max-width: 45px; }
+    .gantt-col-title { width: auto; max-width: 220px; }
+    .gantt-col-assignee { width: auto; max-width: 150px; }
+    .gantt-col-start { width: 95px; max-width: 95px; }
+    .gantt-col-end { width: 95px; max-width: 95px; }
+    .gantt-col-duration {
+        width: 65px;
+        max-width: 65px;
+        border-right: 2px solid #495057;
+    }
+
+    @media (min-width: 1400px) {
+        .gantt-col-title { max-width: 380px; }
+        .gantt-col-assignee { max-width: 170px; }
+    }
+
+    @media (max-width: 1200px) {
+        .gantt-left { max-width: 50%; }
+        .gantt-col-title { max-width: 160px; }
+        .gantt-col-assignee { max-width: 120px; }
+        .gantt-col-start { width: 90px; max-width: 90px; }
+        .gantt-col-end { width: 90px; max-width: 90px; }
+        .gantt-col-duration { width: 60px; max-width: 60px; }
+    }
+
+    @media (max-width: 992px) {
+        .gantt-left { max-width: 45%; }
+        .gantt-col-title { max-width: 130px; }
+        .gantt-col-assignee { max-width: 100px; }
+        .gantt-col-start { width: 85px; max-width: 85px; }
+        .gantt-col-end { width: 85px; max-width: 85px; }
+        .gantt-col-duration { width: 55px; max-width: 55px; }
+    }
+
+    @media (max-width: 768px) {
+        .gantt-left { max-width: 40%; min-width: 280px; }
+        .gantt-col-title { max-width: 110px; }
+        .gantt-col-assignee { max-width: 85px; }
+        .gantt-col-start { width: 80px; max-width: 80px; }
+        .gantt-col-end { width: 80px; max-width: 80px; }
+        .gantt-col-duration { width: 50px; max-width: 50px; }
+    }
+    .gantt-col-timeline {
+        min-width: 0;
+    }
+    .gantt-cell-content {
+        padding: 6px 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 100%;
+    }
+    .gantt-day-header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        text-align: center;
+        line-height: 1.1;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #212529;
+        box-sizing: border-box;
+        border-left: 1px solid #e9ecef;
+        border-right: 1px solid #e9ecef;
+    }
+    .gantt-day-header small {
+        font-size: 0.6rem;
+        line-height: 1;
+        color: #495057;
+    }
+    .gantt-day-cell {
+        width: 36px;
+        height: 100%;
+        min-height: 36px;
+        border-left: 1px solid #e9ecef;
+        border-right: 1px solid #e9ecef;
+        box-sizing: border-box;
+    }
+    .gantt-day-cell.weekend {
+        background: #f1f3f5;
+    }
+    .gantt-timeline-track {
+        display: flex;
+        height: 100%;
+        min-height: 36px;
+        width: 100%;
+    }
+    .gantt-day-header.today,
+    .gantt-day-cell.today {
+        background-color: rgba(108, 117, 125, 0.08);
+    }
+
+    .gantt-fill-priority-low { background-color: rgba(25, 135, 84, 0.65) !important; }
+    .gantt-fill-priority-medium { background-color: rgba(255, 193, 7, 0.75) !important; }
+    .gantt-fill-priority-high { background-color: rgba(220, 53, 69, 0.65) !important; }
+    .gantt-fill-closed { background-color: rgba(108, 117, 125, 0.65) !important; }
+
+    .gantt-table-left tbody tr.gantt-row-closed td,
+    .gantt-table-right tbody tr.gantt-row-closed td { background: rgba(108, 117, 125, 0.12); }
+    .gantt-table-left tbody tr.gantt-row-low td,
+    .gantt-table-right tbody tr.gantt-row-low td { background: rgba(25, 135, 84, 0.12); }
+    .gantt-table-left tbody tr.gantt-row-medium td,
+    .gantt-table-right tbody tr.gantt-row-medium td { background: rgba(255, 193, 7, 0.18); }
+    .gantt-table-left tbody tr.gantt-row-high td,
+    .gantt-table-right tbody tr.gantt-row-high td { background: rgba(220, 53, 69, 0.12); }
+
+    .gantt-table-left tbody tr.gantt-row-hover td,
+    .gantt-table-right tbody tr.gantt-row-hover td {
+        background: rgba(167, 139, 250, 0.18) !important;
+    }
+    .gantt-empty {
+        padding: 2rem;
+        text-align: center;
+        color: #6c757d;
+    }
+    #gantt-view .form-check-label {
+        color: #000 !important;
+        font-weight: 600;
+    }
+    #gantt-view .form-check-input {
+        border-color: #495057;
+    }
+    #gantt-range-label {
+        color: #000;
+        font-size: 0.95rem;
+    }
 </style>
 
 <!-- Тулбар выбора -->
@@ -211,7 +424,7 @@
 </div>
 
 <!-- Таблица -->
-<div class="tasks-table-card">
+<div class="tasks-table-card" id="tasks-table-view">
     <div class="table-top-scroll" id="table-top-scroll" style="display:none;">
         <div class="table-top-scroll-inner" id="table-top-scroll-inner"></div>
     </div>
@@ -241,6 +454,42 @@
                 <tr><td colspan="14" class="text-center text-muted py-4">Загрузка...</td></tr>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Диаграмма Ганта -->
+<div id="gantt-view" class="tasks-table-card" style="display:none;">
+    <div class="d-flex justify-content-between align-items-center p-3 border-bottom flex-wrap gap-2" style="background:#f8f9fa;">
+        <h5 class="mb-0 fw-bold" style="color:#000;"><i class="bi bi-bar-chart-steps me-2"></i>Диаграмма Ганта</h5>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button type="button" class="btn btn-sm btn-outline-success" onclick="exportGanttXlsx()">
+                <i class="bi bi-file-earmark-excel me-1"></i> XLSX
+            </button>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Прокрутка">
+                <button type="button" class="btn btn-outline-secondary" onclick="scrollGanttToStart()"><i class="bi bi-chevron-double-left"></i> Начало</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="scrollGanttToToday()"><i class="bi bi-calendar-event"></i> Сегодня</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="scrollGanttToEnd()">Окончание <i class="bi bi-chevron-double-right"></i></button>
+            </div>
+            <strong id="gantt-range-label" class="text-nowrap"></strong>
+            <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" id="gantt-hide-no-deadline" onchange="toggleGanttHideNoDeadline()">
+                <label class="form-check-label" for="gantt-hide-no-deadline">Скрыть без дедлайна</label>
+            </div>
+        </div>
+    </div>
+    <div class="gantt-flex" id="gantt-wrapper">
+        <div class="gantt-left">
+            <table class="table table-sm table-bordered gantt-table-left mb-0">
+                <thead id="gantt-thead-left"></thead>
+                <tbody id="gantt-tbody-left"></tbody>
+            </table>
+        </div>
+        <div class="gantt-right-wrapper" id="gantt-right-wrapper">
+            <table class="table table-sm table-bordered gantt-table-right mb-0">
+                <thead id="gantt-thead-right"></thead>
+                <tbody id="gantt-tbody-right"></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -671,5 +920,5 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=19"></script>
+<script src="/static/js/tasks_list.js?v=42"></script>
 {% endblock %}
