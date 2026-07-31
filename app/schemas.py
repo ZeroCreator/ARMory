@@ -336,6 +336,7 @@ class TaskOut(BaseModel):
     is_closed: bool = False
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
+    assignee_emails: List[str] = []
     tags: Optional[str] = None
     list_name: Optional[str] = None
     result: Optional[str] = None
@@ -354,6 +355,7 @@ class TaskCreate(BaseModel):
     is_closed: Optional[bool] = False
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
+    assignee_emails: Optional[List[str]] = None
     tags: Optional[str] = None
     list_name: Optional[str] = None
     result: Optional[str] = None
@@ -367,6 +369,7 @@ class TaskUpdate(BaseModel):
     is_closed: Optional[bool] = None
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
+    assignee_emails: Optional[List[str]] = None
     tags: Optional[str] = None
     list_name: Optional[str] = None
     result: Optional[str] = None
@@ -383,6 +386,7 @@ class TaskBulkCreate(BaseModel):
     priority: Optional[str] = "medium"
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
+    assignee_emails: Optional[List[str]] = None
     tags: Optional[str] = None
     list_name: Optional[str] = None
     project_id: Optional[int] = None
@@ -474,6 +478,7 @@ class KanbanTaskExport(BaseModel):
     is_closed: bool = False
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
+    assignee_emails: List[str] = []
     tags: Optional[str] = None
     list_name: Optional[str] = None
     result: Optional[str] = None

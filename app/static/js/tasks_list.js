@@ -24,6 +24,7 @@ let ganttMinDate = null;
 let ganttMaxDate = null;
 let ganttTotalDays = 0;
 let ganttTimelineWidth = 0;
+let currentUserEmail = null;
 
 // ── Массовое добавление вложений к выбранным задачам ──
 let bulkAttachments = [];
@@ -49,6 +50,7 @@ let importBulkAttachments = [];
 let importNextTempId = 1;
 
 document.addEventListener('DOMContentLoaded', async () => {
+    loadCurrentUser();
     if (!IS_GLOBAL) {
         await loadProjectHeader(PROJECT_ID);
     } else {
@@ -119,6 +121,21 @@ function handleTasksListKeydown(e) {
 function scrollHighlightedTaskIntoView() {
     const row = document.querySelector(`#tasks-table-body tr[data-task-id="${highlightedTaskId}"]`);
     if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+async function loadCurrentUser() {
+    try {
+        const me = await api(`${API_BASE}/me`);
+        currentUserEmail = me.email || null;
+    } catch (e) {
+        currentUserEmail = null;
+    }
+    updateAssignMeButtonVisibility();
+}
+
+function updateAssignMeButtonVisibility() {
+    const btn = document.getElementById('task-assign-me-btn');
+    if (btn) btn.style.display = currentUserEmail ? 'inline-block' : 'none';
 }
 
 async function loadProjectHeader(projectId) {
@@ -222,7 +239,7 @@ function applyFilters() {
         if (projectId && String(t.project_id) !== projectId) return false;
         if (status && t.status?.name !== status) return false;
         if (priority && t.priority !== priority) return false;
-        if (assignee && t.assignee_email !== assignee) return false;
+        if (assignee && !(t.assignee_emails || [t.assignee_email]).includes(assignee)) return false;
         if (listName && t.list_name !== listName) return false;
         if (closed !== '' && closed !== null && String(Number(t.is_closed)) !== closed) return false;
         if (tags) {
@@ -283,7 +300,7 @@ function getSortValue(task, column) {
         case 'title': return task.title || '';
         case 'status_name': return task.status?.name || '';
         case 'priority': return task.priority || '';
-        case 'assignee_name': return assigneesMap[task.assignee_email] || task.assignee_email || '';
+        case 'assignee_name': return formatAssignees(task, false);
         case 'due_date': return task.due_date || '';
         case 'list_name': return task.list_name || '';
         case 'created_at': return task.created_at || '';
@@ -328,7 +345,7 @@ function renderTable() {
                 <td class="d-none d-md-table-cell description-cell" title="${escapeHtml(task.description || '')}">${escapeHtml(task.description || '')}</td>
                 <td>${escapeHtml(task.status?.name || '')}</td>
                 <td><span class="badge ${priorityClass}">${priorityLabel(task.priority)}</span></td>
-                <td class="d-none d-sm-table-cell">${escapeHtml(assigneesMap[task.assignee_email] || task.assignee_email || '—')}</td>
+                <td class="d-none d-sm-table-cell">${formatAssignees(task)}</td>
                 <td class="d-none d-sm-table-cell">${task.due_date ? formatDateTime(task.due_date) : '—'}</td>
                 <td class="d-none d-lg-table-cell">${tags || '—'}</td>
                 <td class="d-none d-sm-table-cell">${escapeHtml(task.list_name || '—')}</td>
@@ -375,7 +392,7 @@ async function openTaskViewModal(taskId) {
         setTaskResultVisible(!!task.result);
 
         populateAssigneeSelect();
-        document.getElementById('task-assignee-email').value = task.assignee_email || '';
+        setSelectedAssigneeEmails(task.assignee_emails || [task.assignee_email].filter(Boolean));
 
         const statuses = await loadTaskStatuses(task.project_id);
         populateSelect('task-status-id', statuses.map(s => ({ value: s.id, label: s.name })), 'Выберите статус');
@@ -406,8 +423,63 @@ async function loadTaskStatuses(projectId) {
 }
 
 function populateAssigneeSelect() {
-    const assignees = (filterOptions.assignees || []).map(a => ({ value: a.email, label: a.name }));
-    populateSelect('task-assignee-email', assignees, 'Не назначен');
+    const list = document.getElementById('task-assignee-dropdown-list');
+    if (!list) return;
+    const assignees = filterOptions.assignees || [];
+    if (assignees.length === 0) {
+        list.innerHTML = '<li><span class="dropdown-item-text text-muted">Нет ответственных</span></li>';
+        return;
+    }
+    list.innerHTML = assignees.map(a => `
+        <li>
+            <div class="dropdown-item">
+                <div class="form-check">
+                    <input class="form-check-input task-assignee-checkbox" type="checkbox" value="${escapeHtml(a.email)}" id="task-assignee-${escapeHtml(a.email)}" onchange="updateAssigneeDropdownButton()">
+                    <label class="form-check-label" for="task-assignee-${escapeHtml(a.email)}">${escapeHtml(a.name)}</label>
+                </div>
+            </div>
+        </li>
+    `).join('');
+}
+
+function getSelectedAssigneeEmails() {
+    const checkboxes = document.querySelectorAll('.task-assignee-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function setSelectedAssigneeEmails(emails) {
+    const set = new Set(emails || []);
+    document.querySelectorAll('.task-assignee-checkbox').forEach(cb => {
+        cb.checked = set.has(cb.value);
+    });
+    updateAssigneeDropdownButton();
+}
+
+function updateAssigneeDropdownButton() {
+    const btn = document.getElementById('task-assignee-dropdown-btn');
+    if (!btn) return;
+    const selected = getSelectedAssigneeEmails();
+    if (selected.length === 0) {
+        btn.textContent = 'Не назначены';
+        return;
+    }
+    const labels = selected.map(email => assigneesMap[email] || email);
+    btn.textContent = labels.join(', ');
+}
+
+function assignMeToTask() {
+    if (!currentUserEmail) return;
+    const existing = getSelectedAssigneeEmails();
+    if (!existing.includes(currentUserEmail)) {
+        setSelectedAssigneeEmails([...existing, currentUserEmail]);
+    }
+}
+
+function formatAssignees(task, escape = true) {
+    const emails = task.assignee_emails || [task.assignee_email].filter(Boolean);
+    if (emails.length === 0) return '—';
+    const names = emails.map(email => assigneesMap[email] || email);
+    return escape ? escapeHtml(names.join(', ')) : names.join(', ');
 }
 
 function setTaskResultVisible(visible) {
@@ -442,7 +514,7 @@ async function saveTaskFromModal() {
         priority: document.getElementById('task-priority').value,
         is_closed: document.getElementById('task-is-closed').checked,
         due_date: dueInput ? new Date(dueInput).toISOString() : null,
-        assignee_email: document.getElementById('task-assignee-email').value.trim() || null,
+        assignee_emails: getSelectedAssigneeEmails(),
         tags: document.getElementById('task-tags').value.trim() || null,
         list_name: document.getElementById('task-list-name').value.trim() || null,
         result: document.getElementById('task-result').value.trim() || null,
@@ -1088,7 +1160,7 @@ function exportTasks(format) {
         description: t.description,
         status: t.status?.name,
         priority: t.priority,
-        assignee: assigneesMap[t.assignee_email] || t.assignee_email,
+        assignee: formatAssignees(t, false),
         due_date: formatDateTimeMoscow(t.due_date),
         tags: t.tags,
         list_name: t.list_name,
@@ -1174,7 +1246,7 @@ function getSaveListColumnValue(task, key) {
         case 'description': return (task.description || '').replace(/\s+/g, ' ').trim();
         case 'status_name': return task.status?.name || '';
         case 'priority': return priorityLabel(task.priority);
-        case 'assignee_name': return assigneesMap[task.assignee_email] || task.assignee_email || '—';
+        case 'assignee_name': return formatAssignees(task, false);
         case 'due_date': return task.due_date ? formatDateTime(task.due_date) : '—';
         case 'tags': return task.tags || '—';
         case 'list_name': return task.list_name || '—';
@@ -1654,7 +1726,7 @@ function applyBulkToSelectedImportTasks() {
         if (IS_GLOBAL && projectId) t.project_id = parseInt(projectId, 10);
         if (dueDate) t.due_date = new Date(dueDate).toISOString();
         if (priority) t.priority = priority;
-        if (assignee) t.assignee_email = assignee;
+        if (assignee) t.assignee_emails = [assignee];
         if (tags) t.tags = tags;
     });
 
@@ -1685,7 +1757,7 @@ async function createTasksBulk() {
             description: t.description.trim() || null,
             priority: t.priority || 'medium',
             due_date: t.due_date,
-            assignee_email: t.assignee_email,
+            assignee_emails: t.assignee_emails || [t.assignee_email].filter(Boolean),
             tags: t.tags,
             list_name: listName || undefined,
             project_id: IS_GLOBAL ? t.project_id : undefined,
@@ -1915,7 +1987,7 @@ function renderGantt() {
         const startStr = start.toLocaleDateString('ru-RU');
         const endStr = end ? end.toLocaleDateString('ru-RU') : '—';
         const duration = end ? (daysDiff(start, end) + 1) : '—';
-        const assignee = escapeHtml(assigneesMap[t.assignee_email] || t.assignee_email || '—');
+        const assignee = formatAssignees(t);
         const titleDisplay = escapeHtml((t.title && t.title.trim()) || (t.description && t.description.trim()) || '—');
 
         const fillClass = ganttBarClass(t);

@@ -174,6 +174,15 @@ class Assignee(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class TaskAssignee(Base):
+    __tablename__ = "task_assignees"
+
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True)
+    assignee_email = Column(String(255), nullable=False, primary_key=True)
+
+    task = relationship("Task", back_populates="assignees")
+
+
 class TaskStatus(Base):
     __tablename__ = "task_statuses"
 
@@ -209,7 +218,19 @@ class Task(Base):
 
     project = relationship("Project", back_populates="tasks", lazy="selectin")
     status = relationship("TaskStatus", back_populates="tasks", lazy="selectin")
+    assignees = relationship("TaskAssignee", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskAssignee.assignee_email")
     attachments = relationship("TaskAttachment", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskAttachment.created_at.asc()")
+
+    @property
+    def assignee_emails(self):
+        emails = [a.assignee_email for a in self.assignees]
+        if not emails and self.assignee_email:
+            emails = [self.assignee_email]
+        return emails
+
+    @property
+    def first_assignee_email(self):
+        return self.assignee_emails[0] if self.assignee_emails else None
 
 
 class TaskAttachment(Base):

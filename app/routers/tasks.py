@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Optional
 
+from pydantic import BaseModel
+
 import io
 import os
 import platform
@@ -14,14 +16,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from sqlalchemy import select, update, delete, func, distinct
+from sqlalchemy import select, update, delete, func, distinct, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import Settings, get_settings
 from app.database import get_db
 from app.events import broadcast
-from app.models import Assignee, Project, Task, TaskAttachment, TaskStatus
+from app.models import Assignee, Project, Task, TaskAssignee, TaskAttachment, TaskStatus
 from app.routers.collabora import build_collabora_iframe_url
 from app.routers.wopi import OFFICE_EXTENSIONS, encode_file_id
 from app.storage import StorageBackend, get_storage
@@ -60,6 +62,43 @@ router = APIRouter(prefix="/api/projects/{project_id}", tags=["tasks"])
 global_router = APIRouter(prefix="/api", tags=["kanban"])
 
 
+class CurrentUserOut(BaseModel):
+    email: Optional[str] = None
+
+
+@global_router.get("/me", response_model=CurrentUserOut)
+async def get_current_user(request: Request):
+    """Возвращает email текущего пользователя из заголовков oauth2-proxy."""
+    headers = [
+        "X-Forwarded-Email",
+        "X-Forwarded-User",
+        "X-Forwarded-Preferred-Username",
+        "X-Forwarded-Access-Token",
+        "Remote-User",
+        "Remote-Email",
+    ]
+    email = None
+    for h in headers:
+        value = request.headers.get(h)
+        if value:
+            email = value
+            break
+    return {"email": email.strip() if email else None}
+
+
+@global_router.get("/me/debug")
+async def debug_current_user(request: Request):
+    """Отладочный endpoint: возвращает все потенциальные auth-заголовки."""
+    auth_headers = {}
+    for key, value in request.headers.items():
+        if any(
+            x in key.lower()
+            for x in ["forwarded", "remote", "auth", "user", "email", "preferred"]
+        ):
+            auth_headers[key] = value
+    return {"headers": auth_headers, "all": dict(request.headers)}
+
+
 async def _get_project(project_id: int, db: AsyncSession) -> Project:
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -81,13 +120,63 @@ async def _get_status(project_id: int, status_id: int, db: AsyncSession) -> Task
 async def _get_task(project_id: int, task_id: int, db: AsyncSession) -> Task:
     result = await db.execute(
         select(Task)
-        .options(selectinload(Task.status), selectinload(Task.attachments))
+        .options(selectinload(Task.status), selectinload(Task.attachments), selectinload(Task.assignees))
         .where(Task.id == task_id, Task.project_id == project_id)
     )
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
+
+
+def _extract_assignee_emails(data) -> list[str]:
+    """Извлекает список email исполнителей из данных задачи."""
+    emails = []
+    if getattr(data, "assignee_emails", None):
+        emails = [e.strip() for e in data.assignee_emails if e and e.strip()]
+    if not emails and getattr(data, "assignee_email", None):
+        emails = [data.assignee_email.strip()]
+    return emails
+
+
+async def _apply_task_assignees(task: Task, emails: list[str], db: AsyncSession) -> None:
+    """Обновляет исполнителей задачи и legacy-поле assignee_email."""
+    normalized = sorted(set(e.lower() for e in emails if e))
+    task.assignee_email = normalized[0] if normalized else None
+
+    existing = {a.assignee_email.lower(): a for a in task.assignees}
+    to_keep = set()
+    for email in normalized:
+        if email in existing:
+            to_keep.add(email)
+        else:
+            ta = TaskAssignee(task_id=task.id, assignee_email=email)
+            db.add(ta)
+            to_keep.add(email)
+
+    for email, ta in existing.items():
+        if email not in to_keep:
+            await db.delete(ta)
+
+
+def _task_has_assignee(task: Task, email: str) -> bool:
+    """Проверяет, назначен ли указанный email исполнителем задачи."""
+    if not email:
+        return False
+    email_lower = email.lower()
+    if task.assignee_email and task.assignee_email.lower() == email_lower:
+        return True
+    return any(a.assignee_email.lower() == email_lower for a in task.assignees)
+
+
+def _format_task_assignees(task: Task, assignees_map: dict[str, str]) -> str:
+    """Возвращает строку с именами/емейлами исполнителей задачи через запятую."""
+    names = []
+    for email in task.assignee_emails:
+        name = assignees_map.get(email) or email
+        if name:
+            names.append(name)
+    return ", ".join(names) or "—"
 
 
 # ═══════════════════════════════════════════════════
@@ -226,7 +315,15 @@ async def get_kanban_board(
     if priority is not None:
         tasks_query = tasks_query.where(Task.priority == priority)
     if assignee_email is not None:
-        tasks_query = tasks_query.where(Task.assignee_email.ilike(f"%{assignee_email}%"))
+        search = f"%{assignee_email}%"
+        tasks_query = tasks_query.outerjoin(
+            TaskAssignee, Task.id == TaskAssignee.task_id
+        ).where(
+            or_(
+                Task.assignee_email.ilike(search),
+                TaskAssignee.assignee_email.ilike(search),
+            )
+        ).distinct()
     if tags is not None:
         tasks_query = tasks_query.where(Task.tags.ilike(f"%{tags}%"))
     if created_after is not None:
@@ -310,13 +407,19 @@ async def create_task(
         priority=data.priority or "medium",
         is_closed=data.is_closed or False,
         due_date=None if data.is_closed else data.due_date,
-        assignee_email=data.assignee_email,
+        assignee_email=None,
         tags=data.tags,
         list_name=data.list_name,
         result=data.result,
         sort_order=max_val + 1,
     )
     db.add(task)
+    await db.flush()
+    await db.refresh(task)
+
+    assignee_emails = _extract_assignee_emails(data)
+    await _apply_task_assignees(task, assignee_emails, db)
+
     await db.commit()
     await db.refresh(task)
     broadcast({"type": "task_changed", "project_id": project_id, "task_id": task.id, "status_id": task.status_id})
@@ -379,7 +482,7 @@ async def _bulk_create_tasks(
             priority=task_data.priority or "medium",
             is_closed=False,
             due_date=task_data.due_date,
-            assignee_email=task_data.assignee_email,
+            assignee_email=None,
             tags=task_data.tags,
             list_name=task_data.list_name,
             sort_order=base_order + idx + 1,
@@ -390,6 +493,8 @@ async def _bulk_create_tasks(
     await db.flush()
 
     for task in created_tasks:
+        assignee_emails = _extract_assignee_emails(task_data)
+        await _apply_task_assignees(task, assignee_emails, db)
         for attachment_data in attachments_data:
             attachment = TaskAttachment(
                 task_id=task.id,
@@ -597,8 +702,9 @@ async def update_task(
         task.description = update_data["description"]
     if "due_date" in update_data:
         task.due_date = update_data["due_date"]
-    if "assignee_email" in update_data:
-        task.assignee_email = update_data["assignee_email"]
+    if "assignee_emails" in update_data or "assignee_email" in update_data:
+        emails = _extract_assignee_emails(data)
+        await _apply_task_assignees(task, emails, db)
     if "tags" in update_data:
         task.tags = update_data["tags"]
     if "list_name" in update_data:
@@ -687,6 +793,7 @@ async def export_single_task(
         "is_closed": bool(task.is_closed),
         "due_date": task.due_date,
         "assignee_email": task.assignee_email,
+        "assignee_emails": task.assignee_emails,
         "tags": task.tags,
         "list_name": task.list_name,
         "result": task.result,
@@ -751,7 +858,7 @@ async def import_single_task(
         "priority": data.priority,
         "is_closed": data.is_closed,
         "due_date": data.due_date,
-        "assignee_email": data.assignee_email,
+        "assignee_email": None,
         "tags": data.tags,
         "list_name": data.list_name,
         "result": data.result,
@@ -764,6 +871,9 @@ async def import_single_task(
     db.add(task)
     await db.flush()
     await db.refresh(task)
+
+    emails = _extract_assignee_emails(data)
+    await _apply_task_assignees(task, emails, db)
 
     for attachment_data in data.attachments or []:
         attachment = TaskAttachment(
@@ -1208,6 +1318,7 @@ async def _build_project_export(project_id: int, db: AsyncSession) -> dict:
                 "is_closed": t.is_closed,
                 "due_date": t.due_date,
                 "assignee_email": t.assignee_email,
+                "assignee_emails": t.assignee_emails,
                 "tags": t.tags,
                 "list_name": t.list_name,
                 "sort_order": t.sort_order,
@@ -1292,7 +1403,7 @@ async def _import_project_data(
                 priority=task_data.priority,
                 is_closed=task_data.is_closed,
                 due_date=task_data.due_date,
-                assignee_email=task_data.assignee_email,
+                assignee_email=None,
                 tags=task_data.tags,
                 list_name=task_data.list_name,
                 sort_order=task_data.sort_order,
@@ -1304,13 +1415,16 @@ async def _import_project_data(
             task.priority = task_data.priority
             task.is_closed = task_data.is_closed
             task.due_date = task_data.due_date
-            task.assignee_email = task_data.assignee_email
+            task.assignee_email = None
             task.tags = task_data.tags
             task.list_name = task_data.list_name
             task.sort_order = task_data.sort_order
 
         await db.flush()
         await db.refresh(task)
+
+        emails = _extract_assignee_emails(task_data)
+        await _apply_task_assignees(task, emails, db)
 
         attachments_to_import = list(task_data.attachments or [])
         if attachments_to_import:
@@ -1400,7 +1514,15 @@ async def global_kanban(
     if priority is not None:
         query = query.where(Task.priority == priority)
     if assignee_email is not None:
-        query = query.where(Task.assignee_email.ilike(f"%{assignee_email}%"))
+        search = f"%{assignee_email}%"
+        query = query.outerjoin(
+            TaskAssignee, Task.id == TaskAssignee.task_id
+        ).where(
+            or_(
+                Task.assignee_email.ilike(search),
+                TaskAssignee.assignee_email.ilike(search),
+            )
+        ).distinct()
     if tags is not None:
         query = query.where(Task.tags.ilike(f"%{tags}%"))
     if created_after is not None:
@@ -1743,6 +1865,7 @@ async def export_gantt_xlsx(
         query = select(Task).options(
             selectinload(Task.status),
             selectinload(Task.project),
+            selectinload(Task.assignees),
         )
 
         if project_id is not None:
@@ -1751,7 +1874,15 @@ async def export_gantt_xlsx(
         if priority is not None:
             query = query.where(Task.priority == priority)
         if assignee_email is not None:
-            query = query.where(Task.assignee_email.ilike(f"%{assignee_email}%"))
+            search = f"%{assignee_email}%"
+            query = query.outerjoin(
+                TaskAssignee, Task.id == TaskAssignee.task_id
+            ).where(
+                or_(
+                    Task.assignee_email.ilike(search),
+                    TaskAssignee.assignee_email.ilike(search),
+                )
+            ).distinct()
         if list_name is not None:
             query = query.where(Task.list_name.ilike(f"%{list_name}%"))
         if closed is not None:
@@ -1862,12 +1993,12 @@ async def export_gantt_xlsx(
                 start = end
 
             title = (t.title or "").strip() or (t.description or "").strip() or "—"
-            assignee = assignees.get(t.assignee_email) or t.assignee_email or "—"
+            assignee_str = _format_task_assignees(t, assignees)
             start_str = start.strftime("%d.%m.%Y") if start else ""
             end_str = end.strftime("%d.%m.%Y") if end else ""
             duration = (end - start).days + 1 if end else ""
 
-            row_cells = [t.id, title, assignee, start_str, end_str, duration]
+            row_cells = [t.id, title, assignee_str, start_str, end_str, duration]
             ws.append(row_cells)
             row_num = ws.max_row
 
@@ -1915,7 +2046,7 @@ async def export_gantt_xlsx(
                 t.description or "",
                 t.status.name if t.status else "",
                 t.priority or "",
-                assignees.get(t.assignee_email) or t.assignee_email or "—",
+                _format_task_assignees(t, assignees),
                 t.due_date.strftime("%d.%m.%Y %H:%M") if t.due_date else "",
                 t.tags or "",
                 t.list_name or "",

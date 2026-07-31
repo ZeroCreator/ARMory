@@ -15,6 +15,7 @@ let editingTaskAttachmentId = null;
 let kanbanEventSource = null;
 let kanbanSseReconnectDelay = 1000;
 let kanbanIgnoreReloadUntil = 0;
+let currentUserEmail = null;
 window.kanbanAttachments = window.kanbanAttachments || {};
 
 function shouldIgnoreKanbanReload() {
@@ -26,6 +27,7 @@ function markKanbanReloadIgnored(durationMs = 1500) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    loadCurrentUser();
     await loadFilters();
     await loadKanbanBoard();
     handleTaskDeepLink();
@@ -207,7 +209,77 @@ function populateAssigneeSelects(assignees) {
         label: a.name,
     }));
     populateSelect('filter-assignee', options, 'value', 'label');
-    populateSelect('task-assignee-email', options, 'value', 'label');
+    populateAssigneeDropdown(assignees);
+}
+
+function populateAssigneeDropdown(assignees) {
+    const list = document.getElementById('task-assignee-dropdown-list');
+    if (!list) return;
+    if (!assignees || assignees.length === 0) {
+        list.innerHTML = '<li><span class="dropdown-item-text text-muted">Нет ответственных</span></li>';
+        return;
+    }
+    list.innerHTML = assignees.map(a => `
+        <li>
+            <div class="dropdown-item">
+                <div class="form-check">
+                    <input class="form-check-input task-assignee-checkbox" type="checkbox" value="${escapeHtml(a.email)}" id="task-assignee-${escapeHtml(a.email)}" onchange="updateAssigneeDropdownButton()">
+                    <label class="form-check-label" for="task-assignee-${escapeHtml(a.email)}">${escapeHtml(a.name)}</label>
+                </div>
+            </div>
+        </li>
+    `).join('');
+}
+
+function getSelectedAssigneeEmails() {
+    const checkboxes = document.querySelectorAll('.task-assignee-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function setSelectedAssigneeEmails(emails) {
+    const set = new Set(emails || []);
+    document.querySelectorAll('.task-assignee-checkbox').forEach(cb => {
+        cb.checked = set.has(cb.value);
+    });
+    updateAssigneeDropdownButton();
+}
+
+function updateAssigneeDropdownButton() {
+    const btn = document.getElementById('task-assignee-dropdown-btn');
+    if (!btn) return;
+    const selected = getSelectedAssigneeEmails();
+    if (selected.length === 0) {
+        btn.textContent = 'Не назначены';
+        return;
+    }
+    const labels = selected.map(email => renderAssigneeName(email));
+    btn.textContent = labels.join(', ');
+}
+
+function assignMeToTask() {
+    if (!currentUserEmail) return;
+    const existing = getSelectedAssigneeEmails();
+    if (!existing.includes(currentUserEmail)) {
+        setSelectedAssigneeEmails([...existing, currentUserEmail]);
+    }
+}
+
+function formatAssignees(task, escape = true) {
+    const emails = task.assignee_emails || [task.assignee_email].filter(Boolean);
+    if (emails.length === 0) return '';
+    const names = emails.map(email => renderAssigneeName(email));
+    return escape ? escapeHtml(names.join(', ')) : names.join(', ');
+}
+
+async function loadCurrentUser() {
+    try {
+        const me = await api(`${API_BASE}/me`);
+        currentUserEmail = me.email || null;
+    } catch (e) {
+        currentUserEmail = null;
+    }
+    const btn = document.getElementById('task-assign-me-btn');
+    if (btn) btn.style.display = currentUserEmail ? 'inline-block' : 'none';
 }
 
 function renderAssigneeName(email) {
@@ -348,8 +420,8 @@ function renderTaskCard(task) {
         ? `<span class="kanban-task-meta kanban-deadline-meta" title="Дедлайн"><i class="bi bi-bell"></i> ${formatDateTime(task.due_date)}</span>`
         : '';
 
-    const assignee = task.assignee_email
-        ? `<span class="kanban-task-meta" title="Ответственный"><i class="bi bi-person"></i> ${escapeHtml(renderAssigneeName(task.assignee_email))}</span>`
+    const assigneeHtml = (task.assignee_emails || [task.assignee_email].filter(Boolean)).length > 0
+        ? `<span class="kanban-task-meta" title="Ответственные"><i class="bi bi-person"></i> ${formatAssignees(task)}</span>`
         : '';
 
     const tags = task.tags
@@ -378,7 +450,7 @@ function renderTaskCard(task) {
             ${task.description ? `<p class="kanban-card-desc">${escapeHtml(task.description)}</p>` : ''}
             <div class="kanban-task-meta-wrap">
                 ${dueDate}
-                ${assignee}
+                ${assigneeHtml}
             </div>
             ${attachmentsHtml}
             <div class="kanban-card-footer">
@@ -564,7 +636,7 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
         form.priority.value = task.priority || 'medium';
         document.getElementById('task-is-closed').checked = !!task.is_closed;
         form.due_date.value = task.due_date ? formatDateTimeLocal(task.due_date) : '';
-        form.assignee_email.value = task.assignee_email || '';
+        setSelectedAssigneeEmails(task.assignee_emails || [task.assignee_email].filter(Boolean));
         form.tags.value = task.tags || '';
         form.list_name.value = task.list_name || '';
         form.result.value = task.result || '';
@@ -612,7 +684,7 @@ async function saveTask() {
             priority: form.priority.value,
             is_closed: document.getElementById('task-is-closed').checked,
             due_date: form.due_date.value ? new Date(form.due_date.value).toISOString() : null,
-            assignee_email: form.assignee_email.value.trim() || null,
+            assignee_emails: getSelectedAssigneeEmails(),
             tags: form.tags.value.trim() || null,
             list_name: form.list_name.value.trim() || null,
             result: form.result.value.trim() || null,
@@ -1110,6 +1182,7 @@ function handleContextMenuClick(e) {
     const columnName = item.dataset.columnName || '';
     const email = item.dataset.email || '';
     if (action === 'copy-link') copyTaskLink(taskId);
+    else if (action === 'assign-me') setTaskAssignee(lastTaskContextMenuTaskId, currentUserEmail);
     else if (action === 'assignee-submenu') showTaskAssigneeSubmenu();
     else if (action === 'set-assignee') setTaskAssignee(lastTaskContextMenuTaskId, email);
     else if (action === 'back-to-task-menu') renderTaskContextMenu(lastTaskContextMenuTaskId, lastTaskContextMenuEvent);
@@ -1189,10 +1262,16 @@ function showTaskContextMenu(event, taskId) {
 
 function renderTaskContextMenu(taskId, event) {
     const menu = getContextMenu();
+    const assignMeBtn = currentUserEmail
+        ? `<button class="kanban-context-item" data-action="assign-me" data-task-id="${taskId}">
+            <i class="bi bi-person-check me-2"></i> Назначить себя
+        </button>`
+        : '';
     menu.innerHTML = `
         <button class="kanban-context-item" data-action="copy-link" data-task-id="${taskId}">
             <i class="bi bi-link-45deg me-2"></i> Ссылка на задачу
         </button>
+        ${assignMeBtn}
         <button class="kanban-context-item" data-action="assignee-submenu">
             <i class="bi bi-person me-2"></i> Установить ответственного
         </button>
@@ -1230,11 +1309,18 @@ async function setTaskAssignee(taskId, email) {
     hideContextMenu();
     const task = kanbanData.tasks.find(t => t.id === taskId);
     if (!task) return;
+    const emails = new Set(task.assignee_emails || [task.assignee_email].filter(Boolean));
+    if (email) {
+        if (emails.has(email)) emails.delete(email);
+        else emails.add(email);
+    } else {
+        emails.clear();
+    }
     try {
         const updatedTask = await api(`${API_BASE}/projects/${task.project_id}/tasks/${taskId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ assignee_email: email || null }),
+            body: JSON.stringify({ assignee_emails: Array.from(emails) }),
         });
         const idx = kanbanData.tasks.findIndex(t => t.id === taskId);
         if (idx !== -1) {
@@ -1586,7 +1672,7 @@ function applyBulkToSelectedImportTasks() {
         if (projectId) t.project_id = parseInt(projectId, 10);
         if (dueDate) t.due_date = new Date(dueDate).toISOString();
         if (priority) t.priority = priority;
-        if (assignee) t.assignee_email = assignee;
+        if (assignee) t.assignee_emails = [assignee];
         if (tags) t.tags = tags;
     });
 
@@ -1613,7 +1699,7 @@ async function createTasksBulk() {
             description: t.description.trim() || null,
             priority: t.priority || 'medium',
             due_date: t.due_date,
-            assignee_email: t.assignee_email,
+            assignee_emails: t.assignee_emails || [t.assignee_email].filter(Boolean),
             tags: t.tags,
             project_id: t.project_id,
         })),
