@@ -64,8 +64,13 @@
                         <input type="text" class="form-control" name="title" placeholder="Название (необязательно)">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Описание</label>
-                        <textarea class="form-control" name="description" rows="3" placeholder="Описание..."></textarea>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label">Описание</label>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="toggleTextareaExpand(this)">
+                                <i class="bi bi-arrows-angle-expand me-1"></i> Развернуть
+                            </button>
+                        </div>
+                        <textarea class="form-control expandable-textarea" name="description" rows="3" placeholder="Описание..."></textarea>
                     </div>
                     <div class="row">
                         <div class="col-md-4 mb-3">
@@ -121,7 +126,7 @@
                             <i class="bi bi-journal-text me-1"></i> Результат работы
                         </button>
                         <div id="task-result-wrap" style="display:none;">
-                            <textarea class="form-control" name="result" rows="3" placeholder="Результат работы..."></textarea>
+                            <textarea class="form-control expandable-textarea" name="result" rows="3" placeholder="Результат работы..."></textarea>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -402,5 +407,5 @@
     const LOCAL_STORAGE_PATH = {{ local_storage_path | tojson }};
 </script>
 <script src="/static/js/kanban_common.js?v=1"></script>
-<script src="/static/js/kanban.js?v=54"></script>
+<script src="/static/js/kanban.js?v=57"></script>
 {% endblock %}

@@ -169,6 +169,34 @@ function isLocalhost() {
 }
 
 
+function autoExpandTextarea(ta) {
+    if (!ta) return;
+    ta.classList.add('expanded-textarea');
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+}
+
+function collapseTextarea(ta) {
+    if (!ta) return;
+    ta.classList.remove('expanded-textarea');
+    ta.style.height = '';
+}
+
+function toggleTextareaExpand(btn) {
+    const wrap = btn.closest('.mb-3') || btn.parentElement;
+    const ta = wrap?.querySelector('textarea.expandable-textarea');
+    if (!ta) return;
+    const isExpanded = ta.classList.contains('expanded-textarea');
+    if (isExpanded) {
+        collapseTextarea(ta);
+        btn.innerHTML = '<i class="bi bi-arrows-angle-expand me-1"></i> Развернуть';
+    } else {
+        autoExpandTextarea(ta);
+        btn.innerHTML = '<i class="bi bi-arrows-angle-contract me-1"></i> Свернуть';
+    }
+}
+
+
 // ═══════════════════════════════════════════════════
 // Категории
 // ═══════════════════════════════════════════════════

@@ -433,7 +433,7 @@ async function openTaskViewModal(taskId) {
         document.getElementById('task-tags').value = task.tags || '';
         document.getElementById('task-list-name').value = task.list_name || '';
         document.getElementById('task-result').value = task.result || '';
-        setTaskResultVisible(!!task.result);
+        setTaskResultVisible(false);
 
         populateAssigneeSelect();
         setSelectedAssigneeEmails(task.assignee_emails || [task.assignee_email].filter(Boolean));
@@ -532,6 +532,12 @@ function setTaskResultVisible(visible) {
     if (!wrap) return;
     wrap.style.display = visible ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', visible);
+    const ta = wrap.querySelector('textarea.expandable-textarea');
+    if (visible) {
+        requestAnimationFrame(() => autoExpandTextarea(ta));
+    } else {
+        collapseTextarea(ta);
+    }
 }
 
 function toggleTaskResultField() {

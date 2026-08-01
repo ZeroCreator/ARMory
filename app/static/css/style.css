@@ -3798,6 +3798,16 @@ footer {
     background: #fff;
 }
 
+.expandable-textarea {
+    resize: vertical;
+    min-height: calc(1.5em * 3 + 0.75rem);
+}
+
+.expandable-textarea.expanded-textarea {
+    height: auto;
+    resize: vertical;
+}
+
 /* ── Gantt Kanban status overlay ── */
 .gantt-day-cell {
     position: relative;

@@ -642,7 +642,7 @@ function openTaskModal(taskId, defaultStatusId) {
         form.tags.value = task.tags || '';
         form.list_name.value = task.list_name || '';
         form.result.value = task.result || '';
-        setTaskResultVisible(!!task.result);
+        setTaskResultVisible(false);
         deleteBtn.style.display = 'inline-block';
         renderTaskAttachments(task.attachments || []);
     } else {
@@ -730,6 +730,12 @@ function setTaskResultVisible(visible) {
     if (!wrap) return;
     wrap.style.display = visible ? 'block' : 'none';
     if (btn) btn.classList.toggle('active', visible);
+    const ta = wrap.querySelector('textarea.expandable-textarea');
+    if (visible) {
+        requestAnimationFrame(() => autoExpandTextarea(ta));
+    } else {
+        collapseTextarea(ta);
+    }
 }
 
 function toggleTaskResultField() {

@@ -759,8 +759,13 @@
                         <input type="text" class="form-control" id="task-title" placeholder="Название (необязательно)">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" for="task-description">Описание</label>
-                        <textarea class="form-control" id="task-description" rows="3" placeholder="Описание..."></textarea>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label" for="task-description">Описание</label>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="toggleTextareaExpand(this)">
+                                <i class="bi bi-arrows-angle-expand me-1"></i> Развернуть
+                            </button>
+                        </div>
+                        <textarea class="form-control expandable-textarea" id="task-description" rows="3" placeholder="Описание..."></textarea>
                     </div>
                     <div class="row">
                         <div class="col-md-4 mb-3">
@@ -816,7 +821,7 @@
                             <i class="bi bi-journal-text me-1"></i> Результат работы
                         </button>
                         <div id="task-result-wrap" style="display:none;">
-                            <textarea class="form-control" id="task-result" rows="3" placeholder="Результат работы..."></textarea>
+                            <textarea class="form-control expandable-textarea" id="task-result" rows="3" placeholder="Результат работы..."></textarea>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -932,5 +937,5 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=44"></script>
+<script src="/static/js/tasks_list.js?v=47"></script>
 {% endblock %}
