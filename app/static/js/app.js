@@ -315,7 +315,7 @@ function renderProjectsPage() {
 
     container.innerHTML = pageProjects.map((p, idx) => `
         <div class="col-lg-6 col-xl-6 col-xxl-4 project-col fade-in" data-id="${p.id}">
-            <div class="project-card" data-href="/projects/${p.id}">
+            <div class="project-card" data-href="/projects/${p.id}" oncontextmenu="handleShareContextMenu(event, '/projects/${p.id}')">
                 <div class="project-drag-handle"><i class="bi bi-grip-vertical"></i></div>
                 <div>
                     <div class="project-title">${escapeHtml(p.name)}</div>
@@ -493,7 +493,7 @@ async function loadProject(id) {
     try {
         const p = await api(`${API_BASE}/projects/${id}`);
         header.innerHTML = `
-            <div class="d-flex justify-content-between align-items-start fade-in">
+            <div class="d-flex justify-content-between align-items-start fade-in" oncontextmenu="handleShareContextMenu(event, '/projects/${p.id}')">
                 <div>
                     <h2>${escapeHtml(p.name)}</h2>
                     <p class="text-muted mb-0">${escapeHtml(p.description || 'Без описания')}</p>
@@ -599,6 +599,43 @@ function toggleGroup(groupId) {
     }
 }
 
+function expandSection(sectionId) {
+    const state = getCollapsedState(PROJECT_ID);
+    if (state[sectionId] === false) return;
+    state[sectionId] = false;
+    localStorage.setItem(`sections_collapsed_${PROJECT_ID}`, JSON.stringify(state));
+    const card = document.querySelector(`.section-card[data-id="${sectionId}"]`);
+    if (!card) return;
+    const body = card.querySelector('.section-body');
+    const icon = card.querySelector('.section-toggle-icon');
+    if (body) body.classList.remove('d-none');
+    if (icon) {
+        icon.classList.remove('bi-chevron-right');
+        icon.classList.add('bi-chevron-down');
+    }
+}
+
+function expandGroup(groupId) {
+    const state = getGroupCollapsedState(PROJECT_ID);
+    if (state[groupId] === false) return;
+    state[groupId] = false;
+    localStorage.setItem(`groups_collapsed_${PROJECT_ID}`, JSON.stringify(state));
+    const card = document.querySelector(`.doc-group[data-id="${groupId}"]`);
+    if (!card) return;
+    const body = card.querySelector('.doc-group-body');
+    const icon = card.querySelector('.group-toggle-icon');
+    if (body) body.classList.remove('d-none');
+    if (icon) {
+        icon.classList.remove('bi-chevron-right');
+        icon.classList.add('bi-chevron-down');
+    }
+    const sectionCard = card.closest('.section-card');
+    if (sectionCard) {
+        const sectionId = parseInt(sectionCard.dataset.id, 10);
+        if (sectionId) expandSection(sectionId);
+    }
+}
+
 async function loadSections(projectId) {
     const container = document.getElementById('documents-list');
     const header = document.getElementById('content-header');
@@ -658,48 +695,60 @@ function toggleItemHighlight(itemEl) {
 function handleOpenItemFromUrl() {
     const params = new URLSearchParams(window.location.search);
     const openItemId = params.get('open_item');
-    if (!openItemId) return;
+    const openSectionId = params.get('open_section');
+    const openGroupId = params.get('open_group');
+
+    if (openSectionId) {
+        const sectionId = parseInt(openSectionId, 10);
+        if (sectionId) {
+            expandSection(sectionId);
+            const el = document.querySelector(`.section-card[data-id="${sectionId}"]`);
+            if (el) {
+                setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+            }
+        }
+    }
+
+    if (openGroupId) {
+        const groupId = parseInt(openGroupId, 10);
+        if (groupId) {
+            expandGroup(groupId);
+            const el = document.querySelector(`.doc-group[data-id="${groupId}"]`);
+            if (el) {
+                setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+            }
+        }
+    }
+
+    if (!openItemId) {
+        clearOpenUrlParams();
+        return;
+    }
 
     const itemId = parseInt(openItemId, 10);
-    if (!itemId) return;
+    if (!itemId) {
+        clearOpenUrlParams();
+        return;
+    }
 
     const itemEl = document.querySelector(`.doc-item[data-id="${itemId}"]`);
-    if (!itemEl) return;
+    if (!itemEl) {
+        clearOpenUrlParams();
+        return;
+    }
 
     // Развернуть раздел, если элемент внутри раздела
     const sectionCard = itemEl.closest('.section-card');
     if (sectionCard) {
         const sectionId = parseInt(sectionCard.dataset.id, 10);
-        const state = getCollapsedState(PROJECT_ID);
-        if (state[sectionId] !== false) {
-            state[sectionId] = false;
-            localStorage.setItem(`sections_collapsed_${PROJECT_ID}`, JSON.stringify(state));
-            const body = sectionCard.querySelector('.section-body');
-            const icon = sectionCard.querySelector('.section-toggle-icon');
-            if (body) body.classList.remove('d-none');
-            if (icon) {
-                icon.classList.remove('bi-chevron-right');
-                icon.classList.add('bi-chevron-down');
-            }
-        }
+        expandSection(sectionId);
     }
 
     // Развернуть группу
     const groupEl = itemEl.closest('.doc-group');
     if (groupEl) {
         const groupId = parseInt(groupEl.dataset.id, 10);
-        const state = getGroupCollapsedState(PROJECT_ID);
-        if (state[groupId] !== false) {
-            state[groupId] = false;
-            localStorage.setItem(`groups_collapsed_${PROJECT_ID}`, JSON.stringify(state));
-            const body = groupEl.querySelector('.doc-group-body');
-            const icon = groupEl.querySelector('.group-toggle-icon');
-            if (body) body.classList.remove('d-none');
-            if (icon) {
-                icon.classList.remove('bi-chevron-right');
-                icon.classList.add('bi-chevron-down');
-            }
-        }
+        expandGroup(groupId);
     }
 
     // Подсветить элемент
@@ -723,12 +772,17 @@ function handleOpenItemFromUrl() {
         }, 400);
     }
 
-    // Очистить параметр URL, чтобы при обновлении страницы не открывалось повторно
-    if (window.history.replaceState) {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('open_item');
-        window.history.replaceState({}, '', url.toString());
-    }
+    // Очистить параметры URL, чтобы при обновлении страницы не открывалось повторно
+    clearOpenUrlParams();
+}
+
+function clearOpenUrlParams() {
+    if (!window.history.replaceState) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('open_item');
+    url.searchParams.delete('open_section');
+    url.searchParams.delete('open_group');
+    window.history.replaceState({}, '', url.toString());
 }
 
 function renderSection(section, idx) {
@@ -737,7 +791,7 @@ function renderSection(section, idx) {
     const descHtml = section.description ? `<div class="section-desc small">${escapeHtml(section.description)}</div>` : '';
     return `
         <div class="section-card mb-3 fade-in" data-id="${section.id}">
-            <div class="section-header" onclick="toggleSection(${section.id})">
+            <div class="section-header" onclick="toggleSection(${section.id})" oncontextmenu="handleShareContextMenu(event, '/projects/${PROJECT_ID}?open_section=${section.id}')">
                 <div class="d-flex align-items-center gap-2 flex-fill">
                     <div class="doc-drag-handle" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
                     <i class="bi ${collapsed ? 'bi-chevron-right' : 'bi-chevron-down'} section-toggle-icon"></i>
@@ -779,7 +833,7 @@ function renderGroup(doc, idx) {
     const groupCollapsed = isGroupCollapsed(PROJECT_ID, doc.id);
     return `
         <div class="doc-group fade-in" data-id="${doc.id}">
-            <div class="doc-group-header" onclick="toggleGroup(${doc.id})">
+            <div class="doc-group-header" onclick="toggleGroup(${doc.id})" oncontextmenu="handleShareContextMenu(event, '/projects/${PROJECT_ID}?open_group=${doc.id}')">
                 <div class="d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center gap-2">
                         <div class="doc-drag-handle" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
@@ -923,6 +977,38 @@ function hideProjectItemContextMenu() {
 
 function copyProjectItemShareLink(docId, itemId) {
     const url = `${window.location.origin}/projects/${PROJECT_ID}?open_item=${itemId}`;
+    copyTextToClipboard(url);
+    showToast('Ссылка скопирована в буфер обмена');
+}
+
+// ═══════════════════════════════════════════════════
+// КОНТЕКСТНОЕ МЕНЮ ОБМЕНА ССЫЛКАМИ (проекты, разделы, группы)
+// ═══════════════════════════════════════════════════
+
+let shareContextTarget = null;
+
+function handleShareContextMenu(event, url) {
+    event.preventDefault();
+    event.stopPropagation();
+    shareContextTarget = { url };
+    const menu = document.getElementById('share-context-menu');
+    if (!menu) return;
+    menu.style.display = 'block';
+    const x = Math.min(event.clientX, window.innerWidth - 220);
+    const y = Math.min(event.clientY, window.innerHeight - 80);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+}
+
+function hideShareContextMenu() {
+    const menu = document.getElementById('share-context-menu');
+    if (menu) menu.style.display = 'none';
+    shareContextTarget = null;
+}
+
+function copyShareContextLink() {
+    if (!shareContextTarget || !shareContextTarget.url) return;
+    const url = `${window.location.origin}${shareContextTarget.url}`;
     copyTextToClipboard(url);
     showToast('Ссылка скопирована в буфер обмена');
 }
@@ -1170,6 +1256,7 @@ async function createGroup() {
         showToast('Введите название группы', 'warning');
         return;
     }
+    const sectionId = data.get('section_id');
     try {
         await api(`${API_BASE}/projects/${PROJECT_ID}/documents`, {
             method: 'POST',
@@ -1177,7 +1264,11 @@ async function createGroup() {
         });
         form.reset();
         bootstrap.Modal.getInstance(document.getElementById('groupModal')).hide();
-        loadSections(PROJECT_ID);
+        await loadSections(PROJECT_ID);
+        if (sectionId) {
+            const id = parseInt(sectionId, 10);
+            if (id > 0) expandSection(id);
+        }
     } catch (e) {
         showToast('Ошибка: ' + e.message, 'danger');
     }
@@ -1280,7 +1371,8 @@ async function createItem() {
         form.reset();
         toggleItemType();
         bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
-        loadSections(PROJECT_ID);
+        await loadSections(PROJECT_ID);
+        expandGroup(parseInt(docId, 10));
     } catch (e) {
         showToast('Ошибка: ' + e.message, 'danger');
     }
@@ -2054,6 +2146,7 @@ function hideSidebarContextMenu() {
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#sidebar-context-menu')) hideSidebarContextMenu();
     if (!e.target.closest('#project-item-context-menu')) hideProjectItemContextMenu();
+    if (!e.target.closest('#share-context-menu')) hideShareContextMenu();
 
     // Сбросить подсветку строки файла при клике вне строки
     if (!e.target.closest('.doc-item')) {
@@ -2063,38 +2156,53 @@ document.addEventListener('click', (e) => {
 document.addEventListener('scroll', (e) => {
     hideSidebarContextMenu();
     hideProjectItemContextMenu();
+    hideShareContextMenu();
 }, true);
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         hideSidebarContextMenu();
         hideProjectItemContextMenu();
+        hideShareContextMenu();
     }
 });
 
 // Меню подключается в шаблоне после app.js — вешаем обработчик после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
     const projectItemContextMenu = document.getElementById('project-item-context-menu');
-    if (!projectItemContextMenu) return;
-    projectItemContextMenu.addEventListener('click', (e) => {
-        const item = e.target.closest('.project-item-context-item');
-        if (!item || !projectItemContextTarget) return;
-        const action = item.dataset.action;
-        const { docId, itemId, item: itemData } = projectItemContextTarget;
-        hideProjectItemContextMenu();
-        if (action === 'copy-link') {
-            copyProjectItemShareLink(docId, itemId);
-        } else if (action === 'preview' && itemData) {
-            openItemPreview(itemData);
-        } else if (action === 'alexandrite' && itemData) {
-            openItemInAlexandrite(itemData);
-        } else if (action === 'download' && itemData) {
-            window.location.href = getItemDownloadUrl(itemData);
-        } else if (action === 'edit') {
-            showEditItemModal(docId, itemData);
-        } else if (action === 'delete') {
-            deleteItem(docId, itemId);
-        }
-    });
+    if (projectItemContextMenu) {
+        projectItemContextMenu.addEventListener('click', (e) => {
+            const item = e.target.closest('.project-item-context-item');
+            if (!item || !projectItemContextTarget) return;
+            const action = item.dataset.action;
+            const { docId, itemId, item: itemData } = projectItemContextTarget;
+            hideProjectItemContextMenu();
+            if (action === 'copy-link') {
+                copyProjectItemShareLink(docId, itemId);
+            } else if (action === 'preview' && itemData) {
+                openItemPreview(itemData);
+            } else if (action === 'alexandrite' && itemData) {
+                openItemInAlexandrite(itemData);
+            } else if (action === 'download' && itemData) {
+                window.location.href = getItemDownloadUrl(itemData);
+            } else if (action === 'edit') {
+                showEditItemModal(docId, itemData);
+            } else if (action === 'delete') {
+                deleteItem(docId, itemId);
+            }
+        });
+    }
+
+    const shareContextMenu = document.getElementById('share-context-menu');
+    if (shareContextMenu) {
+        shareContextMenu.addEventListener('click', (e) => {
+            const item = e.target.closest('.sidebar-context-item');
+            if (!item || !shareContextTarget) return;
+            if (item.dataset.action === 'copy-link') {
+                copyShareContextLink();
+            }
+            hideShareContextMenu();
+        });
+    }
 });
 
 const sidebarContextMenu = document.getElementById('sidebar-context-menu');
