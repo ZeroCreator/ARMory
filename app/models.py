@@ -220,6 +220,7 @@ class Task(Base):
     status = relationship("TaskStatus", back_populates="tasks", lazy="selectin")
     assignees = relationship("TaskAssignee", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskAssignee.assignee_email")
     attachments = relationship("TaskAttachment", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskAttachment.created_at.asc()")
+    status_history = relationship("TaskStatusHistory", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskStatusHistory.entered_at.asc()")
 
     @property
     def assignee_emails(self):
@@ -231,6 +232,18 @@ class Task(Base):
     @property
     def first_assignee_email(self):
         return self.assignee_emails[0] if self.assignee_emails else None
+
+
+class TaskStatusHistory(Base):
+    __tablename__ = "task_status_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    status_id = Column(Integer, ForeignKey("task_statuses.id", ondelete="CASCADE"), nullable=False)
+    entered_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    task = relationship("Task", back_populates="status_history")
+    status = relationship("TaskStatus", lazy="selectin")
 
 
 class TaskAttachment(Base):

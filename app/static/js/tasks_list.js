@@ -18,8 +18,12 @@ let editingTaskAttachmentId = null;
 let taskAttachments = {};
 window.kanbanAttachments = window.kanbanAttachments || {};
 let taskStatusCache = {};
+let ganttKanbanStatusMap = {};
 let ganttView = false;
 let ganttHideNoDeadline = false;
+let ganttStatusOverlayEnabled = true;
+let taskStatusHistory = {};
+let loadedTaskStatusHistoryIds = new Set();
 let ganttMinDate = null;
 let ganttMaxDate = null;
 let ganttTotalDays = 0;
@@ -185,6 +189,8 @@ function populateSelect(id, items, defaultLabel = 'Все') {
 async function loadTasks() {
     const tbody = document.getElementById('tasks-table-body');
     tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4">Загрузка...</td></tr>';
+    taskStatusHistory = {};
+    loadedTaskStatusHistoryIds.clear();
     try {
         const url = IS_GLOBAL ? `${API_BASE}/tasks` : `${API_BASE}/projects/${PROJECT_ID}/tasks`;
         allTasks = await api(url);
@@ -198,21 +204,59 @@ async function loadTasks() {
 
 async function loadLastStatuses() {
     lastStatusIds = {};
+    ganttKanbanStatusMap = {};
     try {
         if (IS_GLOBAL) {
             const projectIds = [...new Set((allTasks || []).map(t => t.project_id).filter(Boolean))];
             await Promise.all(projectIds.map(async (projectId) => {
                 const statuses = await api(`${API_BASE}/projects/${projectId}/task-statuses`);
-                const last = (statuses || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).pop();
+                const sorted = (statuses || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+                const last = sorted.length ? sorted[sorted.length - 1] : null;
                 if (last) lastStatusIds[projectId] = last.id;
+                ganttKanbanStatusMap[projectId] = {
+                    testingStatusId: sorted[2]?.id,
+                    deployStatusId: sorted[3]?.id,
+                };
             }));
         } else {
             const statuses = await api(`${API_BASE}/projects/${PROJECT_ID}/task-statuses`);
-            const last = (statuses || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).pop();
+            const sorted = (statuses || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+            const last = sorted.length ? sorted[sorted.length - 1] : null;
             if (last) lastStatusIds[PROJECT_ID] = last.id;
+            ganttKanbanStatusMap[PROJECT_ID] = {
+                testingStatusId: sorted[2]?.id,
+                deployStatusId: sorted[3]?.id,
+            };
         }
     } catch (e) {
         console.error('Failed to load last statuses:', e);
+    }
+}
+
+async function loadTaskStatusHistory(taskIds) {
+    if (!taskIds || !taskIds.length) return;
+    const url = `${API_BASE}/task-status-history?task_ids=${taskIds.join(',')}`;
+    try {
+        const data = await api(url);
+        (data.items || []).forEach(item => {
+            if (!taskStatusHistory[item.task_id]) taskStatusHistory[item.task_id] = [];
+            taskStatusHistory[item.task_id].push(item);
+        });
+        taskIds.forEach(id => loadedTaskStatusHistoryIds.add(id));
+    } catch (e) {
+        console.error('Failed to load task status history:', e);
+    }
+}
+
+async function ensureGanttStatusHistoryLoaded() {
+    const tasksToRender = ganttHideNoDeadline
+        ? filteredTasks.filter(t => t.due_date)
+        : filteredTasks;
+    const missing = tasksToRender
+        .map(t => t.id)
+        .filter(id => !loadedTaskStatusHistoryIds.has(id));
+    if (missing.length) {
+        await loadTaskStatusHistory(missing);
     }
 }
 
@@ -1882,7 +1926,13 @@ function toggleGanttHideNoDeadline() {
     renderGantt();
 }
 
-function renderGantt() {
+function toggleGanttStatusOverlay() {
+    const cb = document.getElementById('gantt-status-overlay');
+    ganttStatusOverlayEnabled = cb ? cb.checked : true;
+    renderGantt();
+}
+
+async function renderGantt() {
     const theadLeft = document.getElementById('gantt-thead-left');
     const tbodyLeft = document.getElementById('gantt-tbody-left');
     const theadRight = document.getElementById('gantt-thead-right');
@@ -1893,6 +1943,8 @@ function renderGantt() {
     const tasksToRender = ganttHideNoDeadline
         ? filteredTasks.filter(t => t.due_date)
         : filteredTasks;
+
+    await ensureGanttStatusHistoryLoaded();
 
     if (tasksToRender.length === 0) {
         tbodyLeft.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Нет задач</td></tr>`;
@@ -1994,6 +2046,13 @@ function renderGantt() {
         const rowClass = ganttRowClass(t);
         const hoverAttrs = `data-gantt-idx="${idx}" onmouseenter="hoverGanttRow(${idx})" onmouseleave="unhoverGanttRow(${idx})"`;
 
+        const history = taskStatusHistory[t.id] || [];
+        const mapping = ganttKanbanStatusMap[t.project_id] || {};
+        const testingEntry = history.find(h => h.status_id === mapping.testingStatusId);
+        const deployEntry = history.find(h => h.status_id === mapping.deployStatusId);
+        const testingDate = testingEntry ? parseDatePart(testingEntry.entered_at) : null;
+        const deployDate = deployEntry ? parseDatePart(deployEntry.entered_at) : null;
+
         let daysHtml = '';
         for (let i = 0; i < totalDays; i++) {
             const dayDate = new Date(minDate);
@@ -2008,7 +2067,34 @@ function renderGantt() {
             const dayClass = isActive ? ` ${fillClass}` : '';
             const weekendClass = [0, 6].includes(dayDate.getDay()) ? ' weekend' : '';
             const todayClass = isToday ? ' today' : '';
-            daysHtml += `<div class="gantt-day-cell${dayClass}${weekendClass}${todayClass}" title="#${t.id} ${escapeHtml(t.title || '')}\n${startStr} — ${endStr}"></div>`;
+
+            let overlayHtml = '';
+            if (ganttStatusOverlayEnabled) {
+                const isTestingDay = testingDate && dayDate.getTime() === testingDate.getTime();
+                const isDeployDay = deployDate && dayDate.getTime() === deployDate.getTime();
+                const isDeadlineDay = end && dayDate.getTime() === end.getTime() && end <= today;
+                const parts = [];
+                if (isTestingDay) {
+                    parts.push('<span class="gantt-overlay-text testing" title="Тестирование">T</span>');
+                }
+                if (isDeployDay) {
+                    parts.push('<span class="gantt-overlay-text deploy" title="Деплой">D</span>');
+                }
+                if (isDeadlineDay) {
+                    if (!deployDate || deployDate > end) {
+                        if (!testingDate || testingDate > end) {
+                            parts.push('<span class="gantt-overlay-danger" title="Не дошла до тестирования к дедлайну">!</span>');
+                        } else {
+                            parts.push('<span class="gantt-overlay-warning" title="В тестировании, но не в деплое к дедлайну">⚡</span>');
+                        }
+                    }
+                }
+                if (parts.length) {
+                    overlayHtml = '<div class="gantt-day-overlays">' + parts.join('') + '</div>';
+                }
+            }
+
+            daysHtml += `<div class="gantt-day-cell${dayClass}${weekendClass}${todayClass}" title="#${t.id} ${escapeHtml(t.title || '')}\n${startStr} — ${endStr}">${overlayHtml}</div>`;
         }
 
         leftRowsHtml += `
@@ -2107,6 +2193,13 @@ async function exportGanttXlsx() {
     if (ganttHideNoDeadline) {
         params.set('hide_no_deadline', '1');
     }
+
+    if (ganttStatusOverlayEnabled) {
+        params.set('status_overlay', '1');
+    }
+
+    params.set('sort_by', sortColumn);
+    params.set('sort_order', sortDirection);
 
     const url = `${API_BASE}/gantt/export/xlsx?${params.toString()}`;
 

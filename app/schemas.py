@@ -302,6 +302,15 @@ class TaskStatusReorderRequest(BaseModel):
     status_ids: List[int]
 
 
+class TaskStatusHistoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    task_id: int
+    status_id: int
+    status_name: Optional[str] = None
+    entered_at: datetime
+
+
 class TaskAttachmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

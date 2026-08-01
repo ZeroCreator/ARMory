@@ -3797,3 +3797,53 @@ footer {
 #import-bulk-attachments-list .d-flex {
     background: #fff;
 }
+
+/* ── Gantt Kanban status overlay ── */
+.gantt-day-cell {
+    position: relative;
+}
+
+.gantt-day-overlays {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    z-index: 2;
+}
+
+.gantt-overlay-text,
+.gantt-overlay-danger,
+.gantt-overlay-warning {
+    line-height: 1;
+    pointer-events: none;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.4);
+}
+
+.gantt-overlay-text {
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.gantt-overlay-text.testing,
+.gantt-overlay-text.deploy {
+    color: #000;
+}
+
+.gantt-overlay-danger {
+    color: #000;
+    font-size: 18px;
+    font-weight: 900;
+    line-height: 1;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.gantt-overlay-warning {
+    color: #000;
+    font-size: 14px;
+    font-weight: bold;
+    filter: grayscale(100%) brightness(0%);
+}

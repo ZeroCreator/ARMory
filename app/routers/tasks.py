@@ -16,6 +16,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
+from openpyxl.styles.colors import Color
 from sqlalchemy import select, update, delete, func, distinct, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -23,7 +26,7 @@ from sqlalchemy.orm import selectinload
 from app.config import Settings, get_settings
 from app.database import get_db
 from app.events import broadcast
-from app.models import Assignee, Project, Task, TaskAssignee, TaskAttachment, TaskStatus
+from app.models import Assignee, Project, Task, TaskAssignee, TaskAttachment, TaskStatus, TaskStatusHistory
 from app.routers.collabora import build_collabora_iframe_url
 from app.routers.wopi import OFFICE_EXTENSIONS, encode_file_id
 from app.storage import StorageBackend, get_storage
@@ -51,6 +54,7 @@ from app.schemas import (
     TaskOut,
     TaskReorderRequest,
     TaskStatusCreate,
+    TaskStatusHistoryOut,
     TaskStatusOut,
     TaskStatusReorderRequest,
     TaskStatusUpdate,
@@ -157,6 +161,17 @@ async def _apply_task_assignees(task: Task, emails: list[str], db: AsyncSession)
     for email, ta in existing.items():
         if email not in to_keep:
             await db.delete(ta)
+
+
+async def _record_status_history(
+    db: AsyncSession, task_id: int, status_id: int, entered_at: Optional[datetime] = None
+) -> None:
+    """Создать запись о переходе задачи в указанную колонку."""
+    db.add(TaskStatusHistory(
+        task_id=task_id,
+        status_id=status_id,
+        entered_at=entered_at or datetime.utcnow(),
+    ))
 
 
 def _task_has_assignee(task: Task, email: str) -> bool:
@@ -417,6 +432,8 @@ async def create_task(
     await db.flush()
     await db.refresh(task)
 
+    await _record_status_history(db, task.id, task.status_id, entered_at=task.created_at)
+
     assignee_emails = _extract_assignee_emails(data)
     await _apply_task_assignees(task, assignee_emails, db)
 
@@ -491,6 +508,9 @@ async def _bulk_create_tasks(
         created_tasks.append(task)
 
     await db.flush()
+
+    for task in created_tasks:
+        await _record_status_history(db, task.id, task.status_id, entered_at=task.created_at)
 
     for task in created_tasks:
         assignee_emails = _extract_assignee_emails(task_data)
@@ -659,15 +679,57 @@ async def reorder_tasks(
 ):
     await _get_project(project_id, db)
     await _get_status(project_id, data.status_id, db)
+
+    old_statuses_result = await db.execute(
+        select(Task.id, Task.status_id)
+        .where(Task.id.in_(data.task_ids), Task.project_id == project_id)
+    )
+    old_statuses = {row.id: row.status_id for row in old_statuses_result.all()}
+
     for idx, task_id in enumerate(data.task_ids):
         await db.execute(
             update(Task)
             .where(Task.id == task_id, Task.project_id == project_id)
             .values(status_id=data.status_id, sort_order=idx)
         )
+        old_status_id = old_statuses.get(task_id)
+        if old_status_id != data.status_id:
+            await _record_status_history(db, task_id, data.status_id)
+
     await db.commit()
     broadcast({"type": "board_changed", "project_id": project_id})
     return None
+
+
+@router.get("/task-status-history")
+async def get_task_status_history(
+    project_id: int,
+    task_ids: str = '',
+    db: AsyncSession = Depends(get_db),
+):
+    """Получить историю переходов задач по колонкам."""
+    await _get_project(project_id, db)
+    ids = [int(x) for x in task_ids.split(',') if x.strip().isdigit()] if task_ids else []
+    if not ids:
+        return {"items": []}
+    query = (
+        select(TaskStatusHistory, TaskStatus.name)
+        .join(TaskStatus, TaskStatusHistory.status_id == TaskStatus.id)
+        .where(TaskStatusHistory.task_id.in_(ids))
+        .order_by(TaskStatusHistory.entered_at.asc())
+    )
+    result = await db.execute(query)
+    items = [
+        TaskStatusHistoryOut(
+            id=history.id,
+            task_id=history.task_id,
+            status_id=history.status_id,
+            status_name=status_name,
+            entered_at=history.entered_at,
+        )
+        for history, status_name in result.all()
+    ]
+    return {"items": items}
 
 
 @router.get("/tasks/{task_id}", response_model=TaskOut)
@@ -751,6 +813,9 @@ async def update_task(
             .values(sort_order=Task.sort_order + 1)
         )
         task.sort_order = 0
+
+    if status_changed:
+        await _record_status_history(db, task.id, task.status_id)
 
     task.updated_at = datetime.utcnow()
     await db.commit()
@@ -1770,12 +1835,44 @@ async def update_task_status_by_column_name(
         )
         task.sort_order = 0
 
+    status_changed = task.status_id != status.id
     task.status_id = status.id
     task.updated_at = datetime.utcnow()
+    if status_changed:
+        await _record_status_history(db, task.id, status.id)
     await db.commit()
     await db.refresh(task)
     broadcast({"type": "board_changed", "project_id": task.project_id, "global": True})
     return task
+
+
+@global_router.get("/task-status-history")
+async def get_global_task_status_history(
+    task_ids: str = '',
+    db: AsyncSession = Depends(get_db),
+):
+    """Получить историю переходов задач по колонкам (глобально)."""
+    ids = [int(x) for x in task_ids.split(',') if x.strip().isdigit()] if task_ids else []
+    if not ids:
+        return {"items": []}
+    query = (
+        select(TaskStatusHistory, TaskStatus.name)
+        .join(TaskStatus, TaskStatusHistory.status_id == TaskStatus.id)
+        .where(TaskStatusHistory.task_id.in_(ids))
+        .order_by(TaskStatusHistory.entered_at.asc())
+    )
+    result = await db.execute(query)
+    items = [
+        TaskStatusHistoryOut(
+            id=history.id,
+            task_id=history.task_id,
+            status_id=history.status_id,
+            status_name=status_name,
+            entered_at=history.entered_at,
+        )
+        for history, status_name in result.all()
+    ]
+    return {"items": items}
 
 
 @global_router.post("/tasks/telegram-list-config", status_code=204)
@@ -1858,6 +1955,9 @@ async def export_gantt_xlsx(
     closed: Optional[int] = None,
     tags: Optional[str] = None,
     hide_no_deadline: bool = False,
+    status_overlay: bool = False,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = "asc",
     db: AsyncSession = Depends(get_db),
 ):
     """Экспорт диаграммы Ганта в .xlsx с учётом фильтров."""
@@ -1903,7 +2003,25 @@ async def export_gantt_xlsx(
         if hide_no_deadline:
             query = query.where(Task.due_date.isnot(None))
 
-        result = await db.execute(query.order_by(Task.is_closed.asc(), Task.created_at.asc()))
+        sort_column_map = {
+            "created_at": Task.created_at,
+            "due_date": Task.due_date,
+            "priority": Task.priority,
+            "title": Task.title,
+            "id": Task.id,
+            "updated_at": Task.updated_at,
+            "assignee_name": Task.assignee_email,
+        }
+        if sort_by == "status_name":
+            query = query.join(TaskStatus, Task.status_id == TaskStatus.id)
+            order_column = TaskStatus.name
+        else:
+            order_column = sort_column_map.get(sort_by, Task.created_at)
+
+        is_desc = str(sort_order or "asc").lower() == "desc"
+        query = query.order_by(order_column.desc() if is_desc else order_column.asc())
+
+        result = await db.execute(query)
         tasks = result.scalars().all()
 
         if not tasks:
@@ -1912,6 +2030,45 @@ async def export_gantt_xlsx(
         # Карта имён ответственных
         assignees_result = await db.execute(select(Assignee))
         assignees = {a.email: a.name for a in assignees_result.scalars().all()}
+
+        # Статусы Kanban для оверлея: 3-я и 4-я колонки
+        status_overlay_map = {}
+        if status_overlay:
+            project_ids = list({t.project_id for t in tasks})
+            for pid in project_ids:
+                statuses_result = await db.execute(
+                    select(TaskStatus)
+                    .where(TaskStatus.project_id == pid)
+                    .order_by(TaskStatus.sort_order.asc())
+                )
+                project_statuses = statuses_result.scalars().all()
+                if len(project_statuses) > 2:
+                    status_overlay_map[pid] = {
+                        "testing": project_statuses[2].id,
+                        "deploy": project_statuses[3].id if len(project_statuses) > 3 else None,
+                    }
+
+            task_ids = [t.id for t in tasks]
+            history_by_task = {}
+            if task_ids:
+                history_result = await db.execute(
+                    select(TaskStatusHistory)
+                    .where(TaskStatusHistory.task_id.in_(task_ids))
+                    .order_by(TaskStatusHistory.entered_at.asc())
+                )
+                for record in history_result.scalars().all():
+                    history_by_task.setdefault(record.task_id, []).append(record)
+
+            def get_first_status_date(task_id: int, status_id: Optional[int]):
+                if not status_id:
+                    return None
+                for record in history_by_task.get(task_id, []):
+                    if record.status_id == status_id and record.entered_at:
+                        return record.entered_at.date()
+                return None
+        else:
+            def get_first_status_date(task_id: int, status_id: Optional[int]):
+                return None
 
         # Даты
         def date_part(dt):
@@ -1998,6 +2155,13 @@ async def export_gantt_xlsx(
             end_str = end.strftime("%d.%m.%Y") if end else ""
             duration = (end - start).days + 1 if end else ""
 
+            testing_date = None
+            deploy_date = None
+            if status_overlay:
+                mapping = status_overlay_map.get(t.project_id, {})
+                testing_date = get_first_status_date(t.id, mapping.get("testing"))
+                deploy_date = get_first_status_date(t.id, mapping.get("deploy"))
+
             row_cells = [t.id, title, assignee_str, start_str, end_str, duration]
             ws.append(row_cells)
             row_num = ws.max_row
@@ -2018,6 +2182,32 @@ async def export_gantt_xlsx(
                 elif d == today:
                     cell.fill = today_fill
 
+                if status_overlay:
+                    labels = []
+                    if testing_date == d:
+                        labels.append("T")
+                    if deploy_date == d:
+                        labels.append("D")
+                    if end and d == end and end <= today:
+                        if not deploy_date or deploy_date > end:
+                            if not testing_date or testing_date > end:
+                                labels.append("!")
+                            else:
+                                labels.append("ϟ")
+                    if labels:
+                        black_font = InlineFont(rFont='Arial Unicode MS', b=True, sz=10, color=Color(rgb='FF000000'))
+                        danger_font = InlineFont(rFont='Arial', b=True, sz=14, color=Color(rgb='FF000000'))
+                        blocks = []
+                        for idx, label in enumerate(labels):
+                            if idx > 0:
+                                blocks.append(TextBlock(black_font, " "))
+                            if label == "!":
+                                blocks.append(TextBlock(danger_font, label))
+                            else:
+                                blocks.append(TextBlock(black_font, label))
+                        cell.value = CellRichText(blocks)
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+
         # Форматирование строк
         for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=6):
             for cell in row:
@@ -2031,7 +2221,7 @@ async def export_gantt_xlsx(
         ws_tasks = wb.create_sheet("Задачи")
         ws_tasks.append([
             "#", "Проект", "Название", "Описание", "Статус", "Приоритет",
-            "Ответственный", "Дедлайн", "Теги", "Список", "Создано", "Закрыто"
+            "Ответственный", "Дедлайн", "Тестирование", "Деплой", "Теги", "Список", "Создано", "Закрыто"
         ])
         for row in ws_tasks[1]:
             row.fill = header_fill
@@ -2039,6 +2229,17 @@ async def export_gantt_xlsx(
             row.alignment = Alignment(horizontal="center", vertical="center")
 
         for t in tasks:
+            testing_date_str = ""
+            deploy_date_str = ""
+            if status_overlay:
+                mapping = status_overlay_map.get(t.project_id, {})
+                testing_date = get_first_status_date(t.id, mapping.get("testing"))
+                deploy_date = get_first_status_date(t.id, mapping.get("deploy"))
+                if testing_date:
+                    testing_date_str = testing_date.strftime("%d.%m.%Y")
+                if deploy_date:
+                    deploy_date_str = deploy_date.strftime("%d.%m.%Y")
+
             ws_tasks.append([
                 t.id,
                 t.project.name if t.project else "",
@@ -2048,6 +2249,8 @@ async def export_gantt_xlsx(
                 t.priority or "",
                 _format_task_assignees(t, assignees),
                 t.due_date.strftime("%d.%m.%Y %H:%M") if t.due_date else "",
+                testing_date_str,
+                deploy_date_str,
                 t.tags or "",
                 t.list_name or "",
                 t.created_at.strftime("%d.%m.%Y %H:%M") if t.created_at else "",

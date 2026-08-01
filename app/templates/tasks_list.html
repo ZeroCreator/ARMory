@@ -475,6 +475,10 @@
                 <input class="form-check-input" type="checkbox" id="gantt-hide-no-deadline" onchange="toggleGanttHideNoDeadline()">
                 <label class="form-check-label" for="gantt-hide-no-deadline">Скрыть без дедлайна</label>
             </div>
+            <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" id="gantt-status-overlay" checked onchange="toggleGanttStatusOverlay()">
+                <label class="form-check-label" for="gantt-status-overlay">Статусы Kanban</label>
+            </div>
         </div>
     </div>
     <div class="gantt-flex" id="gantt-wrapper">
@@ -928,5 +932,5 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=42"></script>
+<script src="/static/js/tasks_list.js?v=44"></script>
 {% endblock %}
