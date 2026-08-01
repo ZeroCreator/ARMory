@@ -3808,6 +3808,16 @@ footer {
     resize: vertical;
 }
 
+.nav-tabs .nav-link {
+    color: var(--text-light);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--purple-deep);
+    background-color: var(--sand-base);
+    border-color: var(--sand-base);
+}
+
 /* ── Gantt Kanban status overlay ── */
 .gantt-day-cell {
     position: relative;

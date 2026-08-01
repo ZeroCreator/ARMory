@@ -596,96 +596,111 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Название списка</label>
-                    <input type="text" class="form-control" id="import-list-name" placeholder="Например, Спринт 12">
-                </div>
-                {% if not project_id %}
-                <div class="mb-3">
-                    <label class="form-label">Проект по умолчанию</label>
-                    <select class="form-select" id="import-bulk-project"></select>
-                </div>
-                {% endif %}
-                <div class="mb-3">
-                    <label class="form-label">Текст списка задач</label>
-                    <textarea class="form-control" id="import-todo-text" rows="6" placeholder="- Описание задачи 1&#10;- Описание задачи 2&#10;- Описание задачи 3"></textarea>
-                </div>
-                <div class="d-flex gap-2 mb-3">
-                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="splitTodoTextIntoTasks()">Разбить на задачи</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addImportTask()">Добавить задачу вручную</button>
-                </div>
-
-                <hr class="my-4">
-                <div class="mb-3">
-                    <label class="form-label">Импорт JSON одной задачи</label>
-                    <input type="file" class="form-control form-control-sm" id="import-single-file" accept=".json,application/json">
-                </div>
-                <div class="d-flex gap-2 mb-3">
-                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="importSingleTask()">Импортировать задачу</button>
-                </div>
-
-                <div id="import-tasks-list" class="import-tasks-list mb-3"></div>
-
-                <div class="card mb-3">
-                    <div class="card-header">Массовые настройки</div>
-                    <div class="card-body row g-2">
-                        <div class="col-md-3">
-                            <label class="form-label">Дедлайн</label>
-                            <input type="datetime-local" class="form-control form-control-sm" id="import-bulk-due-date">
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="import-tab-bulk-btn" data-bs-toggle="tab" data-bs-target="#import-tab-bulk" type="button" role="tab">Список задач</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="import-tab-single-btn" data-bs-toggle="tab" data-bs-target="#import-tab-single" type="button" role="tab">JSON одной задачи</button>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="import-tab-bulk" role="tabpanel">
+                        <div class="mb-3">
+                            <label class="form-label">Название списка</label>
+                            <input type="text" class="form-control" id="import-list-name" placeholder="Например, Спринт 12">
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Приоритет</label>
-                            <select class="form-select form-select-sm" id="import-bulk-priority">
-                                <option value="">—</option>
-                                <option value="low">Низкий</option>
-                                <option value="medium" selected>Средний</option>
-                                <option value="high">Высокий</option>
-                            </select>
+                        {% if not project_id %}
+                        <div class="mb-3">
+                            <label class="form-label">Проект по умолчанию</label>
+                            <select class="form-select" id="import-bulk-project"></select>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Ответственный</label>
-                            <select class="form-select form-select-sm" id="import-bulk-assignee"></select>
+                        {% endif %}
+                        <div class="mb-3">
+                            <label class="form-label">Текст списка задач</label>
+                            <textarea class="form-control" id="import-todo-text" rows="6" placeholder="- Описание задачи 1&#10;- Описание задачи 2&#10;- Описание задачи 3"></textarea>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Теги</label>
-                            <input type="text" class="form-control form-control-sm" id="import-bulk-tags" placeholder="через запятую">
+                        <div class="d-flex gap-2 mb-3">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="splitTodoTextIntoTasks()">Разбить на задачи</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addImportTask()">Добавить задачу вручную</button>
                         </div>
-                    </div>
-                    <div class="card-footer">
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyBulkToSelectedImportTasks()">Применить к выбранным</button>
-                    </div>
-                </div>
 
-                <div class="mb-3">
-                    <label class="form-label">Общие вложения</label>
-                    <div class="d-flex gap-2 mb-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showImportBulkAttachmentForm('link')">Ссылка</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showImportBulkAttachmentForm('git')">Git</button>
-                        <label class="btn btn-sm btn-outline-secondary mb-0">
-                            Файл
-                            <input type="file" style="display:none" onchange="submitImportBulkAttachmentFile(this)">
-                        </label>
-                    </div>
-                    <div id="import-bulk-attachment-form" style="display:none" class="border rounded p-2 mb-2">
-                        <input type="hidden" id="import-bulk-attachment-type">
-                        <div class="row g-2">
-                            <div class="col-md-4">
-                                <input type="text" class="form-control form-control-sm" id="import-bulk-attachment-title" placeholder="Название">
+                        <div id="import-tasks-list" class="import-tasks-list mb-3"></div>
+
+                        <div class="card mb-3">
+                            <div class="card-header">Массовые настройки</div>
+                            <div class="card-body row g-2">
+                                <div class="col-md-3">
+                                    <label class="form-label">Дедлайн</label>
+                                    <input type="datetime-local" class="form-control form-control-sm" id="import-bulk-due-date">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Приоритет</label>
+                                    <select class="form-select form-select-sm" id="import-bulk-priority">
+                                        <option value="">—</option>
+                                        <option value="low">Низкий</option>
+                                        <option value="medium" selected>Средний</option>
+                                        <option value="high">Высокий</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Ответственный</label>
+                                    <select class="form-select form-select-sm" id="import-bulk-assignee"></select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Теги</label>
+                                    <input type="text" class="form-control form-control-sm" id="import-bulk-tags" placeholder="через запятую">
+                                </div>
                             </div>
-                            <div class="col-md-6" id="import-bulk-attachment-url-wrap">
-                                <input type="text" class="form-control form-control-sm" id="import-bulk-attachment-url" placeholder="URL">
-                            </div>
-                            <div class="col-md-2">
-                                <button type="button" class="btn btn-sm btn-primary w-100" onclick="submitImportBulkAttachmentForm()">Добавить</button>
+                            <div class="card-footer">
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyBulkToSelectedImportTasks()">Применить к выбранным</button>
                             </div>
                         </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Общие вложения</label>
+                            <div class="d-flex gap-2 mb-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showImportBulkAttachmentForm('link')">Ссылка</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showImportBulkAttachmentForm('git')">Git</button>
+                                <label class="btn btn-sm btn-outline-secondary mb-0">
+                                    Файл
+                                    <input type="file" style="display:none" onchange="submitImportBulkAttachmentFile(this)">
+                                </label>
+                            </div>
+                            <div id="import-bulk-attachment-form" style="display:none" class="border rounded p-2 mb-2">
+                                <input type="hidden" id="import-bulk-attachment-type">
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <input type="text" class="form-control form-control-sm" id="import-bulk-attachment-title" placeholder="Название">
+                                    </div>
+                                    <div class="col-md-6" id="import-bulk-attachment-url-wrap">
+                                        <input type="text" class="form-control form-control-sm" id="import-bulk-attachment-url" placeholder="URL">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-sm btn-primary w-100" onclick="submitImportBulkAttachmentForm()">Добавить</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="import-bulk-attachments-list"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 mt-3">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="button" class="btn btn-primary" onclick="createTasksBulk()">Создать задачи</button>
+                        </div>
                     </div>
-                    <div id="import-bulk-attachments-list"></div>
+
+                    <div class="tab-pane fade" id="import-tab-single" role="tabpanel">
+                        <div class="mb-3">
+                            <label class="form-label">Файл JSON задачи</label>
+                            <input type="file" class="form-control form-control-sm" id="import-single-file" accept=".json,application/json">
+                        </div>
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="button" class="btn btn-primary" onclick="importSingleTask()">Импортировать задачу</button>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <button type="button" class="btn btn-primary" onclick="createTasksBulk()">Создать задачи</button>
             </div>
         </div>
     </div>
