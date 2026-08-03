@@ -429,7 +429,9 @@ async function openTaskViewModal(taskId) {
         document.getElementById('task-description').value = task.description || '';
         document.getElementById('task-priority').value = task.priority || 'medium';
         document.getElementById('task-is-closed').checked = !!task.is_closed;
-        document.getElementById('task-due-date').value = isoToDatetimeLocal(task.due_date);
+        const dueDateInput = document.getElementById('task-due-date');
+        dueDateInput.value = isoToDatetimeLocal(task.due_date);
+        dueDateInput.dispatchEvent(new Event('change'));
         document.getElementById('task-tags').value = task.tags || '';
         document.getElementById('task-list-name').value = task.list_name || '';
         document.getElementById('task-result').value = task.result || '';
@@ -1440,7 +1442,10 @@ function openTelegramScheduleModal() {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     const datetimeInput = document.getElementById('telegram-schedule-datetime');
-    if (datetimeInput) datetimeInput.value = now.toISOString().slice(0, 16);
+    if (datetimeInput) {
+        datetimeInput.value = now.toISOString().slice(0, 16);
+        datetimeInput.dispatchEvent(new Event('change'));
+    }
     document.querySelectorAll('input[name="telegram-schedule-type"]').forEach(r => {
         r.checked = r.value === 'once';
     });
@@ -1552,7 +1557,9 @@ function resetImportState() {
     document.getElementById('import-list-name').value = '';
     document.getElementById('import-todo-text').value = '';
     resetImportSingleFile();
-    document.getElementById('import-bulk-due-date').value = '';
+    const importDueDate = document.getElementById('import-bulk-due-date');
+    importDueDate.value = '';
+    importDueDate.dispatchEvent(new Event('change'));
     document.getElementById('import-bulk-priority').value = 'medium';
     document.getElementById('import-bulk-assignee').value = '';
     document.getElementById('import-bulk-tags').value = '';

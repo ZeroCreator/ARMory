@@ -1636,6 +1636,11 @@ footer {
     min-width: 0;
 }
 
+.scheduler-form-group-full {
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
 .scheduler-btn-row {
     margin-top: 0;
     margin-bottom: 0;
@@ -3948,9 +3953,59 @@ footer {
     background: var(--sand-darker);
 }
 
-.scheduler-date-toggle {
-    cursor: pointer;
+/* ── DateTime picker reusable component ── */
+.datetime-picker-wrap .datetime-picker {
+    flex-wrap: nowrap;
 }
-.scheduler-date-toggle:hover {
+.datetime-picker-date {
+    min-width: 0;
+}
+.datetime-picker-toggle {
+    cursor: pointer;
     background: var(--sand-dark);
+    color: var(--sand-text);
+    border-color: var(--sand-darker);
+}
+.datetime-picker-toggle:hover,
+.datetime-picker-toggle:focus {
+    background: var(--sand-darker);
+    color: var(--sand-text);
+}
+.datetime-picker-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-top: 1px solid var(--sand-darker);
+    background: var(--sand-dark);
+}
+.datetime-picker-footer-label {
+    font-size: 0.875rem;
+    color: var(--sand-text);
+    white-space: nowrap;
+}
+.datetime-picker-popup-time {
+    width: 5.5rem;
+    text-align: center;
+    background: var(--sand-light);
+    border: 1px solid var(--sand-darker);
+    color: var(--sand-text);
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.5rem;
+}
+.datetime-picker-popup-time:focus {
+    border-color: var(--purple-accent);
+    outline: 0;
+    box-shadow: 0 0 0 0.125rem rgba(167, 139, 250, 0.25);
+}
+.datetime-picker-display[readonly] {
+    cursor: text;
+}
+.modal .datepicker-dropdown,
+.modal-open .datepicker-dropdown {
+    z-index: 1060;
+}
+.datepicker-footer:has(.datetime-picker-footer) .datepicker-controls {
+    display: none;
 }

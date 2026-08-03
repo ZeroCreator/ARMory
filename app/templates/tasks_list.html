@@ -1,5 +1,7 @@
 {% extends "base_project.html" %}
 
+{% from "macros/datetime_picker.html" import datetime_picker %}
+
 {% block extra_css %}
 {% endblock %}
 
@@ -563,8 +565,7 @@
                     </div>
                 </div>
                 <div class="mb-3" id="telegram-schedule-once-field">
-                    <label class="form-label" for="telegram-schedule-datetime">Дата и время</label>
-                    <input type="datetime-local" class="form-control" id="telegram-schedule-datetime">
+                    {{ datetime_picker('telegram-schedule-datetime', label='Дата и время', default_time='now', default_date=True) }}
                 </div>
                 <div class="mb-3" id="telegram-schedule-recurring-field" style="display:none;">
                     <label class="form-label" for="telegram-schedule-cron">Cron-выражение</label>
@@ -632,7 +633,7 @@
                             <div class="card-body row g-2">
                                 <div class="col-md-3">
                                     <label class="form-label">Дедлайн</label>
-                                    <input type="datetime-local" class="form-control form-control-sm" id="import-bulk-due-date">
+                                    {{ datetime_picker('import-bulk-due-date', label='', input_size='sm') }}
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Приоритет</label>
@@ -792,8 +793,7 @@
                             </select>
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label" for="task-due-date">Дедлайн</label>
-                            <input type="datetime-local" class="form-control" id="task-due-date">
+                            {{ datetime_picker('task-due-date', name='due_date', label='Дедлайн') }}
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Ответственные</label>

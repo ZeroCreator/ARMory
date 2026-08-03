@@ -1,5 +1,7 @@
 {% extends "base_project.html" %}
 
+{% from "macros/datetime_picker.html" import datetime_picker %}
+
 {% block content %}
 <div class="mb-3">
     <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
@@ -85,8 +87,7 @@
                             </select>
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Дедлайн</label>
-                            <input type="datetime-local" class="form-control" name="due_date">
+                            {{ datetime_picker('task-due-date', name='due_date', label='Дедлайн') }}
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Ответственные</label>
@@ -223,7 +224,7 @@
                             </div>
                             <div class="col-md-6 mb-2">
                                 <label class="form-label">Дедлайн</label>
-                                <input type="datetime-local" class="form-control form-control-sm" id="import-bulk-due-date">
+                                {{ datetime_picker('import-bulk-due-date', label='', input_size='sm') }}
                             </div>
                             <div class="col-md-6 mb-2">
                                 <label class="form-label">Приоритет</label>

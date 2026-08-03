@@ -2442,6 +2442,220 @@ async function fillSchedulerTasks() {
     }
 }
 
+function initDateTimePicker(pickerId, options = {}) {
+    const hiddenInput = document.getElementById(pickerId);
+    if (!hiddenInput || hiddenInput.dataset.datetimePickerInitialized) return;
+    hiddenInput.dataset.datetimePickerInitialized = 'true';
+    const displayInput = document.getElementById(`${pickerId}-display`);
+    const toggleBtn = hiddenInput.closest('.datetime-picker')?.querySelector('.datetime-picker-toggle');
+    if (!displayInput || typeof Datepicker === 'undefined') return;
+
+    const wrap = hiddenInput.closest('.datetime-picker-wrap');
+    const defaultTime = options.defaultTime || wrap?.dataset.defaultTime || '00:00';
+    const defaultDate = options.defaultDate || wrap?.dataset.defaultDate === 'true';
+    const orientation = options.orientation || wrap?.dataset.orientation || 'auto';
+
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const fmtDate = (d) => `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`;
+    const fmtTime = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    const nowTime = () => fmtTime(new Date());
+    const resolvedTime = () => defaultTime === 'now' ? nowTime() : (defaultTime || '00:00');
+    const isoFromParts = (date, time) => {
+        const y = date.getFullYear();
+        const m = pad2(date.getMonth() + 1);
+        const d = pad2(date.getDate());
+        return `${y}-${m}-${d}T${time}`;
+    };
+
+    const applyTimeMask = (val) => {
+        let digits = val.replace(/\D/g, '').slice(0, 4);
+        if (digits.length > 2) digits = digits.slice(0, 2) + ':' + digits.slice(2);
+        return digits;
+    };
+
+    const parseDatePart = (s) => {
+        if (!s) return null;
+        const datePart = s.trim().split(/\s+/)[0];
+        const [d, m, y] = datePart.split('.');
+        if (!d || !m || !y) return null;
+        const date = new Date(Number(y), Number(m) - 1, Number(d));
+        if (isNaN(date.getTime())) return null;
+        return date;
+    };
+
+    let currentTime = '';
+    let currentDate = null;
+
+    const syncDisplay = () => {
+        if (currentDate && currentTime) {
+            hiddenInput.value = isoFromParts(currentDate, currentTime);
+            displayInput.value = `${fmtDate(currentDate)} ${currentTime}`;
+        } else if (currentDate) {
+            hiddenInput.value = isoFromParts(currentDate, resolvedTime());
+            displayInput.value = `${fmtDate(currentDate)} ${resolvedTime()}`;
+        } else {
+            hiddenInput.value = '';
+            displayInput.value = '';
+        }
+    };
+
+    const updateFromHidden = () => {
+        const iso = hiddenInput.value.trim();
+        if (!iso) {
+            currentDate = null;
+            currentTime = '';
+            displayInput.value = '';
+            return;
+        }
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return;
+        currentDate = d;
+        currentTime = fmtTime(d);
+        displayInput.value = `${fmtDate(d)} ${currentTime}`;
+    };
+
+    const updatePopupTime = (pickerEl) => {
+        const picker = pickerEl || document.querySelector('.datepicker.active .datepicker-picker');
+        if (!picker) return;
+        const popupTime = picker.querySelector('.datetime-picker-popup-time');
+        if (popupTime) popupTime.value = currentTime;
+    };
+
+    const modalContainer = displayInput.closest('.modal-content');
+    const dp = new Datepicker(displayInput, {
+        language: 'ru',
+        format: 'dd.mm.yyyy',
+        todayHighlight: true,
+        autohide: false,
+        updateOnBlur: false,
+        weekStart: 1,
+        clearButton: false,
+        orientation,
+        ...(modalContainer ? { container: modalContainer } : {})
+    });
+
+    const onChangeDate = (e) => {
+        const d = e.detail?.date;
+        if (!d || isNaN(d.getTime())) return;
+        currentDate = d;
+        if (!currentTime) currentTime = resolvedTime();
+        syncDisplay();
+        updatePopupTime();
+    };
+    displayInput.addEventListener('changeDate', onChangeDate);
+
+    const setPickerDate = (dateObj) => {
+        displayInput.removeEventListener('changeDate', onChangeDate);
+        try { dp.setDate(dateObj); } catch (e) {}
+        displayInput.addEventListener('changeDate', onChangeDate);
+        // Datepicker оставляет в displayInput только дату — восстанавливаем дату+время
+        if (currentDate && currentTime) {
+            displayInput.value = `${fmtDate(currentDate)} ${currentTime}`;
+        } else if (currentDate) {
+            displayInput.value = `${fmtDate(currentDate)} ${resolvedTime()}`;
+        } else {
+            displayInput.value = '';
+        }
+    };
+
+    hiddenInput.addEventListener('change', () => {
+        updateFromHidden();
+        if (currentDate) setPickerDate(currentDate);
+        else setPickerDate('');
+        updatePopupTime();
+    });
+
+    if (!hiddenInput.value && defaultDate) {
+        const now = new Date();
+        currentDate = now;
+        currentTime = resolvedTime();
+        syncDisplay();
+        setPickerDate(now);
+    } else {
+        updateFromHidden();
+        if (currentDate) setPickerDate(currentDate);
+    }
+
+    const showPicker = () => {
+        displayInput.focus();
+        dp.show();
+    };
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', showPicker);
+        toggleBtn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                showPicker();
+            }
+        });
+    }
+
+    displayInput.addEventListener('click', showPicker);
+    displayInput.addEventListener('focus', showPicker);
+
+    displayInput.addEventListener('show', (e) => {
+        const pickerEl = e.detail?.datepicker?.picker?.element;
+        const picker = pickerEl?.querySelector('.datepicker-picker');
+        if (!picker) return;
+        let footer = picker.querySelector('.datepicker-footer');
+        if (!footer) {
+            footer = document.createElement('div');
+            footer.className = 'datepicker-footer';
+            picker.appendChild(footer);
+        }
+        footer.innerHTML = '<div class="datetime-picker-footer"><span class="datetime-picker-footer-label">Время</span><input type="text" class="form-control form-control-sm datetime-picker-popup-time" placeholder="ЧЧ:ММ" maxlength="5"></div>';
+        const popupTime = footer.querySelector('.datetime-picker-popup-time');
+        popupTime.value = currentTime;
+
+        const applyTime = () => {
+            currentTime = applyTimeMask(popupTime.value);
+            popupTime.value = currentTime;
+            if (!currentDate && defaultDate) {
+                currentDate = new Date();
+                setPickerDate(currentDate);
+            }
+            if (currentDate) syncDisplay();
+            updatePopupTime(picker);
+        };
+
+        popupTime.addEventListener('input', (ev) => {
+            ev.stopPropagation();
+            popupTime.value = applyTimeMask(ev.target.value);
+            currentTime = popupTime.value;
+            if (!currentDate && defaultDate) {
+                currentDate = new Date();
+                setPickerDate(currentDate);
+            }
+            if (currentDate) syncDisplay();
+            updatePopupTime(picker);
+        });
+        popupTime.addEventListener('keydown', (ev) => {
+            ev.stopPropagation();
+            if (ev.key === 'Enter') {
+                ev.preventDefault();
+                applyTime();
+                dp.hide();
+            }
+        });
+        popupTime.addEventListener('mousedown', (ev) => ev.stopPropagation());
+        popupTime.addEventListener('click', (ev) => ev.stopPropagation());
+        popupTime.addEventListener('blur', () => {
+            if (currentTime && !/^([01]\d|2[0-3]):([0-5]\d)$/.test(currentTime)) {
+                currentTime = '';
+            }
+            syncDisplay();
+            updatePopupTime(picker);
+        });
+    });
+
+    window[`_dtp_${pickerId}`] = {
+        setValue: (iso) => { hiddenInput.value = iso || ''; hiddenInput.dispatchEvent(new Event('change')); },
+        getValue: () => hiddenInput.value
+    };
+}
+
+
 function initScheduler() {
     const scheduleBtn = document.getElementById('schedule-btn');
     const executeBtn = document.getElementById('execute-btn');
@@ -2451,54 +2665,14 @@ function initScheduler() {
     const atqEl = document.getElementById('atq-output');
     const cronContainer = document.getElementById('cron-jobs-container');
     const taskIdInput = document.getElementById('task-id');
+    const datetimeInput = document.getElementById('scheduler-datetime');
 
     if (!scheduleBtn) return;
 
-    // Календарь с русской локализацией и ручной ввод времени
-    const dateInput = document.getElementById('scheduler-date');
-    const timeInput = document.getElementById('scheduler-time');
-    let schedulerDatepicker = null;
-    if (dateInput && typeof Datepicker !== 'undefined') {
-        schedulerDatepicker = new Datepicker(dateInput, {
-            language: 'ru',
-            format: 'dd.mm.yyyy',
-            todayHighlight: true,
-            autohide: true,
-            weekStart: 1,
-            clearButton: true
-        });
-        const today = new Date();
-        const dd = String(today.getDate()).padStart(2, '0');
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const yyyy = today.getFullYear();
-        dateInput.value = `${dd}.${mm}.${yyyy}`;
-        schedulerDatepicker.setDate(today);
-
-        const toggleBtn = dateInput.closest('.input-group')?.querySelector('.scheduler-date-toggle');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', () => {
-                dateInput.focus();
-                schedulerDatepicker.show();
-            });
-            toggleBtn.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    dateInput.focus();
-                    schedulerDatepicker.show();
-                }
-            });
-        }
-    }
-    if (timeInput) {
-        const now = new Date();
-        timeInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        timeInput.addEventListener('input', (e) => {
-            let digits = e.target.value.replace(/\D/g, '').slice(0, 4);
-            if (digits.length > 2) {
-                digits = digits.slice(0, 2) + ':' + digits.slice(2);
-            }
-            e.target.value = digits;
-        });
+    // Единый datetime picker уже инициализируется автозагрузкой (default_time='now', default_date=true)
+    // Убеждаемся, что он готов, если DOM появился позже авто-инициализации
+    if (datetimeInput && !datetimeInput.dataset.datetimePickerInitialized) {
+        initDateTimePicker('scheduler-datetime', { defaultTime: 'now', defaultDate: true });
     }
 
     const showStatus = (text, isError) => {
@@ -2591,22 +2765,16 @@ function initScheduler() {
         const type = document.querySelector('input[name="schedule_type"]:checked')?.value || 'once';
         const payload = {project, schedule_type: type};
         if (type === 'once') {
-            const dateVal = dateInput?.value.trim();
-            const timeVal = timeInput?.value.trim();
-            if (!dateVal || !timeVal) {
+            const datetimeVal = datetimeInput?.value.trim();
+            if (!datetimeVal) {
                 showStatus('Укажите дату и время', true);
                 return;
             }
-            if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(timeVal)) {
-                showStatus('Некорректное время (формат ЧЧ:ММ)', true);
+            if (!/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):([0-5]\d)$/.test(datetimeVal)) {
+                showStatus('Некорректная дата или время', true);
                 return;
             }
-            const [day, month, year] = dateVal.split('.');
-            if (!day || !month || !year || day.length !== 2 || month.length !== 2 || year.length !== 4) {
-                showStatus('Некорректная дата', true);
-                return;
-            }
-            payload.datetime = `${year}-${month}-${day}T${timeVal}`;
+            payload.datetime = datetimeVal;
         } else {
             const cron = cronExpression?.value.trim();
             if (!cron) {
@@ -2881,6 +3049,9 @@ function showCalendarEventModal(eventId, dateStr) {
         }
         deleteBtn.style.display = 'none';
     }
+    ['calendar-event-start', 'calendar-event-end'].forEach(id => {
+        document.getElementById(id)?.dispatchEvent(new Event('change'));
+    });
     new bootstrap.Modal(document.getElementById('calendarEventModal')).show();
 }
 
@@ -3501,4 +3672,10 @@ document.addEventListener('DOMContentLoaded', () => {
             previewModal.querySelector('.modal-dialog')?.classList.remove('modal-fullscreen');
         });
     }
+
+    document.querySelectorAll('.datetime-picker-wrap').forEach(wrap => {
+        const hidden = wrap.querySelector('.datetime-picker-hidden');
+        if (!hidden || !hidden.id) return;
+        initDateTimePicker(hidden.id, { defaultTime: wrap.dataset.defaultTime, defaultDate: wrap.dataset.defaultDate === 'true' });
+    });
 });

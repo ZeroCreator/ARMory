@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
+{% from "macros/datetime_picker.html" import datetime_picker %}
+
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/datepicker.min.css?v=1">
 {% endblock %}
 
 {% block content %}
@@ -64,16 +65,8 @@
                         </div>
                     </div>
                     <div class="scheduler-form-row" id="once-fields">
-                        <div class="scheduler-form-group scheduler-form-group-half">
-                            <label class="form-label" for="scheduler-date">Дата выполнения:</label>
-                            <div class="input-group">
-                                <input type="text" id="scheduler-date" class="form-control" placeholder="дд.мм.гггг" autocomplete="off">
-                                <span class="input-group-text scheduler-date-toggle" role="button" tabindex="0"><i class="bi bi-calendar3"></i></span>
-                            </div>
-                        </div>
-                        <div class="scheduler-form-group scheduler-form-group-half">
-                            <label class="form-label" for="scheduler-time">Время выполнения:</label>
-                            <input type="text" id="scheduler-time" class="form-control" placeholder="ЧЧ:ММ" maxlength="5">
+                        <div class="scheduler-form-group scheduler-form-group-full">
+                            {{ datetime_picker('scheduler-datetime', name='scheduler_datetime', label='Дата и время выполнения:', default_time='now', default_date=True, orientation='bottom right') }}
                         </div>
                     </div>
                     <div class="scheduler-form-row" id="recurring-fields" style="display:none;">
@@ -285,11 +278,11 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Начало</label>
-                        <input type="datetime-local" class="form-control" name="start_date" id="calendar-event-start" required>
+                        {{ datetime_picker('calendar-event-start', name='start_date', label='', required=True, default_date=True) }}
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Окончание</label>
-                        <input type="datetime-local" class="form-control" name="end_date" id="calendar-event-end">
+                        {{ datetime_picker('calendar-event-end', name='end_date', label='') }}
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Цвет</label>
@@ -357,8 +350,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/datepicker.min.js?v=1"></script>
-<script src="/static/js/datepicker-locales/ru.min.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {

@@ -636,6 +636,7 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
         form.priority.value = task.priority || 'medium';
         document.getElementById('task-is-closed').checked = !!task.is_closed;
         form.due_date.value = task.due_date ? formatDateTimeLocal(task.due_date) : '';
+        form.due_date.dispatchEvent(new Event('change'));
         setSelectedAssigneeEmails(task.assignee_emails || [task.assignee_email].filter(Boolean));
         form.tags.value = task.tags || '';
         form.list_name.value = task.list_name || '';
@@ -1459,7 +1460,9 @@ function resetImportState() {
     importNextTempId = 1;
     document.getElementById('import-todo-text').value = '';
     document.getElementById('import-bulk-project').value = '';
-    document.getElementById('import-bulk-due-date').value = '';
+    const importDueDate = document.getElementById('import-bulk-due-date');
+    importDueDate.value = '';
+    importDueDate.dispatchEvent(new Event('change'));
     document.getElementById('import-bulk-priority').value = 'medium';
     document.getElementById('import-bulk-assignee').value = '';
     document.getElementById('import-bulk-tags').value = '';

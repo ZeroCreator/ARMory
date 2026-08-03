@@ -1,0 +1,32 @@
+{% macro datetime_picker(id, name='', label='', value='', required=False, placeholder='дд.мм.гггг ЧЧ:ММ', extra_class='', default_time='00:00', default_date=False, input_size='', orientation='auto') -%}
+<div class="datetime-picker-wrap {{ extra_class }}" data-default-time="{{ default_time }}" data-default-date="{{ 'true' if default_date else 'false' }}" data-orientation="{{ orientation }}">
+    {% if label %}
+    <label class="form-label" for="{{ id }}-display">
+        {{ label }}{% if required %} <span class="text-danger">*</span>{% endif %}
+    </label>
+    {% endif %}
+    <div class="input-group datetime-picker{% if input_size %} input-group-{{ input_size }}{% endif %}">
+        <input type="text"
+               class="form-control datetime-picker-display"
+               id="{{ id }}-display"
+               placeholder="{{ placeholder }}"
+               autocomplete="off"
+               readonly
+               {% if required %}required{% endif %}>
+        <input type="text"
+               class="form-control datetime-picker-date"
+               id="{{ id }}-date"
+               tabindex="-1"
+               aria-hidden="true"
+               style="position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0;padding:0;border:0;">
+        <span class="input-group-text datetime-picker-toggle" role="button" tabindex="0" title="Открыть календарь">
+            <i class="bi bi-calendar3"></i>
+        </span>
+        <input type="hidden"
+               class="datetime-picker-hidden"
+               id="{{ id }}"
+               name="{{ name }}"
+               value="{{ value }}">
+    </div>
+</div>
+{%- endmacro %}
