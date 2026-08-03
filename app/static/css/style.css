@@ -1639,7 +1639,10 @@ footer {
 .scheduler-btn-row {
     margin-top: 0;
     margin-bottom: 0;
-    text-align: left;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
 }
 
 .scheduler-btn-row .scheduler-btn {
@@ -3808,16 +3811,6 @@ footer {
     resize: vertical;
 }
 
-.nav-tabs .nav-link {
-    color: var(--text-light);
-}
-
-.nav-tabs .nav-link.active {
-    color: var(--purple-deep);
-    background-color: var(--sand-base);
-    border-color: var(--sand-base);
-}
-
 /* ── Gantt Kanban status overlay ── */
 .gantt-day-cell {
     position: relative;
@@ -3866,4 +3859,98 @@ footer {
     font-size: 14px;
     font-weight: bold;
     filter: grayscale(100%) brightness(0%);
+}
+
+
+/* ── Datepicker (vanillajs-datepicker) ── */
+.datepicker {
+    font-family: inherit;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    border: 1px solid var(--sand-darker);
+    background: var(--sand-light);
+    color: var(--sand-text);
+}
+.datepicker-dropdown {
+    padding: 0.5rem;
+}
+.datepicker-picker {
+    background: var(--sand-light);
+    border-radius: 14px;
+}
+.datepicker-main {
+    padding: 0.25rem;
+}
+.datepicker-controls .button,
+.datepicker-controls .prev-button,
+.datepicker-controls .next-button,
+.datepicker-controls .view-switch {
+    background: transparent;
+    color: var(--sand-text);
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+}
+.datepicker-controls .button:hover,
+.datepicker-controls .prev-button:hover,
+.datepicker-controls .next-button:hover,
+.datepicker-controls .view-switch:hover {
+    background: var(--sand-dark);
+    color: var(--sand-text);
+}
+.datepicker-view .dow {
+    color: var(--sand-muted);
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+.datepicker-cell {
+    color: var(--sand-text);
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+.datepicker-cell:hover {
+    background: var(--sand-dark);
+}
+.datepicker-cell.focused:not(.selected) {
+    background: var(--sand-darker);
+}
+.datepicker-cell.selected,
+.datepicker-cell.selected:hover {
+    background: var(--purple-accent);
+    color: #fff;
+    font-weight: 600;
+}
+.datepicker-cell.today:not(.selected) {
+    background: rgba(167,139,250,0.15);
+    color: var(--purple-deep);
+    font-weight: 700;
+}
+.datepicker-cell.prev:not(.disabled),
+.datepicker-cell.next:not(.disabled) {
+    color: var(--sand-muted);
+}
+.datepicker-cell.disabled {
+    color: var(--sand-darker);
+    opacity: 0.6;
+}
+.datepicker-picker .datepicker-header {
+    border-bottom: 1px solid var(--sand-darker);
+    margin-bottom: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+.datepicker-footer .datepicker-controls .button {
+    background: var(--sand-dark);
+    color: var(--sand-text);
+    border-radius: 8px;
+    font-weight: 600;
+}
+.datepicker-footer .datepicker-controls .button:hover {
+    background: var(--sand-darker);
+}
+
+.scheduler-date-toggle {
+    cursor: pointer;
+}
+.scheduler-date-toggle:hover {
+    background: var(--sand-dark);
 }

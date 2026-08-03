@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/datepicker.min.css?v=1">
+{% endblock %}
+
 {% block content %}
 <!-- Планировщик / Календарь / Синхронизация -->
 <div class="scheduler-section mb-4">
@@ -61,8 +65,15 @@
                     </div>
                     <div class="scheduler-form-row" id="once-fields">
                         <div class="scheduler-form-group scheduler-form-group-half">
-                            <label class="form-label" for="datetime">Дата и время выполнения:</label>
-                            <input type="datetime-local" id="datetime" class="form-control">
+                            <label class="form-label" for="scheduler-date">Дата выполнения:</label>
+                            <div class="input-group">
+                                <input type="text" id="scheduler-date" class="form-control" placeholder="дд.мм.гггг" autocomplete="off">
+                                <span class="input-group-text scheduler-date-toggle" role="button" tabindex="0"><i class="bi bi-calendar3"></i></span>
+                            </div>
+                        </div>
+                        <div class="scheduler-form-group scheduler-form-group-half">
+                            <label class="form-label" for="scheduler-time">Время выполнения:</label>
+                            <input type="text" id="scheduler-time" class="form-control" placeholder="ЧЧ:ММ" maxlength="5">
                         </div>
                     </div>
                     <div class="scheduler-form-row" id="recurring-fields" style="display:none;">
@@ -83,6 +94,9 @@
                     <div class="scheduler-btn-row">
                         <button id="schedule-btn" class="scheduler-btn scheduler-btn-green">
                             <i class="bi bi-calendar-check me-1"></i> Запланировать
+                        </button>
+                        <button id="execute-btn" class="scheduler-btn scheduler-btn-brown">
+                            <i class="bi bi-play-fill me-1"></i> Выполнить
                         </button>
                     </div>
                     <div id="status-message" class="scheduler-status"></div>
@@ -343,6 +357,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="/static/js/datepicker.min.js?v=1"></script>
+<script src="/static/js/datepicker-locales/ru.min.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {

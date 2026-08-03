@@ -2444,6 +2444,7 @@ async function fillSchedulerTasks() {
 
 function initScheduler() {
     const scheduleBtn = document.getElementById('schedule-btn');
+    const executeBtn = document.getElementById('execute-btn');
     const refreshBtn = document.getElementById('refresh-atq');
     const removeBtn = document.getElementById('remove-btn');
     const statusEl = document.getElementById('status-message');
@@ -2452,6 +2453,53 @@ function initScheduler() {
     const taskIdInput = document.getElementById('task-id');
 
     if (!scheduleBtn) return;
+
+    // Календарь с русской локализацией и ручной ввод времени
+    const dateInput = document.getElementById('scheduler-date');
+    const timeInput = document.getElementById('scheduler-time');
+    let schedulerDatepicker = null;
+    if (dateInput && typeof Datepicker !== 'undefined') {
+        schedulerDatepicker = new Datepicker(dateInput, {
+            language: 'ru',
+            format: 'dd.mm.yyyy',
+            todayHighlight: true,
+            autohide: true,
+            weekStart: 1,
+            clearButton: true
+        });
+        const today = new Date();
+        const dd = String(today.getDate()).padStart(2, '0');
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const yyyy = today.getFullYear();
+        dateInput.value = `${dd}.${mm}.${yyyy}`;
+        schedulerDatepicker.setDate(today);
+
+        const toggleBtn = dateInput.closest('.input-group')?.querySelector('.scheduler-date-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                dateInput.focus();
+                schedulerDatepicker.show();
+            });
+            toggleBtn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    dateInput.focus();
+                    schedulerDatepicker.show();
+                }
+            });
+        }
+    }
+    if (timeInput) {
+        const now = new Date();
+        timeInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        timeInput.addEventListener('input', (e) => {
+            let digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+            if (digits.length > 2) {
+                digits = digits.slice(0, 2) + ':' + digits.slice(2);
+            }
+            e.target.value = digits;
+        });
+    }
 
     const showStatus = (text, isError) => {
         if (!statusEl) return;
@@ -2543,12 +2591,22 @@ function initScheduler() {
         const type = document.querySelector('input[name="schedule_type"]:checked')?.value || 'once';
         const payload = {project, schedule_type: type};
         if (type === 'once') {
-            const datetime = document.getElementById('datetime').value;
-            if (!datetime) {
+            const dateVal = dateInput?.value.trim();
+            const timeVal = timeInput?.value.trim();
+            if (!dateVal || !timeVal) {
                 showStatus('Укажите дату и время', true);
                 return;
             }
-            payload.datetime = datetime;
+            if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(timeVal)) {
+                showStatus('Некорректное время (формат ЧЧ:ММ)', true);
+                return;
+            }
+            const [day, month, year] = dateVal.split('.');
+            if (!day || !month || !year || day.length !== 2 || month.length !== 2 || year.length !== 4) {
+                showStatus('Некорректная дата', true);
+                return;
+            }
+            payload.datetime = `${year}-${month}-${day}T${timeVal}`;
         } else {
             const cron = cronExpression?.value.trim();
             if (!cron) {
@@ -2574,6 +2632,30 @@ function initScheduler() {
             showStatus(error.message, true);
         }
     });
+
+    if (executeBtn) {
+        executeBtn.addEventListener('click', async () => {
+            const project = document.getElementById('project-select').value;
+            if (!project) {
+                showStatus('Выберите задачу', true);
+                return;
+            }
+            try {
+                const data = await api(`${API_BASE}/scheduler/execute`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({project})
+                });
+                if (data.error) {
+                    showStatus(data.error, true);
+                } else {
+                    showStatus(data.message || 'Задача выполнена!', false);
+                }
+            } catch (error) {
+                showStatus(error.message, true);
+            }
+        });
+    }
 
     removeBtn.addEventListener('click', async () => {
         const taskId = taskIdInput.value.trim();

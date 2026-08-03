@@ -145,6 +145,11 @@ class ScheduleRequest(BaseModel):
     args: List[str] = []
 
 
+class ExecuteRequest(BaseModel):
+    project: str
+    args: List[str] = []
+
+
 class RemoveTaskRequest(BaseModel):
     task_id: str
 
@@ -396,6 +401,40 @@ def _project_targets() -> list:
         if target not in targets:
             targets.append(target)
     return targets
+
+
+@router.post("/execute")
+def execute_task(data: ExecuteRequest):
+    task_key = data.project.lower()
+    task = _load_tasks().get(task_key)
+    if not task:
+        return {"error": f"Таск '{data.project}' не найден"}
+    project_dir_raw = task["project_dir"]
+    script_rel = task["script"]
+    args = " ".join(quote(a) for a in (data.args or []))
+    target = task["target"]
+    try:
+        if target is None:
+            project_dir = Path(os.path.expanduser(project_dir_raw))
+            script_path = project_dir / script_rel
+            if not script_path.exists():
+                return {"error": f"Скрипт не найден: {script_path}"}
+            job_cmd = f"cd {quote(str(project_dir))} && {quote(str(script_path))}{' ' + args if args else ''}"
+            result = subprocess.run(job_cmd, shell=True, capture_output=True, text=True)
+        else:
+            script_remote = _remote_path(f"{project_dir_raw}/{script_rel}")
+            check = _run_ssh(target, ["test", "-f", script_remote])
+            if check.returncode != 0:
+                return {"error": f"Скрипт не найден на {target}: {project_dir_raw}/{script_rel}"}
+            job_cmd = f"cd {_remote_path(project_dir_raw)} && {script_remote}{' ' + args if args else ''}"
+            result = _run_ssh(target, ["bash", "-c", job_cmd])
+        if result.returncode != 0:
+            return {"error": result.stderr.strip() or result.stdout or "unknown error"}
+        return {"message": "Задача выполнена!", "output": result.stdout}
+    except subprocess.TimeoutExpired:
+        return {"error": f"SSH: таймаут подключения ({SSH_TIMEOUT} c)"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @router.get("/atq")
