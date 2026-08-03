@@ -11,8 +11,8 @@ import httpx
 
 ARMORY_BASE_URL = os.environ.get("ARMORY_BASE_URL")
 
-KIMI_ASSIGNEE_EMAIL = "kimi@armory.local"
-KIMI_ASSIGNEE_NAME = "Kimi"
+AI_ASSIGNEE_EMAIL = os.environ.get("AI_ASSIGNEE_EMAIL", "ai@armory.local")
+AI_ASSIGNEE_NAME = os.environ.get("AI_ASSIGNEE_NAME", "AI Assistant")
 
 TOOLS = [
     {
@@ -79,7 +79,7 @@ TOOLS = [
     },
     {
         "name": "take_task_into_work",
-        "description": "Взять задачу в работу: перевести в колонку 'В работе' и назначить ответственным Kimi. task_id сквозной.",
+        "description": "Взять задачу в работу: перевести в колонку 'В работе' и назначить ответственным AI-ассистента. task_id сквозной.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -133,20 +133,20 @@ def _match_status(statuses: list[dict[str, Any]], keywords: list[str]) -> dict[s
     return None
 
 
-def _get_or_create_kimi_assignee(base_url: str | None = None) -> dict[str, Any]:
-    """Получить или создать assignee для Kimi."""
+def _get_or_create_ai_assignee(base_url: str | None = None) -> dict[str, Any]:
+    """Получить или создать assignee для AI-ассистента."""
     assignees = _api_request("GET", "/api/assignees", base_url=base_url)
     if isinstance(assignees, dict) and "error" in assignees:
         return assignees
 
     for assignee in assignees:
-        if assignee.get("email") == KIMI_ASSIGNEE_EMAIL:
+        if assignee.get("email") == AI_ASSIGNEE_EMAIL:
             return assignee
 
     return _api_request(
         "POST",
         "/api/assignees",
-        {"name": KIMI_ASSIGNEE_NAME, "email": KIMI_ASSIGNEE_EMAIL},
+        {"name": AI_ASSIGNEE_NAME, "email": AI_ASSIGNEE_EMAIL},
         base_url=base_url,
     )
 
@@ -177,7 +177,7 @@ def _take_task_into_work(task_id: int, base_url: str | None = None) -> dict[str,
         else:
             in_progress = statuses[0]
 
-    assignee = _get_or_create_kimi_assignee(base_url=base_url)
+    assignee = _get_or_create_ai_assignee(base_url=base_url)
     if isinstance(assignee, dict) and "error" in assignee:
         return assignee
 

@@ -1,4 +1,4 @@
-"""HTTP MCP endpoint для Kimi Code CLI.
+"""HTTP MCP endpoint для MCP-клиентов.
 
 Принимает JSON-RPC запросы по HTTP и делегирует обработку mcp_logic.
 Защищён статичным API-ключом (MCP_API_KEY), потому что endpoint

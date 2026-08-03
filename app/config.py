@@ -45,8 +45,17 @@ class Settings(BaseSettings):
     # Публичный URL ARMory (используется для WOPI / Collabora)
     armory_public_url: str = "https://armory.team-73.ru"
 
-    # MCP API key для аутентификации Kimi Code CLI на endpoint /mcp
+    # MCP API key для аутентификации MCP-клиентов на endpoint /mcp
     mcp_api_key: str | None = None
+
+    # AI-ассистент, от имени которого MCP-сервер назначает/берёт задачи
+    ai_assignee_email: str = "ai@armory.local"
+    ai_assignee_name: str = "AI Assistant"
+
+    # Локальная LLM через OpenAI-совместимый API (используется MCP-клиентами)
+    local_llm_base_url: str | None = None
+    local_llm_model: str | None = None
+    local_llm_api_key: str | None = None
 
     # Collabora Online — редактирование документов в Alexandrite
     collabora_enabled: bool = False
