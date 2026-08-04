@@ -1111,7 +1111,7 @@ hr { border-color: rgba(139,124,246,0.15); }
     border-color: var(--purple-accent);
     box-shadow: 0 0 0 0.25rem rgba(167,139,250,0.30);
 }
-.form-control::placeholder { color: #6a6080; }
+.form-control::placeholder { color: #a8a3b3; opacity: 1; }
 .form-label {
     color: var(--purple-accent2);
     font-weight: 600;
@@ -3925,9 +3925,11 @@ footer {
     color: #fff;
     font-weight: 600;
 }
-.datepicker-cell.today:not(.selected) {
-    background: rgba(167,139,250,0.15);
-    color: var(--purple-deep);
+.datepicker-cell.today:not(.selected),
+.datepicker-cell.today.focused:not(.selected),
+.datepicker-cell.today:not(.selected):not(.disabled):hover {
+    background: rgba(167, 139, 250, 0.65);
+    color: #fff;
     font-weight: 700;
 }
 .datepicker-cell.prev:not(.disabled),
@@ -3955,16 +3957,28 @@ footer {
 
 /* ── DateTime picker reusable component ── */
 .datetime-picker-wrap .datetime-picker {
+    position: relative;
     flex-wrap: nowrap;
 }
-.datetime-picker-date {
-    min-width: 0;
+.datetime-picker-wrap .datetime-picker .datetime-picker-display {
+    width: 100%;
+    padding: 0.55rem 2.5rem 0.55rem 0.9rem;
+    border-radius: 10px !important;
 }
 .datetime-picker-toggle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 3;
     cursor: pointer;
     background: var(--sand-dark);
     color: var(--sand-text);
     border-color: var(--sand-darker);
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
 }
 .datetime-picker-toggle:hover,
 .datetime-picker-toggle:focus {
@@ -3985,7 +3999,8 @@ footer {
     color: var(--sand-text);
     white-space: nowrap;
 }
-.datetime-picker-popup-time {
+.datetime-picker-popup-time,
+.datetime-picker-popup-time:focus {
     width: 5.5rem;
     text-align: center;
     background: var(--sand-light);

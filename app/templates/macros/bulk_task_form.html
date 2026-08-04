@@ -1,0 +1,89 @@
+{% from "macros/datetime_picker.html" import datetime_picker %}
+
+{% macro bulk_task_form(prefix, show_status=False, show_is_closed=False) %}
+<div class="bulk-task-form" data-prefix="{{ prefix }}">
+    <div class="row g-2 mb-3">
+        {% if show_status %}
+        <div class="col-md-4">
+            <label class="form-label">Статус</label>
+            <select class="form-select form-select-sm" id="{{ prefix }}-status">
+                <option value="">— не менять —</option>
+            </select>
+        </div>
+        {% endif %}
+        <div class="col-md-4">
+            <label class="form-label">Приоритет</label>
+            <select class="form-select form-select-sm" id="{{ prefix }}-priority">
+                <option value="">— не менять —</option>
+                <option value="low">Низкий</option>
+                <option value="medium">Средний</option>
+                <option value="high">Высокий</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Дедлайн</label>
+            {{ datetime_picker(prefix ~ '-due-date', label='', input_size='sm') }}
+        </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-6">
+            <label class="form-label">Ответственные</label>
+            <div class="dropdown w-100">
+                <button class="form-select form-select-sm text-start" type="button" id="{{ prefix }}-assignee-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    — не менять —
+                </button>
+                <ul class="dropdown-menu w-100" id="{{ prefix }}-assignee-list" aria-labelledby="{{ prefix }}-assignee-btn">
+                    <li><span class="dropdown-item-text text-muted">Нет ответственных</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="{{ prefix }}-tags">Теги</label>
+            <input type="text" class="form-control form-control-sm" id="{{ prefix }}-tags" placeholder="через запятую">
+        </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-6">
+            <label class="form-label" for="{{ prefix }}-list-name">Название списка</label>
+            <input type="text" class="form-control form-control-sm" id="{{ prefix }}-list-name" placeholder="Например, Спринт 12">
+        </div>
+        {% if show_is_closed %}
+        <div class="col-md-6 d-flex align-items-end">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="{{ prefix }}-is-closed">
+                <label class="form-check-label" for="{{ prefix }}-is-closed">Закрыть выбранные задачи</label>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Общие вложения</label>
+        <div class="d-flex gap-2 mb-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showGroupAttachmentForm('{{ prefix }}', 'link')">Ссылка</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showGroupAttachmentForm('{{ prefix }}', 'git')">Git</button>
+            <label class="btn btn-sm btn-outline-secondary mb-0">
+                Файл
+                <input type="file" style="display:none" onchange="submitGroupAttachmentFile('{{ prefix }}', this)">
+            </label>
+        </div>
+        <div id="{{ prefix }}-attachment-form" style="display:none" class="border rounded p-2 mb-2">
+            <input type="hidden" id="{{ prefix }}-attachment-type">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <input type="text" class="form-control form-control-sm" id="{{ prefix }}-attachment-title" placeholder="Название">
+                </div>
+                <div class="col-md-6" id="{{ prefix }}-attachment-url-wrap">
+                    <input type="text" class="form-control form-control-sm" id="{{ prefix }}-attachment-url" placeholder="URL">
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-sm btn-primary w-100" onclick="submitGroupAttachmentForm('{{ prefix }}')">Добавить</button>
+                </div>
+            </div>
+        </div>
+        <div id="{{ prefix }}-attachments-list"></div>
+    </div>
+</div>
+{% endmacro %}

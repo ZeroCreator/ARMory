@@ -1,6 +1,7 @@
 {% extends "base_project.html" %}
 
 {% from "macros/datetime_picker.html" import datetime_picker %}
+{% from "macros/bulk_task_form.html" import bulk_task_form %}
 
 {% block extra_css %}
 {% endblock %}
@@ -416,11 +417,8 @@
         <span class="text-muted small" id="selected-tasks-count"></span>
     </div>
     <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-primary" id="add-attachments-selected-btn" onclick="openAddAttachmentsModal()" disabled>
-            <i class="bi bi-paperclip me-1"></i> Добавить вложения
-        </button>
-        <button class="btn btn-sm btn-danger" id="delete-selected-btn" onclick="deleteSelectedTasks()" disabled style="color: #fff !important;">
-            <i class="bi bi-trash me-1"></i> Удалить выбранные
+        <button class="btn btn-sm btn-outline-primary" id="group-process-btn" onclick="openGroupProcessModal()">
+            <i class="bi bi-collection me-1"></i> Групповая обработка
         </button>
     </div>
 </div>
@@ -629,60 +627,13 @@
                         <div id="import-tasks-list" class="import-tasks-list mb-3"></div>
 
                         <div class="card mb-3">
-                            <div class="card-header">Массовые настройки</div>
-                            <div class="card-body row g-2">
-                                <div class="col-md-3">
-                                    <label class="form-label">Дедлайн</label>
-                                    {{ datetime_picker('import-bulk-due-date', label='', input_size='sm') }}
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Приоритет</label>
-                                    <select class="form-select form-select-sm" id="import-bulk-priority">
-                                        <option value="">—</option>
-                                        <option value="low">Низкий</option>
-                                        <option value="medium" selected>Средний</option>
-                                        <option value="high">Высокий</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Ответственный</label>
-                                    <select class="form-select form-select-sm" id="import-bulk-assignee"></select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Теги</label>
-                                    <input type="text" class="form-control form-control-sm" id="import-bulk-tags" placeholder="через запятую">
-                                </div>
+                            <div class="card-header">Групповые настройки</div>
+                            <div class="card-body">
+                                {{ bulk_task_form('import-bulk', show_status=false, show_is_closed=false) }}
                             </div>
                             <div class="card-footer">
                                 <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyBulkToSelectedImportTasks()">Применить к выбранным</button>
                             </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Общие вложения</label>
-                            <div class="d-flex gap-2 mb-2">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showImportBulkAttachmentForm('link')">Ссылка</button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showImportBulkAttachmentForm('git')">Git</button>
-                                <label class="btn btn-sm btn-outline-secondary mb-0">
-                                    Файл
-                                    <input type="file" style="display:none" onchange="submitImportBulkAttachmentFile(this)">
-                                </label>
-                            </div>
-                            <div id="import-bulk-attachment-form" style="display:none" class="border rounded p-2 mb-2">
-                                <input type="hidden" id="import-bulk-attachment-type">
-                                <div class="row g-2">
-                                    <div class="col-md-4">
-                                        <input type="text" class="form-control form-control-sm" id="import-bulk-attachment-title" placeholder="Название">
-                                    </div>
-                                    <div class="col-md-6" id="import-bulk-attachment-url-wrap">
-                                        <input type="text" class="form-control form-control-sm" id="import-bulk-attachment-url" placeholder="URL">
-                                    </div>
-                                    <div class="col-md-2">
-                                        <button type="button" class="btn btn-sm btn-primary w-100" onclick="submitImportBulkAttachmentForm()">Добавить</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="import-bulk-attachments-list"></div>
                         </div>
 
                         <div class="d-flex justify-content-end gap-2 mt-3">
@@ -707,47 +658,25 @@
     </div>
 </div>
 
-<!-- Модал массового добавления вложений к выбранным задачам -->
-<div class="modal fade" id="addAttachmentsModal" tabindex="-1" aria-hidden="true">
+<!-- Модал групповой обработки выбранных задач -->
+<div class="modal fade" id="groupProcessModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-paperclip me-1"></i> Добавить вложения к выбранным задачам</h5>
+                <h5 class="modal-title"><i class="bi bi-collection me-1"></i> Групповая обработка задач</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small">Вложения будут добавлены ко всем выбранным задачам (<span id="add-attachments-task-count">0</span>).</p>
-                <div class="mb-3">
-                    <label class="form-label">Общие вложения</label>
-                    <div class="d-flex gap-2 mb-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showBulkAttachmentForm('link')">Ссылка</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showBulkAttachmentForm('git')">Git</button>
-                        <label class="btn btn-sm btn-outline-secondary mb-0">
-                            Файл
-                            <input type="file" id="bulk-attachment-file-input" style="display:none" onchange="submitBulkAttachmentFile(this)">
-                        </label>
-                    </div>
-                    <div id="bulk-attachment-form" style="display:none" class="border rounded p-2 mb-2">
-                        <input type="hidden" id="bulk-attachment-type">
-                        <div class="row g-2">
-                            <div class="col-md-4">
-                                <input type="text" class="form-control form-control-sm" id="bulk-attachment-title" placeholder="Название">
-                            </div>
-                            <div class="col-md-6" id="bulk-attachment-url-wrap">
-                                <input type="text" class="form-control form-control-sm" id="bulk-attachment-url" placeholder="URL">
-                            </div>
-                            <div class="col-md-2">
-                                <button type="button" class="btn btn-sm btn-primary w-100" onclick="submitBulkAttachmentForm()">Добавить</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="bulk-attachments-list"></div>
-                </div>
+                <p class="text-muted small">Выбрано задач: <span id="group-process-task-count">0</span>. Заполните только те поля, которые нужно изменить.</p>
+                {{ bulk_task_form('group-process', show_status=true, show_is_closed=true) }}
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-danger me-auto" onclick="deleteGroupTasks()">
+                    <i class="bi bi-trash me-1"></i> Удалить выбранные
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <button type="button" class="btn btn-primary" onclick="addAttachmentsToSelectedTasks()">
-                    <i class="bi bi-paperclip me-1"></i> Добавить ко всем выбранным
+                <button type="button" class="btn btn-primary" onclick="applyGroupProcess()">
+                    <i class="bi bi-check-lg me-1"></i> Применить
                 </button>
             </div>
         </div>
@@ -952,5 +881,5 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=47"></script>
+<script src="/static/js/tasks_list.js?v=49"></script>
 {% endblock %}

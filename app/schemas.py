@@ -423,6 +423,22 @@ class TaskBulkAddAttachmentsRequest(BaseModel):
     attachments: List[TaskBulkAttachment] = []
 
 
+class TaskBulkUpdate(BaseModel):
+    status_id: Optional[int] = None
+    priority: Optional[str] = None
+    due_date: Optional[datetime] = None
+    assignee_email: Optional[str] = None
+    assignee_emails: Optional[List[str]] = None
+    tags: Optional[str] = None
+    list_name: Optional[str] = None
+    is_closed: Optional[bool] = None
+
+
+class TaskBulkUpdateRequest(BaseModel):
+    task_ids: List[int]
+    update: TaskBulkUpdate
+
+
 class KanbanBoardOut(BaseModel):
     statuses: List[TaskStatusOut]
     tasks: List[TaskOut]

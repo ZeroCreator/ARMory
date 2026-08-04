@@ -31,7 +31,8 @@ let ganttTimelineWidth = 0;
 let currentUserEmail = null;
 
 // ── Массовое добавление вложений к выбранным задачам ──
-let bulkAttachments = [];
+let groupProcessAttachments = [];
+let groupProcessSelectedProjectId = null;
 
 const SAVE_LIST_COLUMNS = [
     { key: 'id', label: '#', default: true },
@@ -170,7 +171,7 @@ async function loadFilters() {
             populateSelect('filter-project', (filterOptions.projects || []).map(p => ({ value: p.id, label: p.name })));
             populateSelect('import-bulk-project', (filterOptions.projects || []).map(p => ({ value: p.id, label: p.name })));
         }
-        populateSelect('import-bulk-assignee', (filterOptions.assignees || []).map(a => ({ value: a.email, label: a.name })));
+        initBulkAssigneeList('import-bulk');
     } catch (e) {
         console.error('Failed to load filters:', e);
     }
@@ -1026,36 +1027,208 @@ async function deleteSelectedTasks() {
 
 function updateSelectionToolbar() {
     const countEl = document.getElementById('selected-tasks-count');
-    const deleteBtn = document.getElementById('delete-selected-btn');
-    const attachmentsBtn = document.getElementById('add-attachments-selected-btn');
+    const groupBtn = document.getElementById('group-process-btn');
     const selectAllCheckbox = document.getElementById('select-all-tasks');
-    if (!countEl || !deleteBtn || !attachmentsBtn || !selectAllCheckbox) return;
+    if (!countEl || !groupBtn || !selectAllCheckbox) return;
 
     const visibleIds = filteredTasks.map(t => t.id);
     const selectedVisible = visibleIds.filter(id => selectedTaskIds.has(id));
     const allVisibleSelected = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
 
     countEl.textContent = selectedTaskIds.size > 0 ? `Выбрано: ${selectedTaskIds.size}` : '';
-    deleteBtn.disabled = selectedTaskIds.size === 0;
-    attachmentsBtn.disabled = selectedTaskIds.size === 0;
     selectAllCheckbox.checked = allVisibleSelected;
 }
 
-function openAddAttachmentsModal() {
-    if (selectedTaskIds.size === 0) return;
-    bulkAttachments = [];
-    document.getElementById('add-attachments-task-count').textContent = selectedTaskIds.size;
-    hideBulkAttachmentForm();
-    renderBulkAttachmentsList();
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('addAttachmentsModal')).show();
+
+function getBulkAttachmentArray(prefix) {
+    return prefix === 'import-bulk' ? importBulkAttachments : groupProcessAttachments;
 }
 
-function showBulkAttachmentForm(type) {
-    const form = document.getElementById('bulk-attachment-form');
-    const typeInput = document.getElementById('bulk-attachment-type');
-    const titleInput = document.getElementById('bulk-attachment-title');
-    const urlInput = document.getElementById('bulk-attachment-url');
-    const urlWrap = document.getElementById('bulk-attachment-url-wrap');
+function initBulkAssigneeList(prefix) {
+    const list = document.getElementById(`${prefix}-assignee-list`);
+    const btn = document.getElementById(`${prefix}-assignee-btn`);
+    if (!list) return;
+    const assignees = filterOptions.assignees || [];
+    if (assignees.length === 0) {
+        list.innerHTML = '<li><span class="dropdown-item-text text-muted">Нет ответственных</span></li>';
+    } else {
+        list.innerHTML = assignees.map(a => `
+            <li>
+                <div class="dropdown-item">
+                    <div class="form-check">
+                        <input class="form-check-input group-assignee-checkbox" type="checkbox" value="${escapeHtml(a.email)}" id="${prefix}-assignee-${escapeHtml(a.email)}" data-prefix="${prefix}" onchange="updateBulkAssigneeButton('${prefix}')">
+                        <label class="form-check-label" for="${prefix}-assignee-${escapeHtml(a.email)}">${escapeHtml(a.name)}</label>
+                    </div>
+                </div>
+            </li>
+        `).join('');
+    }
+    if (btn) btn.textContent = '— не менять —';
+}
+
+function getBulkAssigneeEmails(prefix) {
+    return Array.from(document.querySelectorAll(`#${prefix}-assignee-list .group-assignee-checkbox:checked`)).map(cb => cb.value);
+}
+
+function setBulkAssigneeEmails(prefix, emails) {
+    const set = new Set(emails || []);
+    document.querySelectorAll(`#${prefix}-assignee-list .group-assignee-checkbox`).forEach(cb => { cb.checked = set.has(cb.value); });
+    updateBulkAssigneeButton(prefix);
+}
+
+function updateBulkAssigneeButton(prefix) {
+    const btn = document.getElementById(`${prefix}-assignee-btn`);
+    if (!btn) return;
+    const emails = getBulkAssigneeEmails(prefix);
+    if (emails.length === 0) {
+        btn.textContent = '— не менять —';
+        return;
+    }
+    const labels = emails.map(email => assigneesMap[email] || email);
+    btn.textContent = labels.join(', ');
+}
+
+function resetBulkForm(prefix) {
+    const priority = document.getElementById(`${prefix}-priority`);
+    if (priority) priority.value = '';
+
+    const dueDate = document.getElementById(`${prefix}-due-date`);
+    if (dueDate) {
+        dueDate.value = '';
+        dueDate.dispatchEvent(new Event('change'));
+    }
+    const dueDateDisplay = document.getElementById(`${prefix}-due-date-display`);
+    if (dueDateDisplay) dueDateDisplay.value = '';
+
+    const tags = document.getElementById(`${prefix}-tags`);
+    if (tags) tags.value = '';
+
+    const listName = document.getElementById(`${prefix}-list-name`);
+    if (listName) listName.value = '';
+
+    const isClosed = document.getElementById(`${prefix}-is-closed`);
+    if (isClosed) isClosed.checked = false;
+
+    const status = document.getElementById(`${prefix}-status`);
+    if (status) status.value = '';
+
+    setBulkAssigneeEmails(prefix, []);
+
+    const arr = getBulkAttachmentArray(prefix);
+    arr.length = 0;
+    hideGroupAttachmentForm(prefix);
+    renderGroupAttachmentsList(prefix);
+}
+
+function openGroupProcessModal() {
+    if (selectedTaskIds.size === 0) {
+        showToast('Выберите задачи', 'warning');
+        return;
+    }
+
+    groupProcessAttachments = [];
+    groupProcessSelectedProjectId = null;
+    resetBulkForm('group-process');
+    document.getElementById('group-process-task-count').textContent = selectedTaskIds.size;
+
+    const statusSelect = document.getElementById('group-process-status');
+    const statusWrap = statusSelect?.closest('.col-md-4');
+    if (statusWrap) statusWrap.style.display = 'none';
+
+    const selectedTasks = allTasks.filter(t => selectedTaskIds.has(t.id));
+    const projectIds = new Set(selectedTasks.map(t => t.project_id));
+
+    if (!IS_GLOBAL) {
+        groupProcessSelectedProjectId = PROJECT_ID;
+        if (statusWrap) statusWrap.style.display = 'block';
+        loadTaskStatuses(PROJECT_ID).then(statuses => {
+            populateSelect('group-process-status', statuses.map(s => ({ value: s.id, label: s.name })), '— не менять —');
+        });
+    } else if (projectIds.size === 1) {
+        const pid = Array.from(projectIds)[0];
+        groupProcessSelectedProjectId = pid;
+        if (statusWrap) statusWrap.style.display = 'block';
+        loadTaskStatuses(pid).then(statuses => {
+            populateSelect('group-process-status', statuses.map(s => ({ value: s.id, label: s.name })), '— не менять —');
+        });
+    }
+
+    initBulkAssigneeList('group-process');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('groupProcessModal')).show();
+}
+
+async function applyGroupProcess() {
+    if (selectedTaskIds.size === 0) return;
+
+    const taskIds = Array.from(selectedTaskIds);
+    const update = {};
+
+    const statusSelect = document.getElementById('group-process-status');
+    if (statusSelect && statusSelect.value) {
+        update.status_id = parseInt(statusSelect.value, 10);
+    }
+
+    const priority = document.getElementById('group-process-priority').value;
+    if (priority) update.priority = priority;
+
+    const dueDate = document.getElementById('group-process-due-date').value;
+    if (dueDate) update.due_date = new Date(dueDate).toISOString();
+
+    const assigneeEmails = getBulkAssigneeEmails('group-process');
+    if (assigneeEmails.length > 0) update.assignee_emails = assigneeEmails;
+
+    const tags = document.getElementById('group-process-tags').value.trim();
+    if (tags) update.tags = tags;
+
+    const listName = document.getElementById('group-process-list-name').value.trim();
+    if (listName) update.list_name = listName;
+
+    const isClosed = document.getElementById('group-process-is-closed');
+    if (isClosed && isClosed.checked) update.is_closed = true;
+
+    const url = IS_GLOBAL
+        ? `${API_BASE}/tasks/bulk`
+        : `${API_BASE}/projects/${PROJECT_ID}/tasks/bulk`;
+
+    try {
+        await api(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_ids: taskIds, update }),
+        });
+
+        if (groupProcessAttachments.length > 0) {
+            const attachUrl = IS_GLOBAL
+                ? `${API_BASE}/tasks/attachments/bulk`
+                : `${API_BASE}/projects/${PROJECT_ID}/tasks/attachments/bulk`;
+            await api(attachUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task_ids: taskIds, attachments: groupProcessAttachments }),
+            });
+        }
+
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('groupProcessModal')).hide();
+        showToast('Групповая обработка выполнена', 'success');
+        await loadTasks();
+        await loadFilters();
+    } catch (e) {
+        showToast('Ошибка групповой обработки: ' + e.message, 'danger');
+    }
+}
+
+async function deleteGroupTasks() {
+    if (selectedTaskIds.size === 0) return;
+    await deleteSelectedTasks();
+    bootstrap.Modal.getInstance(document.getElementById('groupProcessModal'))?.hide();
+}
+
+function showGroupAttachmentForm(prefix, type) {
+    const form = document.getElementById(`${prefix}-attachment-form`);
+    const typeInput = document.getElementById(`${prefix}-attachment-type`);
+    const titleInput = document.getElementById(`${prefix}-attachment-title`);
+    const urlInput = document.getElementById(`${prefix}-attachment-url`);
+    const urlWrap = document.getElementById(`${prefix}-attachment-url-wrap`);
 
     typeInput.value = type;
     titleInput.value = '';
@@ -1065,34 +1238,44 @@ function showBulkAttachmentForm(type) {
     form.style.display = 'block';
 }
 
-function hideBulkAttachmentForm() {
-    const form = document.getElementById('bulk-attachment-form');
+function hideGroupAttachmentForm(prefix) {
+    const form = document.getElementById(`${prefix}-attachment-form`);
     if (form) form.style.display = 'none';
 }
 
-function submitBulkAttachmentForm() {
-    const type = document.getElementById('bulk-attachment-type').value;
-    const title = document.getElementById('bulk-attachment-title').value.trim() || null;
-    const url = document.getElementById('bulk-attachment-url').value.trim();
+function submitGroupAttachmentForm(prefix) {
+    const type = document.getElementById(`${prefix}-attachment-type`).value;
+    const title = document.getElementById(`${prefix}-attachment-title`).value.trim() || null;
+    const url = document.getElementById(`${prefix}-attachment-url`).value.trim();
 
     if (type !== 'file' && !url) {
         showToast('Введите URL', 'warning');
         return;
     }
 
-    bulkAttachments.push({ attachment_type: type, title, url });
-    hideBulkAttachmentForm();
-    renderBulkAttachmentsList();
+    getBulkAttachmentArray(prefix).push({ attachment_type: type, title, url });
+    hideGroupAttachmentForm(prefix);
+    renderGroupAttachmentsList(prefix);
 }
 
-async function submitBulkAttachmentFile(input) {
+async function submitGroupAttachmentFile(prefix, input) {
     const file = input.files[0];
     if (!file) return;
     input.value = '';
 
-    const uploadUrl = IS_GLOBAL
-        ? `${API_BASE}/tasks/attachments/upload`
-        : `${API_BASE}/projects/${PROJECT_ID}/attachments/upload`;
+    let uploadUrl;
+    if (prefix === 'import-bulk') {
+        const projectId = getImportProjectId();
+        if (!projectId) {
+            showToast('Выберите проект для загрузки файла', 'warning');
+            return;
+        }
+        uploadUrl = `${API_BASE}/projects/${projectId}/attachments/upload`;
+    } else {
+        uploadUrl = IS_GLOBAL
+            ? `${API_BASE}/tasks/attachments/upload`
+            : `${API_BASE}/projects/${PROJECT_ID}/attachments/upload`;
+    }
 
     const formData = new FormData();
     formData.append('file', file);
@@ -1102,31 +1285,32 @@ async function submitBulkAttachmentFile(input) {
             method: 'POST',
             body: formData,
         });
-        bulkAttachments.push({
+        getBulkAttachmentArray(prefix).push({
             attachment_type: 'file',
             title: attachment.title || file.name,
             file_path: attachment.file_path,
         });
-        renderBulkAttachmentsList();
+        renderGroupAttachmentsList(prefix);
     } catch (e) {
         showToast('Ошибка загрузки файла: ' + e.message, 'danger');
     }
 }
 
-function deleteBulkAttachment(index) {
-    bulkAttachments.splice(index, 1);
-    renderBulkAttachmentsList();
+function deleteGroupAttachment(prefix, index) {
+    getBulkAttachmentArray(prefix).splice(index, 1);
+    renderGroupAttachmentsList(prefix);
 }
 
-function renderBulkAttachmentsList() {
-    const container = document.getElementById('bulk-attachments-list');
+function renderGroupAttachmentsList(prefix) {
+    const container = document.getElementById(`${prefix}-attachments-list`);
     if (!container) return;
-    if (bulkAttachments.length === 0) {
+    const attachments = getBulkAttachmentArray(prefix);
+    if (attachments.length === 0) {
         container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
         return;
     }
 
-    container.innerHTML = bulkAttachments.map((a, idx) => {
+    container.innerHTML = attachments.map((a, idx) => {
         const icon = a.attachment_type === 'git' ? 'bi-git' : (a.attachment_type === 'link' ? 'bi-link-45deg' : 'bi-file-earmark');
         const display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
         return `
@@ -1134,41 +1318,10 @@ function renderBulkAttachmentsList() {
                 <div class="text-truncate">
                     <i class="bi ${icon} me-1"></i> ${display}
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteBulkAttachment(${idx})" title="Удалить"><i class="bi bi-trash"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteGroupAttachment('${prefix}', ${idx})" title="Удалить"><i class="bi bi-trash"></i></button>
             </div>
         `;
     }).join('');
-}
-
-async function addAttachmentsToSelectedTasks() {
-    if (selectedTaskIds.size === 0) return;
-    if (bulkAttachments.length === 0) {
-        showToast('Добавьте хотя бы одно вложение', 'warning');
-        return;
-    }
-
-    const taskIds = Array.from(selectedTaskIds);
-    const payload = {
-        task_ids: taskIds,
-        attachments: bulkAttachments,
-    };
-
-    const url = IS_GLOBAL
-        ? `${API_BASE}/tasks/attachments/bulk`
-        : `${API_BASE}/projects/${PROJECT_ID}/tasks/attachments/bulk`;
-
-    try {
-        await api(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('addAttachmentsModal')).hide();
-        showToast(`Вложения добавлены к ${taskIds.length} задачам`, 'success');
-        await loadTasks();
-    } catch (e) {
-        showToast('Ошибка добавления вложений: ' + e.message, 'danger');
-    }
 }
 
 function toMoscowDateParts(date) {
@@ -1557,16 +1710,10 @@ function resetImportState() {
     document.getElementById('import-list-name').value = '';
     document.getElementById('import-todo-text').value = '';
     resetImportSingleFile();
-    const importDueDate = document.getElementById('import-bulk-due-date');
-    importDueDate.value = '';
-    importDueDate.dispatchEvent(new Event('change'));
-    document.getElementById('import-bulk-priority').value = 'medium';
-    document.getElementById('import-bulk-assignee').value = '';
-    document.getElementById('import-bulk-tags').value = '';
+    resetBulkForm('import-bulk');
     if (document.getElementById('import-bulk-project')) document.getElementById('import-bulk-project').value = '';
-    hideImportBulkAttachmentForm();
     renderImportTasksList();
-    renderImportBulkAttachmentsList();
+    renderGroupAttachmentsList('import-bulk');
 }
 
 function openTaskImportModal() {
@@ -1673,109 +1820,18 @@ function renderImportTasksList() {
     container.innerHTML = html;
 }
 
-function showImportBulkAttachmentForm(type) {
-    const form = document.getElementById('import-bulk-attachment-form');
-    const typeInput = document.getElementById('import-bulk-attachment-type');
-    const titleInput = document.getElementById('import-bulk-attachment-title');
-    const urlInput = document.getElementById('import-bulk-attachment-url');
-    const urlWrap = document.getElementById('import-bulk-attachment-url-wrap');
-
-    typeInput.value = type;
-    titleInput.value = '';
-    urlInput.value = '';
-    urlWrap.style.display = type === 'file' ? 'none' : 'block';
-    urlInput.placeholder = type === 'git' ? 'URL репозитория' : 'URL';
-    form.style.display = 'block';
-}
-
-function hideImportBulkAttachmentForm() {
-    const form = document.getElementById('import-bulk-attachment-form');
-    if (form) form.style.display = 'none';
-}
-
-function submitImportBulkAttachmentForm() {
-    const type = document.getElementById('import-bulk-attachment-type').value;
-    const title = document.getElementById('import-bulk-attachment-title').value.trim() || null;
-    const url = document.getElementById('import-bulk-attachment-url').value.trim();
-
-    if (type !== 'file' && !url) {
-        showToast('Введите URL', 'warning');
-        return;
-    }
-
-    importBulkAttachments.push({ attachment_type: type, title, url });
-    hideImportBulkAttachmentForm();
-    renderImportBulkAttachmentsList();
-}
-
-async function submitImportBulkAttachmentFile(input) {
-    const file = input.files[0];
-    if (!file) return;
-    input.value = '';
-
-    const projectId = getImportProjectId();
-    if (!projectId) {
-        showToast('Выберите проект для загрузки файла', 'warning');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-        const attachment = await api(`${API_BASE}/projects/${projectId}/attachments/upload`, {
-            method: 'POST',
-            body: formData,
-        });
-        importBulkAttachments.push({
-            attachment_type: 'file',
-            title: attachment.title || file.name,
-            file_path: attachment.file_path,
-        });
-        renderImportBulkAttachmentsList();
-    } catch (e) {
-        showToast('Ошибка загрузки файла: ' + e.message, 'danger');
-    }
-}
-
 function getImportProjectId() {
     if (!IS_GLOBAL) return PROJECT_ID;
     const select = document.getElementById('import-bulk-project');
     return select ? (select.value || (filterOptions.projects[0]?.id)) : null;
 }
 
-function deleteImportBulkAttachment(index) {
-    importBulkAttachments.splice(index, 1);
-    renderImportBulkAttachmentsList();
-}
-
-function renderImportBulkAttachmentsList() {
-    const container = document.getElementById('import-bulk-attachments-list');
-    if (!container) return;
-    if (importBulkAttachments.length === 0) {
-        container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
-        return;
-    }
-
-    container.innerHTML = importBulkAttachments.map((a, idx) => {
-        const icon = a.attachment_type === 'git' ? 'bi-git' : (a.attachment_type === 'link' ? 'bi-link-45deg' : 'bi-file-earmark');
-        const display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
-        return `
-            <div class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded mb-1">
-                <div class="text-truncate">
-                    <i class="bi ${icon} me-1"></i> ${display}
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteImportBulkAttachment(${idx})" title="Удалить"><i class="bi bi-trash"></i></button>
-            </div>
-        `;
-    }).join('');
-}
-
 function applyBulkToSelectedImportTasks() {
     const dueDate = document.getElementById('import-bulk-due-date').value || null;
     const priority = document.getElementById('import-bulk-priority').value || null;
-    const assignee = document.getElementById('import-bulk-assignee').value || null;
+    const assigneeEmails = getBulkAssigneeEmails('import-bulk');
     const tags = document.getElementById('import-bulk-tags').value.trim() || null;
+    const listName = document.getElementById('import-bulk-list-name').value.trim() || null;
     const projectId = getImportProjectId();
 
     importTasksState.forEach(t => {
@@ -1783,11 +1839,12 @@ function applyBulkToSelectedImportTasks() {
         if (IS_GLOBAL && projectId) t.project_id = parseInt(projectId, 10);
         if (dueDate) t.due_date = new Date(dueDate).toISOString();
         if (priority) t.priority = priority;
-        if (assignee) t.assignee_emails = [assignee];
+        if (assigneeEmails.length > 0) t.assignee_emails = assigneeEmails;
         if (tags) t.tags = tags;
+        if (listName) t.list_name = listName;
     });
 
-    showToast('Массовые настройки применены к выбранным задачам', 'success');
+    showToast('Групповые настройки применены к выбранным задачам', 'success');
     renderImportTasksList();
 }
 

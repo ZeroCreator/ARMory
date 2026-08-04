@@ -50,6 +50,8 @@ from app.schemas import (
     TaskBulkCreate,
     TaskBulkOut,
     TaskBulkRequest,
+    TaskBulkUpdate,
+    TaskBulkUpdateRequest,
     TaskCreate,
     TaskOut,
     TaskReorderRequest,
@@ -741,21 +743,22 @@ async def get_task(
     return await _get_task(project_id, task_id, db)
 
 
-@router.patch("/tasks/{task_id}", response_model=TaskOut)
-async def update_task(
-    project_id: int,
-    task_id: int,
+async def _apply_task_update(
+    task: Task,
     data: TaskUpdate,
-    db: AsyncSession = Depends(get_db),
-):
-    task = await _get_task(project_id, task_id, db)
+    project_id: int,
+    db: AsyncSession,
+) -> bool:
+    """Применить поля TaskUpdate к одной задаче. Возвращает True, если статус изменился."""
     update_data = data.model_dump(exclude_unset=True)
     status_changed = False
+
     if "status_id" in update_data:
         await _get_status(project_id, update_data["status_id"], db)
         if task.status_id != update_data["status_id"]:
             task.status_id = update_data["status_id"]
             status_changed = True
+
     if "title" in update_data:
         task.title = update_data["title"] or ""
     if "priority" in update_data:
@@ -771,7 +774,6 @@ async def update_task(
         task.tags = update_data["tags"]
     if "list_name" in update_data:
         task.list_name = update_data["list_name"]
-    old_result = task.result
     if "result" in update_data:
         task.result = update_data["result"]
 
@@ -779,7 +781,6 @@ async def update_task(
         was_closed = task.is_closed
         task.is_closed = update_data["is_closed"]
         if update_data["is_closed"] and not was_closed:
-            # При закрытии задачи сбрасываем дедлайн и отправляем вниз колонки.
             task.due_date = None
             max_order = await db.execute(
                 select(func.max(Task.sort_order))
@@ -787,10 +788,8 @@ async def update_task(
             )
             task.sort_order = (max_order.scalar_one_or_none() or 0) + 1
         elif not update_data["is_closed"] and was_closed:
-            # При открытии возвращаем задачу в начало колонки.
             task.sort_order = 0
         elif status_changed:
-            # Задача просто перенесена в другую колонку — ставим первой.
             await db.execute(
                 update(Task)
                 .where(
@@ -802,7 +801,6 @@ async def update_task(
             )
             task.sort_order = 0
     elif status_changed:
-        # Задача перенесена в другую колонку без изменения флага закрытия — ставим первой.
         await db.execute(
             update(Task)
             .where(
@@ -818,13 +816,95 @@ async def update_task(
         await _record_status_history(db, task.id, task.status_id)
 
     task.updated_at = datetime.utcnow()
+    return status_changed
+
+
+@router.patch("/tasks/{task_id}", response_model=TaskOut)
+async def update_task(
+    project_id: int,
+    task_id: int,
+    data: TaskUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    task = await _get_task(project_id, task_id, db)
+    old_result = task.result
+    status_changed = await _apply_task_update(task, data, project_id, db)
+
     await db.commit()
     await db.refresh(task)
     broadcast({"type": "task_changed", "project_id": project_id, "task_id": task.id, "status_id": task.status_id})
-    new_result = update_data.get("result")
+    new_result = None
+    update_data = data.model_dump(exclude_unset=True)
+    if "result" in update_data:
+        new_result = update_data["result"]
     if new_result and not old_result:
         broadcast({"type": "task_completed", "project_id": project_id, "task_id": task.id, "message": f"Задача №{task.id} выполнена"})
     return task
+
+
+@router.patch("/tasks/bulk", status_code=204)
+async def update_tasks_bulk(
+    project_id: int,
+    data: TaskBulkUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Массовое обновление задач проекта."""
+    await _get_project(project_id, db)
+    if not data.task_ids:
+        raise HTTPException(status_code=400, detail="No task IDs provided")
+
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.assignees))
+        .where(Task.project_id == project_id, Task.id.in_(data.task_ids))
+    )
+    tasks = result.scalars().all()
+    found_ids = {t.id for t in tasks}
+    missing = set(data.task_ids) - found_ids
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Tasks not found: {sorted(missing)}")
+
+    for task in tasks:
+        await _apply_task_update(task, data.update, project_id, db)
+
+    await db.commit()
+    for task in tasks:
+        await db.refresh(task)
+        broadcast({"type": "task_changed", "project_id": project_id, "task_id": task.id, "status_id": task.status_id})
+    return None
+
+
+@global_router.patch("/tasks/bulk", status_code=204)
+async def update_tasks_bulk_global(
+    data: TaskBulkUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Массовое обновление задач из общего списка (разные проекты).
+    Смена статуса недоступна, т.к. колонки привязаны к проектам."""
+    if not data.task_ids:
+        raise HTTPException(status_code=400, detail="No task IDs provided")
+    if data.update.status_id is not None:
+        raise HTTPException(status_code=400, detail="status_id is not allowed in global bulk update")
+
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.assignees))
+        .where(Task.id.in_(data.task_ids))
+    )
+    tasks = result.scalars().all()
+    found_ids = {t.id for t in tasks}
+    missing = set(data.task_ids) - found_ids
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Tasks not found: {sorted(missing)}")
+
+    for task in tasks:
+        await _apply_task_update(task, data.update, task.project_id, db)
+
+    await db.commit()
+    for task in tasks:
+        await db.refresh(task)
+        broadcast({"type": "task_changed", "project_id": task.project_id, "task_id": task.id, "status_id": task.status_id})
+    return None
 
 
 @router.delete("/tasks/{task_id}", status_code=204)

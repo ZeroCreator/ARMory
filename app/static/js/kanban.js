@@ -1604,7 +1604,7 @@ function applyBulkToSelectedImportTasks() {
         if (tags) t.tags = tags;
     });
 
-    showToast('Массовые настройки применены к выбранным задачам', 'success');
+    showToast('Групповые настройки применены к выбранным задачам', 'success');
     renderImportTasksList();
 }
 

@@ -2492,7 +2492,7 @@ function initDateTimePicker(pickerId, options = {}) {
             displayInput.value = `${fmtDate(currentDate)} ${currentTime}`;
         } else if (currentDate) {
             hiddenInput.value = isoFromParts(currentDate, resolvedTime());
-            displayInput.value = `${fmtDate(currentDate)} ${resolvedTime()}`;
+            displayInput.value = fmtDate(currentDate);
         } else {
             hiddenInput.value = '';
             displayInput.value = '';
@@ -2538,7 +2538,6 @@ function initDateTimePicker(pickerId, options = {}) {
         const d = e.detail?.date;
         if (!d || isNaN(d.getTime())) return;
         currentDate = d;
-        if (!currentTime) currentTime = resolvedTime();
         syncDisplay();
         updatePopupTime();
     };
