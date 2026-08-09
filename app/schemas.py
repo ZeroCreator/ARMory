@@ -343,6 +343,7 @@ class TaskOut(BaseModel):
     description: Optional[str] = None
     priority: str = "medium"
     is_closed: bool = False
+    start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     assignee_emails: List[str] = []
@@ -362,6 +363,7 @@ class TaskCreate(BaseModel):
     description: Optional[str] = None
     priority: Optional[str] = "medium"
     is_closed: Optional[bool] = False
+    start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     assignee_emails: Optional[List[str]] = None
@@ -376,6 +378,7 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = None
     priority: Optional[str] = None
     is_closed: Optional[bool] = None
+    start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     assignee_emails: Optional[List[str]] = None
@@ -393,6 +396,8 @@ class TaskBulkCreate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     priority: Optional[str] = "medium"
+    status_id: Optional[int] = None
+    start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     assignee_emails: Optional[List[str]] = None
@@ -426,6 +431,7 @@ class TaskBulkAddAttachmentsRequest(BaseModel):
 class TaskBulkUpdate(BaseModel):
     status_id: Optional[int] = None
     priority: Optional[str] = None
+    start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     assignee_emails: Optional[List[str]] = None
@@ -501,6 +507,7 @@ class KanbanTaskExport(BaseModel):
     description: Optional[str] = None
     priority: str = "medium"
     is_closed: bool = False
+    start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     assignee_emails: List[str] = []

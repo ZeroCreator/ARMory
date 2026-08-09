@@ -423,6 +423,7 @@ async def create_task(
         description=data.description,
         priority=data.priority or "medium",
         is_closed=data.is_closed or False,
+        start_date=data.start_date,
         due_date=None if data.is_closed else data.due_date,
         assignee_email=None,
         tags=data.tags,
@@ -480,31 +481,46 @@ async def _bulk_create_tasks(
     attachments_data: list[TaskBulkAttachment],
     db: AsyncSession,
 ) -> list[Task]:
-    """Создать несколько задач в колонке 'К выполнению' и прикрепить общие вложения."""
-    status = await _get_or_create_todo_status(project_id, db)
+    """Создать несколько задач. Если статус не указан — используется 'К выполнению'."""
+    default_status = await _get_or_create_todo_status(project_id, db)
 
-    max_order = await db.execute(
-        select(Task.sort_order)
-        .where(Task.project_id == project_id, Task.status_id == status.id)
-        .order_by(Task.sort_order.desc())
-        .limit(1)
-    )
-    base_order = max_order.scalar_one_or_none() or 0
+    # Определяем status_id для каждой задачи и считаем max_order внутри каждого статуса
+    status_ids = []
+    for task_data in tasks_data:
+        status_id = task_data.status_id
+        if status_id:
+            await _get_status(project_id, status_id, db)
+        else:
+            status_id = default_status.id
+        status_ids.append(status_id)
+
+    max_orders: dict[int, int] = {}
+    for status_id in set(status_ids):
+        max_order_result = await db.execute(
+            select(Task.sort_order)
+            .where(Task.project_id == project_id, Task.status_id == status_id)
+            .order_by(Task.sort_order.desc())
+            .limit(1)
+        )
+        max_orders[status_id] = max_order_result.scalar_one_or_none() or 0
 
     created_tasks: list[Task] = []
     for idx, task_data in enumerate(tasks_data):
+        status_id = status_ids[idx]
+        max_orders[status_id] += 1
         task = Task(
             project_id=project_id,
-            status_id=status.id,
+            status_id=status_id,
             title=task_data.title or "",
             description=task_data.description,
             priority=task_data.priority or "medium",
             is_closed=False,
+            start_date=task_data.start_date,
             due_date=task_data.due_date,
             assignee_email=None,
             tags=task_data.tags,
             list_name=task_data.list_name,
-            sort_order=base_order + idx + 1,
+            sort_order=max_orders[status_id],
         )
         db.add(task)
         created_tasks.append(task)
@@ -765,6 +781,8 @@ async def _apply_task_update(
         task.priority = update_data["priority"]
     if "description" in update_data:
         task.description = update_data["description"]
+    if "start_date" in update_data:
+        task.start_date = update_data["start_date"]
     if "due_date" in update_data:
         task.due_date = update_data["due_date"]
     if "assignee_emails" in update_data or "assignee_email" in update_data:
@@ -936,6 +954,7 @@ async def export_single_task(
         "description": task.description,
         "priority": task.priority,
         "is_closed": bool(task.is_closed),
+        "start_date": task.start_date,
         "due_date": task.due_date,
         "assignee_email": task.assignee_email,
         "assignee_emails": task.assignee_emails,
@@ -1002,6 +1021,7 @@ async def import_single_task(
         "description": data.description,
         "priority": data.priority,
         "is_closed": data.is_closed,
+        "start_date": data.start_date,
         "due_date": data.due_date,
         "assignee_email": None,
         "tags": data.tags,
@@ -1461,6 +1481,7 @@ async def _build_project_export(project_id: int, db: AsyncSession) -> dict:
                 "description": t.description,
                 "priority": t.priority,
                 "is_closed": t.is_closed,
+                "start_date": t.start_date,
                 "due_date": t.due_date,
                 "assignee_email": t.assignee_email,
                 "assignee_emails": t.assignee_emails,
@@ -1547,6 +1568,7 @@ async def _import_project_data(
                 description=task_data.description,
                 priority=task_data.priority,
                 is_closed=task_data.is_closed,
+                start_date=task_data.start_date,
                 due_date=task_data.due_date,
                 assignee_email=None,
                 tags=task_data.tags,
@@ -1559,6 +1581,7 @@ async def _import_project_data(
             task.description = task_data.description
             task.priority = task_data.priority
             task.is_closed = task_data.is_closed
+            task.start_date = task_data.start_date
             task.due_date = task_data.due_date
             task.assignee_email = None
             task.tags = task_data.tags
@@ -2158,7 +2181,7 @@ async def export_gantt_xlsx(
 
         all_dates = []
         for t in tasks:
-            s = date_part(t.created_at)
+            s = date_part(t.start_date) or date_part(t.created_at)
             e = date_part(t.due_date)
             if s:
                 all_dates.append(s)
@@ -2222,7 +2245,7 @@ async def export_gantt_xlsx(
         ws.column_dimensions["F"].width = 10
 
         for t in tasks:
-            start = date_part(t.created_at)
+            start = date_part(t.start_date) or date_part(t.created_at)
             end = date_part(t.due_date)
             if not start and not end:
                 continue
@@ -2301,7 +2324,7 @@ async def export_gantt_xlsx(
         ws_tasks = wb.create_sheet("Задачи")
         ws_tasks.append([
             "#", "Проект", "Название", "Описание", "Статус", "Приоритет",
-            "Ответственный", "Дедлайн", "Тестирование", "Деплой", "Теги", "Список", "Создано", "Закрыто"
+            "Ответственный", "Начало", "Дедлайн", "Тестирование", "Деплой", "Теги", "Список", "Создано", "Закрыто"
         ])
         for row in ws_tasks[1]:
             row.fill = header_fill
@@ -2328,6 +2351,7 @@ async def export_gantt_xlsx(
                 t.status.name if t.status else "",
                 t.priority or "",
                 _format_task_assignees(t, assignees),
+                t.start_date.strftime("%d.%m.%Y %H:%M") if t.start_date else "",
                 t.due_date.strftime("%d.%m.%Y %H:%M") if t.due_date else "",
                 testing_date_str,
                 deploy_date_str,

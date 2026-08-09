@@ -42,6 +42,7 @@ const SAVE_LIST_COLUMNS = [
     { key: 'status_name', label: 'Статус', default: true },
     { key: 'priority', label: 'Приоритет', default: true },
     { key: 'assignee_name', label: 'Ответственный', default: true },
+    { key: 'start_date', label: 'Начало', default: true },
     { key: 'due_date', label: 'Дедлайн', default: true },
     { key: 'tags', label: 'Теги', default: true },
     { key: 'list_name', label: 'Список', default: true },
@@ -87,6 +88,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     document.addEventListener('keydown', handleTasksListKeydown);
+
+    const importProjectSelect = document.getElementById('import-bulk-project');
+    if (importProjectSelect) {
+        importProjectSelect.addEventListener('change', loadImportStatuses);
+    }
 });
 
 function handleTasksListKeydown(e) {
@@ -345,6 +351,7 @@ function getSortValue(task, column) {
         case 'status_name': return task.status?.name || '';
         case 'priority': return task.priority || '';
         case 'assignee_name': return formatAssignees(task, false);
+        case 'start_date': return task.start_date || '';
         case 'due_date': return task.due_date || '';
         case 'list_name': return task.list_name || '';
         case 'created_at': return task.created_at || '';
@@ -356,7 +363,7 @@ function getSortValue(task, column) {
 function renderTable() {
     const tbody = document.getElementById('tasks-table-body');
     if (filteredTasks.length === 0) {
-        const colspan = IS_GLOBAL ? 14 : 13;
+        const colspan = IS_GLOBAL ? 15 : 14;
         tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-muted py-4">Нет задач</td></tr>`;
         return;
     }
@@ -385,11 +392,12 @@ function renderTable() {
                 </td>
                 <td>${task.id}</td>
                 ${projectCell}
-                <td>${escapeHtml(task.title || '')}</td>
+                <td title="${escapeHtml(task.title || '')}">${escapeHtml(task.title || '')}</td>
                 <td class="d-none d-md-table-cell description-cell" title="${escapeHtml(task.description || '')}">${escapeHtml(task.description || '')}</td>
                 <td>${escapeHtml(task.status?.name || '')}</td>
                 <td><span class="badge ${priorityClass}">${priorityLabel(task.priority)}</span></td>
                 <td class="d-none d-sm-table-cell">${formatAssignees(task)}</td>
+                <td class="d-none d-sm-table-cell">${task.start_date ? formatDateTime(task.start_date) : '—'}</td>
                 <td class="d-none d-sm-table-cell">${task.due_date ? formatDateTime(task.due_date) : '—'}</td>
                 <td class="d-none d-lg-table-cell">${tags || '—'}</td>
                 <td class="d-none d-sm-table-cell">${escapeHtml(task.list_name || '—')}</td>
@@ -429,6 +437,9 @@ async function openTaskViewModal(taskId) {
         document.getElementById('task-description').value = task.description || '';
         document.getElementById('task-priority').value = task.priority || 'medium';
         document.getElementById('task-is-closed').checked = !!task.is_closed;
+        const startDateInput = document.getElementById('task-start-date');
+        startDateInput.value = isoToDatetimeLocal(task.start_date);
+        startDateInput.dispatchEvent(new Event('change'));
         const dueDateInput = document.getElementById('task-due-date');
         dueDateInput.value = isoToDatetimeLocal(task.due_date);
         dueDateInput.dispatchEvent(new Event('change'));
@@ -559,12 +570,14 @@ async function saveTaskFromModal() {
     }
 
     const dueInput = document.getElementById('task-due-date').value;
+    const startInput = document.getElementById('task-start-date').value;
     const payload = {
         title: document.getElementById('task-title').value.trim() || null,
         description: document.getElementById('task-description').value.trim() || null,
         status_id: statusId,
         priority: document.getElementById('task-priority').value,
         is_closed: document.getElementById('task-is-closed').checked,
+        start_date: startInput ? new Date(startInput).toISOString() : null,
         due_date: dueInput ? new Date(dueInput).toISOString() : null,
         assignee_emails: getSelectedAssigneeEmails(),
         tags: document.getElementById('task-tags').value.trim() || null,
@@ -1091,6 +1104,14 @@ function resetBulkForm(prefix) {
     const priority = document.getElementById(`${prefix}-priority`);
     if (priority) priority.value = '';
 
+    const startDate = document.getElementById(`${prefix}-start-date`);
+    if (startDate) {
+        startDate.value = '';
+        startDate.dispatchEvent(new Event('change'));
+    }
+    const startDateDisplay = document.getElementById(`${prefix}-start-date-display`);
+    if (startDateDisplay) startDateDisplay.value = '';
+
     const dueDate = document.getElementById(`${prefix}-due-date`);
     if (dueDate) {
         dueDate.value = '';
@@ -1172,6 +1193,9 @@ async function applyGroupProcess() {
 
     const dueDate = document.getElementById('group-process-due-date').value;
     if (dueDate) update.due_date = new Date(dueDate).toISOString();
+
+    const startDate = document.getElementById('group-process-start-date').value;
+    if (startDate) update.start_date = new Date(startDate).toISOString();
 
     const assigneeEmails = getBulkAssigneeEmails('group-process');
     if (assigneeEmails.length > 0) update.assignee_emails = assigneeEmails;
@@ -1451,6 +1475,7 @@ function getSaveListColumnValue(task, key) {
         case 'status_name': return task.status?.name || '';
         case 'priority': return priorityLabel(task.priority);
         case 'assignee_name': return formatAssignees(task, false);
+        case 'start_date': return task.start_date ? formatDateTime(task.start_date) : '—';
         case 'due_date': return task.due_date ? formatDateTime(task.due_date) : '—';
         case 'tags': return task.tags || '—';
         case 'list_name': return task.list_name || '—';
@@ -1717,8 +1742,16 @@ function resetImportState() {
 
 function openTaskImportModal() {
     resetImportState();
+    loadImportStatuses();
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('taskImportModal'));
     modal.show();
+}
+
+async function loadImportStatuses() {
+    const projectId = getImportProjectId();
+    if (!projectId) return;
+    const statuses = await loadTaskStatuses(projectId);
+    populateSelect('import-bulk-status', statuses.map(s => ({ value: s.id, label: s.name })), 'К выполнению');
 }
 
 function parseTodoText(text) {
@@ -1740,6 +1773,7 @@ function splitTodoTextIntoTasks() {
             description: line,
             selected: true,
             project_id: null,
+            start_date: null,
             due_date: null,
             priority: null,
             assignee_email: null,
@@ -1756,6 +1790,7 @@ function addImportTask() {
         description: '',
         selected: true,
         project_id: null,
+        start_date: null,
         due_date: null,
         priority: null,
         assignee_email: null,
@@ -1826,8 +1861,11 @@ function getImportProjectId() {
 }
 
 function applyBulkToSelectedImportTasks() {
+    const startDate = document.getElementById('import-bulk-start-date').value || null;
     const dueDate = document.getElementById('import-bulk-due-date').value || null;
     const priority = document.getElementById('import-bulk-priority').value || null;
+    const statusSelect = document.getElementById('import-bulk-status');
+    const statusId = statusSelect?.value ? parseInt(statusSelect.value, 10) : null;
     const assigneeEmails = getBulkAssigneeEmails('import-bulk');
     const tags = document.getElementById('import-bulk-tags').value.trim() || null;
     const listName = document.getElementById('import-bulk-list-name').value.trim() || null;
@@ -1836,6 +1874,8 @@ function applyBulkToSelectedImportTasks() {
     importTasksState.forEach(t => {
         if (!t.selected) return;
         if (IS_GLOBAL && projectId) t.project_id = parseInt(projectId, 10);
+        if (statusId) t.status_id = statusId;
+        if (startDate) t.start_date = new Date(startDate).toISOString();
         if (dueDate) t.due_date = new Date(dueDate).toISOString();
         if (priority) t.priority = priority;
         if (assigneeEmails.length > 0) t.assignee_emails = assigneeEmails;
@@ -1869,6 +1909,8 @@ async function createTasksBulk() {
             title: t.title.trim() || null,
             description: t.description.trim() || null,
             priority: t.priority || 'medium',
+            status_id: t.status_id || null,
+            start_date: t.start_date,
             due_date: t.due_date,
             assignee_emails: t.assignee_emails || [t.assignee_email].filter(Boolean),
             tags: t.tags,
@@ -2025,7 +2067,7 @@ async function renderGantt() {
 
     const allDates = [];
     tasksToRender.forEach(t => {
-        const s = parseDatePart(t.created_at);
+        const s = parseDatePart(t.start_date) || parseDatePart(t.created_at);
         const e = parseDatePart(t.due_date);
         if (s) allDates.push(s);
         if (e) allDates.push(e);
@@ -2100,7 +2142,7 @@ async function renderGantt() {
     let rightRowsHtml = '';
 
     tasksToRender.forEach((t, idx) => {
-        let start = parseDatePart(t.created_at);
+        let start = parseDatePart(t.start_date) || parseDatePart(t.created_at);
         const end = parseDatePart(t.due_date);
         if (!start && !end) return;
         if (!start) start = end;

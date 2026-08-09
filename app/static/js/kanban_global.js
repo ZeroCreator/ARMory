@@ -635,6 +635,8 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
         form.description.value = task.description || '';
         form.priority.value = task.priority || 'medium';
         document.getElementById('task-is-closed').checked = !!task.is_closed;
+        form.start_date.value = task.start_date ? formatDateTimeLocal(task.start_date) : '';
+        form.start_date.dispatchEvent(new Event('change'));
         form.due_date.value = task.due_date ? formatDateTimeLocal(task.due_date) : '';
         form.due_date.dispatchEvent(new Event('change'));
         setSelectedAssigneeEmails(task.assignee_emails || [task.assignee_email].filter(Boolean));
@@ -684,6 +686,7 @@ async function saveTask() {
             description: form.description.value.trim() || null,
             priority: form.priority.value,
             is_closed: document.getElementById('task-is-closed').checked,
+            start_date: form.start_date.value ? new Date(form.start_date.value).toISOString() : null,
             due_date: form.due_date.value ? new Date(form.due_date.value).toISOString() : null,
             assignee_emails: getSelectedAssigneeEmails(),
             tags: form.tags.value.trim() || null,
@@ -1503,12 +1506,19 @@ function resetImportState() {
     importNextTempId = 1;
     document.getElementById('import-todo-text').value = '';
     document.getElementById('import-bulk-project').value = '';
+    const importStartDate = document.getElementById('import-bulk-start-date');
+    importStartDate.value = '';
+    importStartDate.dispatchEvent(new Event('change'));
     const importDueDate = document.getElementById('import-bulk-due-date');
     importDueDate.value = '';
     importDueDate.dispatchEvent(new Event('change'));
     document.getElementById('import-bulk-priority').value = 'medium';
+    const importStatus = document.getElementById('import-bulk-status');
+    if (importStatus) importStatus.value = '';
     document.getElementById('import-bulk-assignee').value = '';
     document.getElementById('import-bulk-tags').value = '';
+    const importListName = document.getElementById('import-bulk-list-name');
+    if (importListName) importListName.value = '';
     hideImportBulkAttachmentForm();
     renderImportTasksList();
     renderImportBulkAttachmentsList();
@@ -1518,8 +1528,25 @@ function openTaskImportModal() {
     resetImportState();
     populateSelect('import-bulk-project', filterOptions.projects || [], 'id', 'name');
     populateSelect('import-bulk-assignee', kanbanAssignees.map(a => ({ value: a.email, label: a.name })), 'value', 'label');
+    const projectSelect = document.getElementById('import-bulk-project');
+    if (projectSelect) {
+        projectSelect.onchange = loadImportStatuses;
+    }
+    loadImportStatuses();
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('taskImportModal'));
     modal.show();
+}
+
+async function loadImportStatuses() {
+    const projectSelect = document.getElementById('import-bulk-project');
+    const projectId = projectSelect?.value || filterOptions.projects[0]?.id;
+    if (!projectId) return;
+    try {
+        const statuses = await api(`${API_BASE}/projects/${projectId}/task-statuses`);
+        populateSelect('import-bulk-status', (statuses || []).map(s => ({ value: s.id, label: s.name })), 'К выполнению');
+    } catch (e) {
+        console.error('Failed to load import statuses:', e);
+    }
 }
 
 function parseTodoText(text) {
@@ -1541,6 +1568,7 @@ function splitTodoTextIntoTasks() {
             description: line,
             selected: true,
             project_id: null,
+            start_date: null,
             due_date: null,
             priority: null,
             assignee_email: null,
@@ -1557,6 +1585,7 @@ function addImportTask() {
         description: '',
         selected: true,
         project_id: null,
+        start_date: null,
         due_date: null,
         priority: null,
         assignee_email: null,
@@ -1714,18 +1743,25 @@ function renderImportBulkAttachmentsList() {
 
 function applyBulkToSelectedImportTasks() {
     const projectId = document.getElementById('import-bulk-project').value || null;
+    const startDate = document.getElementById('import-bulk-start-date').value || null;
     const dueDate = document.getElementById('import-bulk-due-date').value || null;
     const priority = document.getElementById('import-bulk-priority').value || null;
+    const statusSelect = document.getElementById('import-bulk-status');
+    const statusId = statusSelect?.value ? parseInt(statusSelect.value, 10) : null;
     const assignee = document.getElementById('import-bulk-assignee').value || null;
     const tags = document.getElementById('import-bulk-tags').value.trim() || null;
+    const listName = document.getElementById('import-bulk-list-name').value.trim() || null;
 
     importTasksState.forEach(t => {
         if (!t.selected) return;
         if (projectId) t.project_id = parseInt(projectId, 10);
+        if (statusId) t.status_id = statusId;
+        if (startDate) t.start_date = new Date(startDate).toISOString();
         if (dueDate) t.due_date = new Date(dueDate).toISOString();
         if (priority) t.priority = priority;
         if (assignee) t.assignee_emails = [assignee];
         if (tags) t.tags = tags;
+        if (listName) t.list_name = listName;
     });
 
     showToast('Групповые настройки применены к выбранным задачам', 'success');
@@ -1750,9 +1786,12 @@ async function createTasksBulk() {
             title: t.title.trim() || null,
             description: t.description.trim() || null,
             priority: t.priority || 'medium',
+            status_id: t.status_id || null,
+            start_date: t.start_date,
             due_date: t.due_date,
             assignee_emails: t.assignee_emails || [t.assignee_email].filter(Boolean),
             tags: t.tags,
+            list_name: t.list_name,
             project_id: t.project_id,
         })),
         attachments: importBulkAttachments,

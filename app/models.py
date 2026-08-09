@@ -207,6 +207,7 @@ class Task(Base):
     description = Column(Text, nullable=True)
     priority = Column(String(20), nullable=False, default="medium")
     is_closed = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    start_date = Column(DateTime, nullable=True)
     due_date = Column(DateTime, nullable=True)
     assignee_email = Column(String(255), nullable=True)
     tags = Column(String(500), nullable=True)

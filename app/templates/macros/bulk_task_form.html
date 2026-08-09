@@ -1,17 +1,17 @@
 {% from "macros/datetime_picker.html" import datetime_picker %}
 
-{% macro bulk_task_form(prefix, show_status=False, show_is_closed=False) %}
+{% macro bulk_task_form(prefix, show_status=False, show_is_closed=False, status_placeholder='— не менять —') %}
 <div class="bulk-task-form" data-prefix="{{ prefix }}">
     <div class="row g-2 mb-3">
         {% if show_status %}
-        <div class="col-md-4">
+        <div class="col-md-6">
             <label class="form-label">Статус</label>
             <select class="form-select form-select-sm" id="{{ prefix }}-status">
-                <option value="">— не менять —</option>
+                <option value="">{{ status_placeholder }}</option>
             </select>
         </div>
         {% endif %}
-        <div class="col-md-4">
+        <div class="{% if show_status %}col-md-6{% else %}col-md-12{% endif %}">
             <label class="form-label">Приоритет</label>
             <select class="form-select form-select-sm" id="{{ prefix }}-priority">
                 <option value="">— не менять —</option>
@@ -20,9 +20,27 @@
                 <option value="high">Высокий</option>
             </select>
         </div>
-        <div class="col-md-4">
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-6">
+            <label class="form-label">Начало</label>
+            {{ datetime_picker(prefix ~ '-start-date', label='', input_size='sm') }}
+        </div>
+        <div class="col-md-6">
             <label class="form-label">Дедлайн</label>
             {{ datetime_picker(prefix ~ '-due-date', label='', input_size='sm') }}
+        </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-6">
+            <label class="form-label" for="{{ prefix }}-list-name">Название списка</label>
+            <input type="text" class="form-control form-control-sm" id="{{ prefix }}-list-name" placeholder="Например, Спринт 12">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="{{ prefix }}-tags">Теги</label>
+            <input type="text" class="form-control form-control-sm" id="{{ prefix }}-tags" placeholder="через запятую">
         </div>
     </div>
 
@@ -37,17 +55,6 @@
                     <li><span class="dropdown-item-text text-muted">Нет ответственных</span></li>
                 </ul>
             </div>
-        </div>
-        <div class="col-md-6">
-            <label class="form-label" for="{{ prefix }}-tags">Теги</label>
-            <input type="text" class="form-control form-control-sm" id="{{ prefix }}-tags" placeholder="через запятую">
-        </div>
-    </div>
-
-    <div class="row g-2 mb-3">
-        <div class="col-md-6">
-            <label class="form-label" for="{{ prefix }}-list-name">Название списка</label>
-            <input type="text" class="form-control form-control-sm" id="{{ prefix }}-list-name" placeholder="Например, Спринт 12">
         </div>
         {% if show_is_closed %}
         <div class="col-md-6 d-flex align-items-end">
