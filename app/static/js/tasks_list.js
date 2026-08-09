@@ -2169,13 +2169,17 @@ async function renderGantt() {
             const dayDate = new Date(minDate);
             dayDate.setDate(dayDate.getDate() + i);
             let isActive = false;
+            let isStriped = false;
             if (end) {
                 const visibleStart = start < minDate ? minDate : start;
                 const visibleEnd = end > maxDate ? maxDate : end;
                 isActive = dayDate >= visibleStart && dayDate <= visibleEnd;
+                if (isActive && deployDate && deployDate < end) {
+                    isStriped = dayDate > deployDate;
+                }
             }
             const isToday = dayDate.getTime() === today.getTime();
-            const dayClass = isActive ? ` ${fillClass}` : '';
+            const dayClass = isActive ? (isStriped ? ` ${fillClass}-striped` : ` ${fillClass}`) : '';
             const weekendClass = [0, 6].includes(dayDate.getDay()) ? ' weekend' : '';
             const todayClass = isToday ? ' today' : '';
 
