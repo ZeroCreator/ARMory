@@ -82,8 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const taskId = parseInt(row.dataset.taskId, 10);
             highlightedTaskId = taskId;
-            renderTable();
-            openTaskViewModal(taskId);
+            toggleTaskSelected(taskId);
         });
     }
 

@@ -1141,7 +1141,9 @@ function handleContextMenuClick(e) {
     if (action === 'copy-link') copyTaskLink(taskId);
     else if (action === 'assign-me') setTaskAssignee(lastTaskContextMenuTaskId, currentUserEmail);
     else if (action === 'assignee-submenu') showTaskAssigneeSubmenu();
+    else if (action === 'status-submenu') showTaskStatusSubmenu();
     else if (action === 'set-assignee') setTaskAssignee(lastTaskContextMenuTaskId, email);
+    else if (action === 'change-task-status') changeTaskStatus(lastTaskContextMenuTaskId, parseInt(item.dataset.statusId, 10));
     else if (action === 'back-to-task-menu') renderTaskContextMenu(lastTaskContextMenuTaskId, lastTaskContextMenuEvent);
     else if (action === 'edit-task') editTaskFromContext(taskId);
     else if (action === 'delete-task') deleteTaskFromContext(taskId);
@@ -1239,6 +1241,9 @@ function renderTaskContextMenu(taskId, event) {
         <button class="kanban-context-item" data-action="assignee-submenu">
             <i class="bi bi-person me-2"></i> Установить ответственного
         </button>
+        <button class="kanban-context-item" data-action="status-submenu">
+            <i class="bi bi-arrow-left-right me-2"></i> Изменить статус
+        </button>
         <button class="kanban-context-item" data-action="edit-task" data-task-id="${taskId}">
             <i class="bi bi-pencil me-2"></i> Редактировать
         </button>
@@ -1267,6 +1272,50 @@ function showTaskAssigneeSubmenu() {
         </button>
         ${options}
     `;
+}
+
+function showTaskStatusSubmenu() {
+    const taskId = lastTaskContextMenuTaskId;
+    const task = kanbanData.tasks.find(t => t.id === taskId);
+    const currentStatusId = task?.status_id;
+    const menu = getContextMenu();
+    const options = (kanbanData.statuses || []).map(s => {
+        const isCurrent = s.id === currentStatusId;
+        return `
+            <button class="kanban-context-item ${isCurrent ? 'disabled' : ''}" data-action="change-task-status" data-status-id="${s.id}" ${isCurrent ? 'disabled' : ''}>
+                <span class="d-inline-block rounded-circle me-2" style="width:8px;height:8px;background:${escapeHtml(s.color)}"></span>
+                ${escapeHtml(s.name)}
+            </button>
+        `;
+    }).join('');
+    menu.innerHTML = `
+        <button class="kanban-context-item" data-action="back-to-task-menu">
+            <i class="bi bi-arrow-left me-2"></i> Назад
+        </button>
+        <div class="kanban-context-divider"></div>
+        ${options}
+    `;
+}
+
+async function changeTaskStatus(taskId, statusId) {
+    hideContextMenu();
+    const task = kanbanData.tasks.find(t => t.id === taskId);
+    if (!task || task.status_id === statusId) return;
+    const columnBody = document.querySelector(`.kanban-column-body[data-status-id="${statusId}"]`);
+    if (!columnBody) return;
+    const card = document.querySelector(`.kanban-card[data-id="${taskId}"]`);
+    if (!card) return;
+
+    markKanbanReloadIgnored();
+    task.status_id = statusId;
+    card.dataset.statusId = statusId;
+    columnBody.prepend(card);
+    updateKanbanColumnCounts();
+
+    const taskIds = Array.from(columnBody.querySelectorAll('.kanban-card'))
+        .map(c => parseInt(c.dataset.id, 10));
+    updateLocalTaskOrder(statusId, taskIds);
+    await updateTaskStatus(taskId, statusId, taskIds);
 }
 
 async function setTaskAssignee(taskId, email) {

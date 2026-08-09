@@ -2,6 +2,12 @@
 // ОБЩАЯ ЛОГИКА DRAG-AND-DROP KANBANА
 // ═══════════════════════════════════════════════════
 
+function isKanbanTouchDevice() {
+    return window.matchMedia('(pointer: coarse)').matches ||
+        ('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0);
+}
+
 class KanbanDragController {
     constructor(options) {
         this.options = Object.assign({
@@ -27,6 +33,11 @@ class KanbanDragController {
     init() {
         this.sortables.forEach(s => s.destroy());
         this.sortables = [];
+
+        if (isKanbanTouchDevice()) {
+            this.dragging = false;
+            return;
+        }
 
         const bodies = this.board
             ? this.board.querySelectorAll('.kanban-column-body')
