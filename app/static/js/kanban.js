@@ -601,7 +601,7 @@ function openTaskModal(taskId, defaultStatusId) {
     const exportBtn = document.getElementById('task-export-btn');
     const statusDisplay = document.getElementById('task-status-display');
     const statusDisplayName = document.getElementById('task-status-display-name');
-    if (addAttachBtn) addAttachBtn.disabled = !currentTaskId;
+    if (addAttachBtn) addAttachBtn.disabled = false;
     if (exportBtn) exportBtn.style.display = currentTaskId ? 'inline-block' : 'none';
     hideAttachmentForm();
 
@@ -661,7 +661,7 @@ function openTaskModal(taskId, defaultStatusId) {
     modal.show();
 }
 
-async function saveTask() {
+async function saveTask(stayOpen = false) {
     const form = document.getElementById('task-form');
 
     const payload = {
@@ -684,22 +684,43 @@ async function saveTask() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
+            if (stayOpen) {
+                await reloadCurrentTask();
+                showToast('Задача сохранена', 'success');
+            }
         } else {
             const statusId = parseInt(document.getElementById('task-status-id').value, 10);
             if (!statusId) {
                 showToast('Не выбрана колонка', 'warning');
-                return;
+                return false;
             }
-            await api(`${API_BASE}/projects/${PROJECT_ID}/tasks`, {
+            const created = await api(`${API_BASE}/projects/${PROJECT_ID}/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...payload, status_id: statusId }),
             });
+            currentTaskId = created.id;
+            document.getElementById('task-id').value = created.id;
+            const titleEl = document.getElementById('task-modal-title');
+            titleEl.textContent = `#${created.id} · ${escapeHtml(projectName || `Проект #${created.project_id}`)}`;
+            const addAttachBtn = document.getElementById('task-add-attachment-btn');
+            if (addAttachBtn) addAttachBtn.disabled = false;
+            const exportBtn = document.getElementById('task-export-btn');
+            if (exportBtn) exportBtn.style.display = 'inline-block';
+            await reloadCurrentTask();
+            if (stayOpen) {
+                showToast('Задача сохранена. Теперь можно добавить вложение.', 'success');
+            }
         }
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('taskModal')).hide();
-        loadKanbanBoard(PROJECT_ID);
+
+        if (!stayOpen) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('taskModal')).hide();
+            loadKanbanBoard(PROJECT_ID);
+        }
+        return true;
     } catch (e) {
         showToast('Ошибка сохранения задачи: ' + e.message, 'danger');
+        return false;
     }
 }
 
@@ -770,7 +791,7 @@ function renderTaskAttachments(attachments) {
     const container = document.getElementById('task-attachments-list');
     if (!container) return;
     if (!currentTaskId) {
-        container.innerHTML = '<span class="text-muted small">Сохраните задачу, чтобы добавить вложения</span>';
+        container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
         return;
     }
     if (!attachments || attachments.length === 0) {
@@ -873,6 +894,17 @@ async function saveTaskAttachmentEdit() {
         await reloadCurrentTask();
     } catch (e) {
         showToast('Ошибка изменения вложения: ' + e.message, 'danger');
+    }
+}
+
+async function handleAddAttachment(type) {
+    if (currentTaskId) {
+        showAttachmentForm(type);
+        return;
+    }
+    const saved = await saveTask(true);
+    if (saved) {
+        showAttachmentForm(type);
     }
 }
 

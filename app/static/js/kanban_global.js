@@ -608,7 +608,7 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
     const deleteBtn = document.getElementById('task-delete-btn');
     const addAttachBtn = document.getElementById('task-add-attachment-btn');
     const exportBtn = document.getElementById('task-export-btn');
-    if (addAttachBtn) addAttachBtn.disabled = !currentTaskId;
+    if (addAttachBtn) addAttachBtn.disabled = false;
     if (exportBtn) exportBtn.style.display = currentTaskId ? 'inline-block' : 'none';
     hideAttachmentForm();
 
@@ -659,7 +659,7 @@ function openTaskModal(taskId, defaultProjectId, defaultColumnName) {
     modal.show();
 }
 
-async function saveTask() {
+async function saveTask(stayOpen = false) {
     const form = document.getElementById('task-form');
     const saveBtn = document.querySelector('#taskModal .modal-footer .btn-primary');
 
@@ -674,11 +674,11 @@ async function saveTask() {
         const statusId = parseInt(document.getElementById('task-status-id').value, 10);
         if (!projectId) {
             showToast('Выберите проект', 'warning');
-            return;
+            return false;
         }
         if (!statusId) {
             showToast('Выберите статус', 'warning');
-            return;
+            return false;
         }
 
         const payload = {
@@ -700,19 +700,45 @@ async function saveTask() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...payload, status_id: statusId }),
             });
+            if (stayOpen) {
+                await reloadCurrentTask();
+                showToast('Задача сохранена', 'success');
+            }
         } else {
-            await api(`${API_BASE}/projects/${projectId}/tasks`, {
+            const created = await api(`${API_BASE}/projects/${projectId}/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...payload, status_id: statusId }),
             });
+            currentTaskId = created.id;
+            pendingTaskColumnName = null;
+            document.getElementById('task-id').value = created.id;
+            document.getElementById('task-project-id').value = created.project_id;
+            onTaskProjectChange();
+            document.getElementById('task-status-id').value = created.status_id;
+            const titleEl = document.getElementById('task-modal-title');
+            const taskProjectName = projectsMap[created.project_id] || `Проект #${created.project_id}`;
+            titleEl.textContent = `#${created.id} · ${escapeHtml(taskProjectName)}`;
+            const addAttachBtn = document.getElementById('task-add-attachment-btn');
+            if (addAttachBtn) addAttachBtn.disabled = false;
+            const exportBtn = document.getElementById('task-export-btn');
+            if (exportBtn) exportBtn.style.display = 'inline-block';
+            await reloadCurrentTask();
+            if (stayOpen) {
+                showToast('Задача сохранена. Теперь можно добавить вложение.', 'success');
+            }
         }
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('taskModal')).hide();
-        loadKanbanBoard();
-        await loadFilters();
+
+        if (!stayOpen) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('taskModal')).hide();
+            loadKanbanBoard();
+            await loadFilters();
+        }
+        return true;
     } catch (e) {
         console.error('saveTask error:', e);
         showToast('Ошибка сохранения задачи: ' + e.message, 'danger');
+        return false;
     } finally {
         if (saveBtn) {
             saveBtn.disabled = false;
@@ -793,7 +819,7 @@ function renderTaskAttachments(attachments) {
     const container = document.getElementById('task-attachments-list');
     if (!container) return;
     if (!currentTaskId) {
-        container.innerHTML = '<span class="text-muted small">Сохраните задачу, чтобы добавить вложения</span>';
+        container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
         return;
     }
     if (!attachments || attachments.length === 0) {
@@ -898,6 +924,17 @@ async function saveTaskAttachmentEdit() {
         await reloadCurrentTask();
     } catch (e) {
         showToast('Ошибка изменения вложения: ' + e.message, 'danger');
+    }
+}
+
+async function handleAddAttachment(type) {
+    if (currentTaskId) {
+        showAttachmentForm(type);
+        return;
+    }
+    const saved = await saveTask(true);
+    if (saved) {
+        showAttachmentForm(type);
     }
 }
 

@@ -797,9 +797,9 @@
                                     <i class="bi bi-plus-lg"></i> Добавить вложение
                                 </button>
                                 <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('link'); return false;"><i class="bi bi-link-45deg me-2"></i> Ссылка</a></li>
-                                    <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('git'); return false;"><i class="bi bi-git me-2"></i> Git-репозиторий</a></li>
-                                    <li><a class="dropdown-item" href="#" onclick="showAttachmentForm('file'); return false;"><i class="bi bi-paperclip me-2"></i> Файл</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="handleAddAttachment('link'); return false;"><i class="bi bi-link-45deg me-2"></i> Ссылка</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="handleAddAttachment('git'); return false;"><i class="bi bi-git me-2"></i> Git-репозиторий</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="handleAddAttachment('file'); return false;"><i class="bi bi-paperclip me-2"></i> Файл</a></li>
                                 </ul>
                             </div>
                             <button type="button" class="btn btn-sm btn-outline-success" id="task-export-btn" onclick="exportCurrentTask()" title="Экспорт задачи" style="display:none;">

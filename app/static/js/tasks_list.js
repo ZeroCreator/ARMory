@@ -666,6 +666,10 @@ async function saveAssignee() {
 
 // ── Вложения ──
 
+async function handleAddAttachment(type) {
+    showAttachmentForm(type);
+}
+
 function showAttachmentForm(type) {
     if (!currentTaskId || !currentTaskProjectId) {
         showToast('Сначала сохраните задачу', 'warning');
@@ -757,7 +761,7 @@ function renderTaskAttachments(attachments) {
     if (!container) return;
 
     if (!currentTaskId || !currentTaskProjectId) {
-        container.innerHTML = '<span class="text-muted small">Сохраните задачу, чтобы добавить вложения</span>';
+        container.innerHTML = '<span class="text-muted small">Нет вложений</span>';
         return;
     }
 
