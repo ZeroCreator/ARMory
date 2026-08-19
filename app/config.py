@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     telegram_reminder_enabled: bool = False
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
+    telegram_proxy_url: str | None = None
 
     # Публичный URL ARMory (используется для WOPI / Collabora)
     armory_public_url: str = "https://armory.team-73.ru"

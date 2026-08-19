@@ -47,7 +47,9 @@ async def send_telegram_message(text: str) -> tuple[bool, str | None]:
         "disable_web_page_preview": True,
     }
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(
+            timeout=10, proxy=settings.telegram_proxy_url
+        ) as client:
             response = await client.post(url, json=payload)
             response.raise_for_status()
             data = response.json()
