@@ -315,11 +315,74 @@ async function loadProjects() {
         allProjects = projects;
         currentProjectsPage = 1;
         renderProjectsPage();
+        startUnreadStream();
     } catch (e) {
         container.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${e.message}</div>`;
         document.getElementById('projects-pagination').innerHTML = '';
     }
 }
+
+let unreadEventSource = null;
+
+function startUnreadStream() {
+    if (unreadEventSource || !window.EventSource) return;
+    if (!document.getElementById('projects-list')) return;
+    unreadEventSource = new EventSource(`${API_BASE}/events`);
+    unreadEventSource.addEventListener('unread', (e) => {
+        loadUnreadCountsAndUpdateBells();
+    });
+    unreadEventSource.onerror = (e) => {
+        console.error('events stream error:', e);
+    };
+}
+
+async function loadUnreadCountsAndUpdateBells() {
+    try {
+        const counts = await api(`${API_BASE}/projects/unread`);
+        updateUnreadBells(counts);
+    } catch (e) {
+        console.error('load unread counts failed:', e);
+    }
+}
+
+function updateUnreadBells(counts) {
+    Object.entries(counts).forEach(([id, count]) => {
+        const existing = allProjects.find(p => p.id === parseInt(id, 10));
+        if (existing) existing.unread_comments_count = count;
+    });
+
+    document.querySelectorAll('.project-col').forEach(col => {
+        const id = parseInt(col.dataset.id, 10);
+        const count = counts[id] || 0;
+        const card = col.querySelector('.project-card');
+        if (!card) return;
+        let bell = card.querySelector('.project-unread-bell');
+        if (count > 0) {
+            if (!bell) {
+                bell = document.createElement('div');
+                bell.className = 'project-unread-bell';
+                bell.innerHTML = '<i class="bi bi-bell-fill"></i>';
+                card.insertBefore(bell, card.firstChild);
+            }
+        } else if (bell) {
+            bell.remove();
+        }
+    });
+}
+
+window.addEventListener('pagehide', () => {
+    if (unreadEventSource) {
+        unreadEventSource.close();
+        unreadEventSource = null;
+    }
+});
+
+window.addEventListener('pageshow', () => {
+    if (document.getElementById('projects-list')) {
+        startUnreadStream();
+        loadUnreadCountsAndUpdateBells();
+    }
+});
 
 function renderProjectsPage() {
     const container = document.getElementById('projects-list');
@@ -344,6 +407,7 @@ function renderProjectsPage() {
     container.innerHTML = pageProjects.map((p, idx) => `
         <div class="col-lg-6 col-xl-6 col-xxl-4 project-col fade-in" data-id="${p.id}">
             <div class="project-card" data-href="/projects/${p.id}" oncontextmenu="handleShareContextMenu(event, '/projects/${p.id}')">
+                ${p.unread_comments_count > 0 ? '<div class="project-unread-bell"><i class="bi bi-bell-fill"></i></div>' : ''}
                 <div class="project-drag-handle"><i class="bi bi-grip-vertical"></i></div>
                 <div>
                     <div class="project-title">${escapeHtml(p.name)}</div>
@@ -3658,6 +3722,215 @@ async function dismissActiveReminder(id) {
         await api(`${API_BASE}/calendar/events/${id}/dismiss`, { method: 'POST' });
     } catch (e) {
         console.error('[reminders] dismiss error:', e);
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// ЧАТ-ПАНЕЛЬ ПРОЕКТА
+// ═══════════════════════════════════════════════════
+
+let projectChatCurrentUser = null;
+let projectChatRefreshInterval = null;
+let projectChatCurrentProjectId = null;
+let editingCommentId = null;
+let editingCommentContent = '';
+
+function getInitials(name) {
+    if (!name) return '?';
+    const parts = name.split(/[\s@]+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function initProjectChat(projectId) {
+    const panel = document.getElementById('project-chat-panel');
+    if (!panel) return;
+
+    projectChatCurrentProjectId = projectId;
+    document.body.classList.add('project-chat-page');
+
+    const input = document.getElementById('project-chat-input');
+    if (input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendProjectComment(projectId);
+            }
+        });
+    }
+
+    loadProjectChatUser().then(() => {
+        loadProjectComments(projectId);
+        if (!projectChatRefreshInterval) {
+            projectChatRefreshInterval = setInterval(() => {
+                if (panel.classList.contains('open') || window.innerWidth >= 1400) {
+                    loadProjectComments(projectChatCurrentProjectId);
+                }
+            }, 15000);
+        }
+    });
+}
+
+async function loadProjectChatUser() {
+    try {
+        const me = await api(`${API_BASE}/me`);
+        projectChatCurrentUser = me.email || null;
+    } catch (e) {
+        projectChatCurrentUser = null;
+    }
+}
+
+function toggleProjectChat() {
+    const panel = document.getElementById('project-chat-panel');
+    if (!panel) return;
+    const isOpen = panel.classList.toggle('open');
+    if (isOpen && projectChatCurrentProjectId) {
+        loadProjectComments(projectChatCurrentProjectId);
+        const input = document.getElementById('project-chat-input');
+        if (input) setTimeout(() => input.focus(), 100);
+    }
+}
+
+async function loadProjectComments(projectId) {
+    const container = document.getElementById('project-chat-messages');
+    if (!container) return;
+    if (editingCommentId) return; // не перезаписывать форму редактирования
+    try {
+        const comments = await api(`${API_BASE}/projects/${projectId}/comments`);
+        window._lastLoadedComments = comments;
+        renderProjectComments(comments);
+        // Пометить прочитанными после рендера
+        api(`${API_BASE}/projects/${projectId}/comments/read`, { method: 'POST' }).catch(() => {});
+    } catch (e) {
+        container.innerHTML = `<div class="project-chat-empty">Ошибка загрузки: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function renderProjectComments(comments) {
+    const container = document.getElementById('project-chat-messages');
+    if (!container) return;
+
+    if (!comments || !comments.length) {
+        container.innerHTML = `<div class="project-chat-empty"><i class="bi bi-chat-dots"></i><br>Сообщений пока нет</div>`;
+        return;
+    }
+
+    const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 5;
+
+    container.innerHTML = comments.map(c => {
+        const isOwn = projectChatCurrentUser && c.author_email === projectChatCurrentUser;
+        const isEditing = editingCommentId === c.id;
+        const actions = isOwn && !isEditing
+            ? `<span class="project-chat-actions">
+                <button class="project-chat-action-btn" onclick="startEditProjectComment(${c.id})" title="Изменить"><i class="bi bi-pencil"></i></button>
+                <button class="project-chat-action-btn" onclick="deleteProjectComment(${c.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+              </span>`
+            : '';
+        const editedLabel = c.is_edited
+            ? `<span class="project-chat-edited" title="Изменено ${formatDate(c.updated_at)}">(изм.)</span>`
+            : '';
+        const body = isEditing
+            ? `<div class="project-chat-edit">
+                <textarea class="project-chat-input" id="project-chat-edit-${c.id}" rows="2">${escapeHtml(editingCommentContent || c.content)}</textarea>
+                <div class="project-chat-edit-actions">
+                  <button class="btn btn-sm btn-primary" onclick="saveEditProjectComment(${c.id})">Сохранить</button>
+                  <button class="btn btn-sm btn-secondary" onclick="cancelEditProjectComment()">Отмена</button>
+                </div>
+              </div>`
+            : `<div class="project-chat-text">${escapeHtml(c.content)}</div>`;
+        return `
+            <div class="project-chat-message ${isOwn ? 'own' : ''}" data-id="${c.id}">
+                <div class="project-chat-message-header">
+                    <span class="project-chat-author">
+                        <span class="project-chat-avatar">${escapeHtml(getInitials(c.author_name || c.author_email))}</span>
+                        ${escapeHtml(c.author_name || c.author_email)}
+                    </span>
+                    <span class="project-chat-time" style="display:flex;align-items:center;gap:0.35rem;">${formatDate(c.created_at)} ${editedLabel} ${actions}</span>
+                </div>
+                ${body}
+            </div>
+        `;
+    }).join('');
+
+    if (wasAtBottom) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+async function sendProjectComment(projectId) {
+    const input = document.getElementById('project-chat-input');
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content) return;
+
+    const btn = document.querySelector('.project-chat-send');
+    if (btn) btn.disabled = true;
+
+    try {
+        await api(`${API_BASE}/projects/${projectId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content })
+        });
+        input.value = '';
+        await loadProjectComments(projectId);
+        const container = document.getElementById('project-chat-messages');
+        if (container) container.scrollTop = container.scrollHeight;
+    } catch (e) {
+        showToast('Ошибка отправки: ' + e.message, 'danger');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function startEditProjectComment(commentId) {
+    editingCommentId = commentId;
+    editingCommentContent = '';
+    const container = document.getElementById('project-chat-messages');
+    const textEl = container?.querySelector(`.project-chat-message[data-id="${commentId}"] .project-chat-text`);
+    if (textEl) editingCommentContent = textEl.textContent || '';
+    renderProjectComments(window._lastLoadedComments || []);
+    const ta = document.getElementById(`project-chat-edit-${commentId}`);
+    if (ta) {
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+}
+
+function cancelEditProjectComment() {
+    editingCommentId = null;
+    editingCommentContent = '';
+    renderProjectComments(window._lastLoadedComments || []);
+}
+
+async function saveEditProjectComment(commentId) {
+    const ta = document.getElementById(`project-chat-edit-${commentId}`);
+    if (!ta) return;
+    const content = ta.value.trim();
+    if (!content) return;
+    try {
+        await api(`${API_BASE}/projects/${projectChatCurrentProjectId}/comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content })
+        });
+        editingCommentId = null;
+        editingCommentContent = '';
+        await loadProjectComments(projectChatCurrentProjectId);
+    } catch (e) {
+        showToast('Ошибка изменения: ' + e.message, 'danger');
+    }
+}
+
+async function deleteProjectComment(commentId) {
+    if (!confirm('Удалить сообщение?')) return;
+    try {
+        await api(`${API_BASE}/projects/${projectChatCurrentProjectId}/comments/${commentId}`, {
+            method: 'DELETE'
+        });
+        await loadProjectComments(projectChatCurrentProjectId);
+    } catch (e) {
+        showToast('Ошибка удаления: ' + e.message, 'danger');
     }
 }
 

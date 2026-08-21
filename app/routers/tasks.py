@@ -89,7 +89,7 @@ async def get_current_user(request: Request):
         if value:
             email = value
             break
-    return {"email": email.strip() if email else None}
+    return {"email": email.strip() if email else "local.user"}
 
 
 @global_router.get("/me/debug")

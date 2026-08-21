@@ -1,6 +1,7 @@
 {% extends "base_project.html" %}
 
 {% block content %}
+<div class="project-main-content">
 <div class="mb-3">
     <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
     <span class="text-muted mx-2">|</span>
@@ -28,6 +29,29 @@
 <div id="documents-list">
     <div class="text-center text-muted py-5">Загрузка...</div>
 </div>
+</div>
+
+<!-- Панель обсуждения проекта -->
+<div id="project-chat-panel" class="project-chat-panel">
+    <div class="project-chat-header">
+        <span class="project-chat-title"><i class="bi bi-chat-dots me-2"></i>Обсуждение</span>
+        <button type="button" class="project-chat-close d-xxl-none" onclick="toggleProjectChat()" aria-label="Закрыть">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <div id="project-chat-messages" class="project-chat-messages">
+        <div class="text-center text-muted small py-3">Загрузка...</div>
+    </div>
+    <div class="project-chat-input-area">
+        <textarea id="project-chat-input" class="form-control project-chat-input" rows="2" placeholder="Напишите сообщение..."></textarea>
+        <button type="button" class="btn btn-primary project-chat-send" onclick="sendProjectComment(PROJECT_ID)">
+            <i class="bi bi-send"></i>
+        </button>
+    </div>
+</div>
+<button type="button" id="project-chat-toggle" class="project-chat-toggle" onclick="toggleProjectChat()" aria-label="Обсуждение">
+    <i class="bi bi-chat-dots"></i>
+</button>
 
 <!-- Модал создания раздела -->
 <div class="modal fade" id="sectionModal" tabindex="-1" aria-hidden="true">
@@ -301,6 +325,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         loadProject(PROJECT_ID);
         loadSections(PROJECT_ID);
+        initProjectChat(PROJECT_ID);
     });
 </script>
 {% endblock %}

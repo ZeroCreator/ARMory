@@ -23,8 +23,9 @@ async def _event_stream(request: Request):
 
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL)
+                event_name = event.get("event", "kanban")
                 data = json.dumps(event, ensure_ascii=False)
-                yield f"event: kanban\ndata: {data}\n\n"
+                yield f"event: {event_name}\ndata: {data}\n\n"
             except asyncio.TimeoutError:
                 yield ":heartbeat\n\n"
     finally:

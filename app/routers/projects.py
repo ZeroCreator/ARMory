@@ -1,25 +1,80 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-from typing import List
+from typing import List, Optional
 
 from app.database import get_db
-from app.models import Project, Document, DocumentItem, DocType, TaskStatus
+from app.models import Project, Document, DocumentItem, DocType, TaskStatus, ProjectComment, ProjectCommentRead
 from app.schemas import ProjectCreate, ProjectUpdate, ProjectOut, ProjectDetailOut, ProjectReorderRequest
 from app.storage import get_storage, StorageBackend, slugify
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
+_AUTH_HEADERS = [
+    "X-Forwarded-Email",
+    "X-Forwarded-User",
+    "X-Forwarded-Preferred-Username",
+    "X-Forwarded-Access-Token",
+    "Remote-User",
+    "Remote-Email",
+]
+
+
+def _get_current_email(request: Request) -> Optional[str]:
+    for h in _AUTH_HEADERS:
+        value = request.headers.get(h)
+        if value:
+            return value.strip()
+    return "local.user"
+
+
+async def _get_unread_counts(user_email: Optional[str], project_ids: List[int], db: AsyncSession) -> dict:
+    if not project_ids or not user_email:
+        return {}
+    unread_result = await db.execute(
+        select(ProjectComment.project_id, func.count().label("cnt"))
+        .outerjoin(
+            ProjectCommentRead,
+            (ProjectCommentRead.project_id == ProjectComment.project_id)
+            & (ProjectCommentRead.user_email == user_email),
+        )
+        .where(
+            ProjectComment.project_id.in_(project_ids),
+            ProjectComment.author_email != user_email,
+            ProjectComment.created_at > func.coalesce(ProjectCommentRead.last_read_at, "1970-01-01"),
+        )
+        .group_by(ProjectComment.project_id)
+    )
+    return {row.project_id: row.cnt for row in unread_result.all()}
+
+
 @router.get("", response_model=List[ProjectOut])
-async def list_projects(db: AsyncSession = Depends(get_db)):
+async def list_projects(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Project)
         .options(selectinload(Project.documents), selectinload(Project.sections))
         .order_by(Project.sort_order, Project.updated_at.desc())
     )
-    return result.scalars().all()
+    projects = result.scalars().all()
+
+    user_email = _get_current_email(request)
+    project_ids = [p.id for p in projects]
+    unread_counts = await _get_unread_counts(user_email, project_ids, db)
+
+    for p in projects:
+        p.unread_comments_count = unread_counts.get(p.id, 0)
+
+    return projects
+
+
+@router.get("/unread")
+async def unread_counts(request: Request, db: AsyncSession = Depends(get_db)):
+    user_email = _get_current_email(request)
+    result = await db.execute(select(Project.id))
+    project_ids = [r for r in result.scalars().all()]
+    return await _get_unread_counts(user_email, project_ids, db)
 
 
 @router.post("", response_model=ProjectOut, status_code=201)

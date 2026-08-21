@@ -23,6 +23,7 @@ class Project(Base):
 
     sections = relationship("Section", back_populates="project", cascade="all, delete-orphan", lazy="selectin", order_by="Section.sort_order")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan", lazy="selectin", order_by="Document.sort_order")
+    comments = relationship("ProjectComment", back_populates="project", cascade="all, delete-orphan", lazy="selectin", order_by="ProjectComment.created_at")
     task_statuses = relationship("TaskStatus", back_populates="project", cascade="all, delete-orphan", lazy="selectin", order_by="TaskStatus.sort_order")
     tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan", lazy="selectin", order_by="Task.sort_order")
 
@@ -103,6 +104,28 @@ class SidebarLink(Base):
     note = Column(Text, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class ProjectComment(Base):
+    __tablename__ = "project_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    author_email = Column(String(255), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    project = relationship("Project", back_populates="comments")
+
+
+class ProjectCommentRead(Base):
+    __tablename__ = "project_comment_reads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_email = Column(String(255), nullable=False)
+    last_read_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 class CalendarEvent(Base):

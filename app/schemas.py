@@ -119,6 +119,7 @@ class ProjectOut(ProjectBase):
     updated_at: datetime
     documents: List[DocumentOut] = []
     sections: List[SectionOut] = []
+    unread_comments_count: int = 0
 
 
 class ProjectDetailOut(ProjectOut):
@@ -180,6 +181,30 @@ class SidebarBlockReorderRequest(BaseModel):
 
 class SidebarLinkReorderRequest(BaseModel):
     link_ids: List[int]
+
+
+# ═══════════════════════════════════════════════════
+# Комментарии проекта
+# ═══════════════════════════════════════════════════
+
+class ProjectCommentCreate(BaseModel):
+    content: str
+
+
+class ProjectCommentUpdate(BaseModel):
+    content: str
+
+
+class ProjectCommentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    author_email: str
+    author_name: str
+    content: str
+    created_at: datetime
+    updated_at: datetime
+    is_edited: bool = False
 
 
 # ═══════════════════════════════════════════════════
