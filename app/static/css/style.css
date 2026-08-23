@@ -4478,12 +4478,20 @@ footer {
         display: inline-flex;
     }
 
-    .project-layout.sidebar-left-open .project-main-content {
+.project-layout.sidebar-left-open .project-main-content {
         margin-left: min(320px, 80vw);
     }
 
     .project-layout.sidebar-right-open .project-main-content {
         margin-right: min(320px, 80vw);
+    }
+
+    .project-layout.sidebar-left-open .project-chat-toggle {
+        display: none;
+    }
+
+    .project-layout.sidebar-right-open .project-calendar-toggle {
+        display: none;
     }
 }
 
