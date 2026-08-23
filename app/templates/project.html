@@ -1,57 +1,92 @@
 {% extends "base_project.html" %}
 
+{% from "macros/datetime_picker.html" import datetime_picker %}
+
+{% block main_class %}main-content project-page{% endblock %}
+
 {% block content %}
-<div class="project-main-content">
-<div class="mb-3">
-    <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
-    <span class="text-muted mx-2">|</span>
-    <a href="/projects/{{ project_id }}/kanban" class="text-decoration-none"><i class="bi bi-kanban"></i> Kanban</a>
-    <span class="text-muted mx-2">|</span>
-    <a href="/projects/{{ project_id }}/tasks" class="text-decoration-none"><i class="bi bi-list-task"></i> ToDo-список</a>
-</div>
+<div class="project-layout">
+    <!-- Левый сайдбар — обсуждение проекта -->
+    <aside class="project-sidebar-left">
+        <div id="project-chat-panel" class="project-chat-panel">
+            <div class="project-chat-header">
+                <span class="project-chat-title"><i class="bi bi-chat-dots me-2"></i>Обсуждение</span>
+                <button type="button" class="project-chat-close" onclick="toggleProjectSidebar('chat')" aria-label="Закрыть">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div id="project-chat-messages" class="project-chat-messages">
+                <div class="text-center text-muted small py-3">Загрузка...</div>
+            </div>
+            <div class="project-chat-input-area">
+                <textarea id="project-chat-input" class="form-control project-chat-input" rows="2" placeholder="Напишите сообщение..."></textarea>
+                <button type="button" class="btn btn-primary project-chat-send" onclick="sendProjectComment(PROJECT_ID)">
+                    <i class="bi bi-send"></i>
+                </button>
+            </div>
+        </div>
+    </aside>
 
-<div id="project-header" class="mb-4">
-    <h2 class="text-muted">Загрузка...</h2>
-</div>
+    <!-- Основной контент проекта -->
+    <div class="project-main-content">
+        <div class="mb-3">
+            <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
+            <span class="text-muted mx-2">|</span>
+            <a href="/projects/{{ project_id }}/kanban" class="text-decoration-none"><i class="bi bi-kanban"></i> Kanban</a>
+            <span class="text-muted mx-2">|</span>
+            <a href="/projects/{{ project_id }}/tasks" class="text-decoration-none"><i class="bi bi-list-task"></i> ToDo-список</a>
+        </div>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0" id="content-header">Документы</h4>
-    <div class="d-flex gap-2">
-        <button class="btn btn-outline-brown" data-bs-toggle="modal" data-bs-target="#sectionModal">
-            <i class="bi bi-folder-plus me-1"></i> Раздел
-        </button>
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#groupModal">
-            <i class="bi bi-plus-lg me-1"></i> Группа
-        </button>
-    </div>
-</div>
+        <div id="project-header" class="mb-4">
+            <h2 class="text-muted">Загрузка...</h2>
+        </div>
 
-<div id="documents-list">
-    <div class="text-center text-muted py-5">Загрузка...</div>
-</div>
-</div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0" id="content-header">Документы</h4>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-brown" data-bs-toggle="modal" data-bs-target="#sectionModal">
+                    <i class="bi bi-folder-plus me-1"></i> Раздел
+                </button>
+                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#groupModal">
+                    <i class="bi bi-plus-lg me-1"></i> Группа
+                </button>
+            </div>
+        </div>
 
-<!-- Панель обсуждения проекта -->
-<div id="project-chat-panel" class="project-chat-panel">
-    <div class="project-chat-header">
-        <span class="project-chat-title"><i class="bi bi-chat-dots me-2"></i>Обсуждение</span>
-        <button type="button" class="project-chat-close d-xxl-none" onclick="toggleProjectChat()" aria-label="Закрыть">
-            <i class="bi bi-x-lg"></i>
-        </button>
+        <div id="documents-list">
+            <div class="text-center text-muted py-5">Загрузка...</div>
+        </div>
     </div>
-    <div id="project-chat-messages" class="project-chat-messages">
-        <div class="text-center text-muted small py-3">Загрузка...</div>
-    </div>
-    <div class="project-chat-input-area">
-        <textarea id="project-chat-input" class="form-control project-chat-input" rows="2" placeholder="Напишите сообщение..."></textarea>
-        <button type="button" class="btn btn-primary project-chat-send" onclick="sendProjectComment(PROJECT_ID)">
-            <i class="bi bi-send"></i>
-        </button>
-    </div>
+
+    <!-- Правый сайдбар — мини-календарь и события -->
+    <aside class="project-sidebar-right">
+        <div class="project-calendar-panel">
+            <div id="project-calendar"></div>
+        </div>
+        <div class="project-events-list">
+            <div class="project-events-header">
+                <h5 class="project-events-title">События</h5>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-primary" onclick="showCalendarEventModal()">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary project-calendar-close" onclick="toggleProjectSidebar('calendar')" aria-label="Закрыть">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="project-calendar-events-container" class="project-events-container">
+                <div class="text-muted small text-center py-3">Загрузка...</div>
+            </div>
+        </div>
+    </aside>
+    <button type="button" id="project-chat-toggle" class="project-chat-toggle" onclick="toggleProjectSidebar('chat')" aria-label="Обсуждение">
+        <i class="bi bi-chat-dots"></i>
+    </button>
+    <button type="button" id="project-calendar-toggle" class="project-calendar-toggle" onclick="toggleProjectSidebar('calendar')" aria-label="Календарь">
+        <i class="bi bi-calendar3"></i>
+    </button>
 </div>
-<button type="button" id="project-chat-toggle" class="project-chat-toggle" onclick="toggleProjectChat()" aria-label="Обсуждение">
-    <i class="bi bi-chat-dots"></i>
-</button>
 
 <!-- Модал создания раздела -->
 <div class="modal fade" id="sectionModal" tabindex="-1" aria-hidden="true">
@@ -314,6 +349,56 @@
         </div>
     </div>
 </div>
+
+<!-- Модал события календаря -->
+<div class="modal fade" id="calendarEventModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="calendar-event-modal-title">Новое событие</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="calendar-event-form">
+                    <input type="hidden" name="event_id" id="calendar-event-id">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" name="title" id="calendar-event-title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" name="description" id="calendar-event-description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Начало</label>
+                        {{ datetime_picker('calendar-event-start', name='start_date', label='', required=True, default_date=True) }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Окончание</label>
+                        {{ datetime_picker('calendar-event-end', name='end_date', label='') }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Цвет</label>
+                        <input type="color" class="form-control form-control-color" name="color" id="calendar-event-color" value="#a78bfa">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="calendar-event-reminder">Напомнить за (минут)</label>
+                        <input type="number" class="form-control" name="reminder_minutes" id="calendar-event-reminder" min="0" step="1" placeholder="не напоминать">
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="all_day" id="calendar-event-all-day">
+                        <label class="form-check-label" for="calendar-event-all-day">Весь день</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger me-auto" id="calendar-event-delete-btn" onclick="deleteCalendarEvent()" style="display:none;">Удалить</button>
+                <button type="button" class="btn btn-primary" onclick="saveCalendarEvent()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -326,6 +411,8 @@
         loadProject(PROJECT_ID);
         loadSections(PROJECT_ID);
         initProjectChat(PROJECT_ID);
+        initProjectCalendar();
+        loadProjectCalendarEvents();
     });
 </script>
 {% endblock %}

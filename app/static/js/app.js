@@ -3137,6 +3137,9 @@ async function saveCalendarEvent() {
         return;
     }
     const payload = { title, description, start_date: start, end_date: end || null, color, all_day: allDay, reminder_minutes: reminderMinutes };
+    if (typeof PROJECT_ID !== 'undefined') {
+        payload.project_id = PROJECT_ID;
+    }
     try {
         if (id) {
             await api(`${API_BASE}/calendar/events/${id}`, {
@@ -3153,6 +3156,7 @@ async function saveCalendarEvent() {
         }
         bootstrap.Modal.getInstance(document.getElementById('calendarEventModal')).hide();
         loadCalendarEvents();
+        if (document.getElementById('project-calendar-events-container')) loadProjectCalendarEvents();
     } catch (e) {
         showToast('Ошибка: ' + e.message, 'danger');
     }
@@ -3165,9 +3169,125 @@ async function deleteCalendarEvent() {
         await api(`${API_BASE}/calendar/events/${id}`, { method: 'DELETE' });
         bootstrap.Modal.getInstance(document.getElementById('calendarEventModal')).hide();
         loadCalendarEvents();
+        if (document.getElementById('project-calendar-events-container')) loadProjectCalendarEvents();
     } catch (e) {
         showToast('Ошибка: ' + e.message, 'danger');
     }
+}
+
+// ═══════════════════════════════════════════════════
+// МИНИ-КАЛЕНДАРЬ ПРОЕКТА (правый сайдбар)
+// ═══════════════════════════════════════════════════
+
+let projectCalendarInstance = null;
+
+function initProjectCalendar() {
+    const el = document.getElementById('project-calendar');
+    if (!el || typeof FullCalendar === 'undefined' || el.offsetParent === null) return;
+    projectCalendarInstance = new FullCalendar.Calendar(el, {
+        initialView: 'dayGridMonth',
+        locale: 'ru',
+        firstDay: 1,
+        headerToolbar: {
+            left: 'prev,next',
+            center: 'title',
+            right: ''
+        },
+        height: 'auto',
+        eventClick: function(info) {
+            editCalendarEvent(parseInt(info.event.id));
+        },
+        dateClick: function(info) {
+            showCalendarEventModal(null, info.dateStr);
+        },
+        datesSet: function() {
+            renderProjectCalendarEventsList();
+        },
+        events: []
+    });
+    projectCalendarInstance.render();
+
+    window.addEventListener('resize', () => {
+        if (projectCalendarInstance) projectCalendarInstance.updateSize();
+    });
+}
+
+async function loadProjectCalendarEvents() {
+    try {
+        const projectId = typeof PROJECT_ID !== 'undefined' ? PROJECT_ID : null;
+        const url = projectId != null ? `${API_BASE}/calendar/events?project_id=${projectId}` : `${API_BASE}/calendar/events`;
+        const events = await api(url);
+        calendarEventsCache = events || [];
+        renderProjectCalendarEventsList();
+        if (projectCalendarInstance) {
+            projectCalendarInstance.removeAllEvents();
+            calendarEventsCache.forEach(e => {
+                projectCalendarInstance.addEvent({
+                    id: String(e.id),
+                    title: e.title,
+                    start: e.start_date,
+                    end: e.end_date,
+                    allDay: e.all_day,
+                    color: e.color,
+                    extendedProps: { description: e.description, note: e.note, reminder_minutes: e.reminder_minutes }
+                });
+            });
+        }
+    } catch (e) {
+        console.error('Project calendar load error:', e);
+        const container = document.getElementById('project-calendar-events-container');
+        if (container) container.innerHTML = `<div class="alert alert-danger small">Ошибка загрузки событий</div>`;
+    }
+}
+
+function renderProjectCalendarEventsList() {
+    const container = document.getElementById('project-calendar-events-container');
+    if (!container) return;
+    const now = new Date();
+
+    let rangeStart, rangeEnd;
+    if (projectCalendarInstance && projectCalendarInstance.getDate) {
+        const d = projectCalendarInstance.getDate();
+        rangeStart = new Date(d.getFullYear(), d.getMonth(), 1);
+        rangeEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    } else {
+        rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    }
+
+    const inRange = [...calendarEventsCache]
+        .filter(e => {
+            if (!e.start_date) return false;
+            const start = new Date(e.start_date);
+            if (e.all_day) {
+                const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+                return startDay < rangeEnd && startDay >= rangeStart;
+            }
+            return start < rangeEnd && start >= rangeStart;
+        })
+        .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+
+    if (!inRange.length) {
+        container.innerHTML = `<div class="text-muted small text-center py-3">Нет событий в этом месяце</div>`;
+        return;
+    }
+
+    container.innerHTML = inRange.map(e => {
+        const start = new Date(e.start_date);
+        const isPast = start < now;
+        const isOverdue = isPast && activeReminderIds.has(e.id);
+        const dateStr = start.toLocaleDateString('ru-RU');
+        const timeStr = e.all_day ? 'весь день' : start.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+        const reminderStr = e.reminder_minutes != null ? ` · <i class="bi bi-bell"></i> за ${e.reminder_minutes} мин` : '';
+        return `
+        <div class="calendar-event-item ${isPast ? 'past' : ''} ${isOverdue ? 'overdue' : ''}" onclick="editCalendarEvent(${e.id})">
+            <div class="calendar-event-bar" style="background:${escapeHtml(e.color || '#a78bfa')}"></div>
+            <div class="calendar-event-info">
+                <div class="calendar-event-title">${escapeHtml(e.title)}</div>
+                <div class="calendar-event-meta">${dateStr} · ${timeStr}${reminderStr}</div>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 // ═══════════════════════════════════════════════════
@@ -3763,7 +3883,9 @@ function initProjectChat(projectId) {
         loadProjectComments(projectId);
         if (!projectChatRefreshInterval) {
             projectChatRefreshInterval = setInterval(() => {
-                if (panel.classList.contains('open') || window.innerWidth >= 1400) {
+                const sidebar = document.querySelector('.project-sidebar-left');
+                const sidebarVisible = sidebar && getComputedStyle(sidebar).display !== 'none';
+                if (sidebarVisible || panel.classList.contains('open')) {
                     loadProjectComments(projectChatCurrentProjectId);
                 }
             }, 15000);
@@ -3780,14 +3902,28 @@ async function loadProjectChatUser() {
     }
 }
 
-function toggleProjectChat() {
-    const panel = document.getElementById('project-chat-panel');
-    if (!panel) return;
-    const isOpen = panel.classList.toggle('open');
-    if (isOpen && projectChatCurrentProjectId) {
-        loadProjectComments(projectChatCurrentProjectId);
-        const input = document.getElementById('project-chat-input');
-        if (input) setTimeout(() => input.focus(), 100);
+function toggleProjectSidebar(sidebar) {
+    const layout = document.querySelector('.project-layout');
+    const left = document.querySelector('.project-sidebar-left');
+    const right = document.querySelector('.project-sidebar-right');
+    if (sidebar === 'chat' && left) {
+        const isOpen = left.classList.toggle('open');
+        layout?.classList.toggle('sidebar-left-open', isOpen);
+        if (isOpen && projectChatCurrentProjectId) {
+            loadProjectComments(projectChatCurrentProjectId);
+            const input = document.getElementById('project-chat-input');
+            if (input) setTimeout(() => input.focus(), 100);
+        }
+    } else if (sidebar === 'calendar' && right) {
+        const isOpen = right.classList.toggle('open');
+        layout?.classList.toggle('sidebar-right-open', isOpen);
+        if (isOpen) {
+            if (!projectCalendarInstance) initProjectCalendar();
+            loadProjectCalendarEvents();
+            requestAnimationFrame(() => {
+                if (projectCalendarInstance) projectCalendarInstance.updateSize();
+            });
+        }
     }
 }
 
@@ -3845,7 +3981,7 @@ function renderProjectComments(comments) {
                         <span class="project-chat-avatar">${escapeHtml(getInitials(c.author_name || c.author_email))}</span>
                         ${escapeHtml(c.author_name || c.author_email)}
                     </span>
-                    <span class="project-chat-time" style="display:flex;align-items:center;gap:0.35rem;">${formatDate(c.created_at)} ${editedLabel} ${actions}</span>
+                    <span class="project-chat-time">${formatDate(c.created_at)} ${editedLabel} ${actions}</span>
                 </div>
                 ${body}
             </div>

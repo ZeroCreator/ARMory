@@ -23,6 +23,7 @@ class EventCreate(BaseModel):
     all_day: bool = False
     color: str | None = None
     reminder_minutes: int | None = None
+    project_id: int | None = None
 
 
 class EventUpdate(BaseModel):
@@ -34,6 +35,7 @@ class EventUpdate(BaseModel):
     all_day: bool | None = None
     color: str | None = None
     reminder_minutes: int | None = None
+    project_id: int | None = None
 
 
 def _parse_iso(dt_str: str | None) -> datetime.datetime | None:
@@ -46,8 +48,11 @@ def _parse_iso(dt_str: str | None) -> datetime.datetime | None:
 
 
 @router.get("/events")
-async def list_events(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(CalendarEvent).order_by(desc(CalendarEvent.start_date)))
+async def list_events(project_id: int | None = None, db: AsyncSession = Depends(get_db)):
+    query = select(CalendarEvent).order_by(desc(CalendarEvent.start_date))
+    if project_id is not None:
+        query = query.where(CalendarEvent.project_id == project_id)
+    result = await db.execute(query)
     events = result.scalars().all()
     return [
         {
@@ -60,6 +65,7 @@ async def list_events(db: AsyncSession = Depends(get_db)):
             "all_day": e.all_day,
             "color": e.color,
             "reminder_minutes": e.reminder_minutes,
+            "project_id": e.project_id,
             "notified_at": e.notified_at.isoformat() if e.notified_at else None,
             "dismissed_at": e.dismissed_at.isoformat() if e.dismissed_at else None,
         }
@@ -82,6 +88,7 @@ async def create_event(data: EventCreate, db: AsyncSession = Depends(get_db)):
         all_day=data.all_day,
         color=data.color or "#a78bfa",
         reminder_minutes=data.reminder_minutes,
+        project_id=data.project_id,
         notified_at=None,
     )
     db.add(event)
@@ -116,6 +123,8 @@ async def update_event(event_id: int, data: EventUpdate, db: AsyncSession = Depe
     if "reminder_minutes" in data.model_fields_set:
         event.reminder_minutes = data.reminder_minutes
         reset_notification = True
+    if "project_id" in data.model_fields_set:
+        event.project_id = data.project_id
 
     if reset_notification:
         event.notified_at = None
