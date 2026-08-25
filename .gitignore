@@ -45,6 +45,7 @@ data/armory.db
 data/uploads/*
 !data/uploads/.gitkeep
 data/alexandrite/
+data/extensions.json
 
 # PocketBase runtime data (databases, WAL-files, generated types)
 # Schema is imported manually via JSON; migrations are not used.
