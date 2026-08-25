@@ -6,9 +6,9 @@ ARMory — веб-приложение для управления докуме�
 
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + aiosqlite
 - **Frontend**: Jinja2 templates + Bootstrap 5 + vanilla JS + SortableJS
-- **База данных**: SQLite (`data/projectdocs.db`)
+- **База данных**: SQLite (`data/armory.db`)
 - **Хранилище файлов**: локальная файловая система (`data/uploads/`) или S3-совместимое хранилище
-- **Встроенные инструменты**: PocketBase (схемы данных проектов)
+- **Подключаемые приложения**: реестр расширений, Docker-развёртывание и SSE-журнал операций
 - **Документация**: MkDocs + Material
 
 ## Структура проекта
@@ -32,15 +32,14 @@ ARMory/
 │       ├── scheduler.py
 │       ├── calendar.py
 │       ├── alexandrite.py
-│       ├── glossary.py
 │       ├── wopi.py
 │       ├── collabora.py
 │       └── ...
 ├── data/                   # Данные приложения
-│   ├── projectdocs.db      # База данных
+│   ├── armory.db           # База данных ARMory
+│   ├── extensions.json     # Состояние подключаемых приложений
 │   ├── uploads/            # Загруженные файлы
 │   ├── alexandrite/        # Хранилище Alexandrite (автосоздаётся)
-│   ├── pb_data/            # Данные PocketBase
 │   └── backups/            # Локальные резервные копии
 ├── docs/                   # Markdown-документация для MkDocs
 ├── site/                   # Собранная статика MkDocs
@@ -83,7 +82,6 @@ Project
 - **TaskAttachment** — вложение к задаче: ссылка, файл или git-репозиторий.
 - **CalendarEvent** — событие календаря.
 - **SidebarBlock / SidebarLink** — боковые панели с пользовательскими ссылками.
-- **GlossaryTopic / GlossarySubtopic / GlossaryTerm** — глоссарий терминов с темами и подтемами.
 
 ## Хранилище файлов
 
@@ -106,17 +104,9 @@ Project
 
 Состояние дерева (развёрнутые папки) сохраняется в `localStorage` браузера.
 
-## PocketBase
+## Подключаемые приложения
 
-PocketBase используется как встроенный инструмент для проектирования и просмотра схем данных:
-
-- Доступен из меню ARMory по пути `/pocketbase/_/`.
-- Данные PocketBase хранятся в `data/pb_data/`.
-- Схема импортируется вручную через `data/pb_schema.json` (не пушится в git).
-- JS-миграции не используются.
-- Суперпользователь создаётся автоматически при старте.
-
-Подробнее см. [PocketBase](pocketbase.md).
+ARMory хранит реестр в `data/extensions.json`. Страница `/applications` запускает готовые Docker-образы с фиксированными безопасными аргументами и передаёт журнал установки через Server-Sent Events. В Docker-запуске операции выполняет внутренний `extension-manager`, которому одному подключён `/var/run/docker.sock`; его порт не публикуется. При локальном запуске используется Docker CLI пользователя. Встроенных подключений и специального кода для отдельных приложений нет.
 
 ## Конфигурация
 

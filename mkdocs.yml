@@ -28,9 +28,9 @@ theme:
 nav:
   - Главная: index.md
   - Архитектура: architecture.md
+  - Подключаемые приложения: applications.md
   - API: api.md
   - Alexandrite: alexandrite.md
-  - Глоссарий: glossary.md
   - Хранилище S3: s3.md
   - Календарь: calendar.md
   - Планировщик: scheduler.md
@@ -38,7 +38,6 @@ nav:
   - Kanban: kanban.md
   - MCP: mcp-setup.md
   - Локальная модель: local-model.md
-  - PocketBase: pocketbase.md
   - Деплой: deployment.md
 
 markdown_extensions:

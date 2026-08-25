@@ -1,5 +1,14 @@
 # API
 
+## Подключаемые приложения
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/extensions` | Список приложений и состояние подключений |
+| PATCH | `/api/extensions/{id}` | Включить или отключить пункт меню |
+| POST | `/api/extensions/deploy` | Запустить развёртывание Docker-образа; возвращает `job_id` |
+| GET | `/api/extensions/jobs/{job_id}/events` | SSE-журнал развёртывания |
+
 ## Проекты
 
 | Метод | Путь | Описание |
@@ -89,27 +98,6 @@
 | GET | `/api/kanban/export` | Экспорт общей доски в JSON |
 | POST | `/api/kanban/import` | Импорт общей доски из JSON |
 | GET | `/api/gantt/export/xlsx` | Экспорт диаграммы Ганта в `.xlsx` с учётом фильтров и флага `hide_no_deadline` |
-
-## Глоссарий
-
-| Метод | Путь | Описание |
-|-------|------|----------|
-| GET | `/api/glossary` | Список терминов (пагинация, поиск, фильтр по теме/подтеме) |
-| GET | `/api/glossary/count` | Количество терминов с учётом фильтров |
-| POST | `/api/glossary` | Создать термин |
-| GET | `/api/glossary/{id}` | Получить термин |
-| PATCH | `/api/glossary/{id}` | Обновить термин |
-| DELETE | `/api/glossary/{id}` | Удалить термин |
-| GET | `/api/glossary/topics` | Список тем с подтемами |
-| POST | `/api/glossary/topics` | Создать тему |
-| PATCH | `/api/glossary/topics/{id}` | Обновить тему |
-| DELETE | `/api/glossary/topics/{id}` | Удалить тему |
-| GET | `/api/glossary/subtopics` | Список подтем |
-| POST | `/api/glossary/subtopics` | Создать подтему |
-| PATCH | `/api/glossary/subtopics/{id}` | Обновить подтему |
-| DELETE | `/api/glossary/subtopics/{id}` | Удалить подтему |
-| GET | `/api/glossary/export` | Экспорт глоссария в `.xlsx` |
-| POST | `/api/glossary/import` | Импорт глоссария из `.xlsx` |
 
 ## Alexandrite
 

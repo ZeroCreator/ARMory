@@ -699,6 +699,17 @@ async def create_archive():
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
     _cleanup_old_backup_jobs()
+    active_job = next(
+        (
+            job
+            for job in _backup_jobs.values()
+            if job.get("status") in {"starting", "packing", "running", "uploading"}
+            and job.get("archive_name")
+        ),
+        None,
+    )
+    if active_job:
+        raise HTTPException(status_code=409, detail="Создание резервной копии уже выполняется")
 
     db_path = Path(settings.database_url.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")).resolve()
     uploads_src = Path(settings.local_storage_path).resolve()
@@ -736,6 +747,10 @@ async def _run_create_archive_async(
         if job_id in _backup_jobs:
             _backup_jobs[job_id]["current_file"] = archive_name
             _backup_jobs[job_id]["status"] = "uploading"
+            _backup_jobs[job_id]["total"] = 1
+            _backup_jobs[job_id]["processed"] = 0
+            _backup_jobs[job_id]["processed_size"] = 0
+            _backup_jobs[job_id]["total_size"] = local_archive.stat().st_size
 
         remote_path = f"{REMOTE_BACKUPS}/{archive_name}"
         await asyncio.to_thread(yandex.ensure_folders, remote_path)

@@ -14,8 +14,9 @@ from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 
 from app.database import engine, Base, AsyncSessionLocal
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, glossary, wopi, collabora, tasks, assignees, pocketbase_proxy, mcp as mcp_router, events, comments
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, wopi, collabora, tasks, assignees, extensions, mcp as mcp_router, events, comments
 from app.config import get_settings
+from app.extensions import enabled_extensions
 from app.telegram import check_and_send_calendar_reminders
 
 settings = get_settings()
@@ -69,6 +70,8 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.mount("/uploads", StaticFiles(directory=settings.local_storage_path), name="uploads")
 templates = Jinja2Templates(directory="app/templates")
+templates.env.globals["enabled_extensions"] = enabled_extensions
+app.state.templates = templates
 
 # Роутеры
 app.include_router(projects.router)
@@ -79,7 +82,6 @@ app.include_router(scheduler.router)
 app.include_router(calendar.router)
 app.include_router(backup.router)
 app.include_router(alexandrite.router)
-app.include_router(glossary.router)
 app.include_router(wopi.router)
 app.include_router(collabora.router)
 app.include_router(tasks.router)
@@ -88,18 +90,22 @@ app.include_router(assignees.router)
 app.include_router(mcp_router.router)
 app.include_router(events.router)
 app.include_router(comments.router)
-app.include_router(pocketbase_proxy.router, prefix="/pocketbase")
+app.include_router(extensions.router)
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(
         "index.html",
-        {
-            "request": request,
-            "title": settings.app_name,
-            "pocketbase_url": settings.pocketbase_public_url,
-        },
+        {"request": request, "title": settings.app_name},
+    )
+
+
+@app.get("/synchronization", response_class=HTMLResponse)
+async def synchronization_page(request: Request):
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "title": settings.app_name, "sync_page": True},
     )
 
 
@@ -112,7 +118,6 @@ async def project_page(request: Request, project_id: int):
             "project_id": project_id,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
-            "pocketbase_url": settings.pocketbase_public_url,
         },
     )
 
@@ -126,7 +131,6 @@ async def kanban_page(request: Request, project_id: int):
             "project_id": project_id,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
-            "pocketbase_url": settings.pocketbase_public_url,
         },
     )
 
@@ -139,7 +143,6 @@ async def global_kanban_page(request: Request):
             "request": request,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
-            "pocketbase_url": settings.pocketbase_public_url,
         },
     )
 
@@ -153,7 +156,6 @@ async def project_tasks_list_page(request: Request, project_id: int):
             "project_id": project_id,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
-            "pocketbase_url": settings.pocketbase_public_url,
         },
     )
 
@@ -167,7 +169,6 @@ async def global_tasks_list_page(request: Request):
             "project_id": None,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
-            "pocketbase_url": settings.pocketbase_public_url,
         },
     )
 
@@ -176,15 +177,7 @@ async def global_tasks_list_page(request: Request):
 async def alexandrite_page(request: Request):
     return templates.TemplateResponse(
         "alexandrite.html",
-        {"request": request, "title": settings.app_name, "pocketbase_url": settings.pocketbase_public_url},
-    )
-
-
-@app.get("/glossary", response_class=HTMLResponse)
-async def glossary_page(request: Request):
-    return templates.TemplateResponse(
-        "glossary.html",
-        {"request": request, "title": settings.app_name, "pocketbase_url": settings.pocketbase_public_url},
+        {"request": request, "title": settings.app_name},
     )
 
 

@@ -119,23 +119,33 @@ class YandexDiskStorage:
             if not upload_url:
                 return False
 
-            uploaded = 0
             with open(local_path, "rb") as f:
                 if progress_callback:
+                    class _UploadStream:
+                        """Файловый поток с прогрессом и известной длиной."""
 
-                    def _generator():
-                        nonlocal uploaded
-                        while True:
-                            chunk = f.read(8192)
-                            if not chunk:
-                                break
-                            uploaded += len(chunk)
-                            progress_callback(uploaded, total_size)
-                            yield chunk
+                        def __init__(self, file_obj, size: int):
+                            self.file_obj = file_obj
+                            self.size = size
+                            self.uploaded = 0
 
-                    upload_resp = requests.put(upload_url, data=_generator(), timeout=120)
+                        def __len__(self):
+                            return self.size
+
+                        def read(self, size=-1):
+                            chunk = self.file_obj.read(size)
+                            if chunk:
+                                self.uploaded += len(chunk)
+                                progress_callback(self.uploaded, self.size)
+                            return chunk
+
+                    upload_resp = requests.put(
+                        upload_url,
+                        data=_UploadStream(f, total_size),
+                        timeout=600,
+                    )
                 else:
-                    upload_resp = requests.put(upload_url, data=f, timeout=120)
+                    upload_resp = requests.put(upload_url, data=f, timeout=600)
 
             if upload_resp.status_code in (200, 201, 202):
                 return True

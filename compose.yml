@@ -15,27 +15,20 @@ services:
       - ${SCHEDULER_SSH_KEY_HOST:-./deploy/id_ed25519}:/app/ssh/id_ed25519:ro
     env_file:
       - .env
+    environment:
+      EXTENSION_MANAGER_URL: http://extension-manager:8092
     networks:
       - armory-net
 
-  pocketbase:
-    image: alpine:3.20
-    container_name: armory-pocketbase
+  extension-manager:
+    image: armory:latest
+    container_name: armory-extension-manager
     restart: unless-stopped
-    working_dir: /pb
-    env_file:
-      - .env
-    environment:
-      POCKETBASE_ADMIN_EMAIL: ${POCKETBASE_ADMIN_EMAIL:-admin@example.com}
-      POCKETBASE_ADMIN_PASSWORD: ${POCKETBASE_ADMIN_PASSWORD:-changeme}
-    command: >
-      sh -c '/pb/pocketbase superuser upsert "$POCKETBASE_ADMIN_EMAIL" "$POCKETBASE_ADMIN_PASSWORD" --dir=/pb/pb_data &&
-             /pb/pocketbase serve --http=0.0.0.0:8090 --dir=/pb/pb_data'
+    command: /app/.venv/bin/uvicorn app.extension_manager:app --host=0.0.0.0 --port=8092
     expose:
-      - "8090"
+      - "8092"
     volumes:
-      - ./pocketbase/pocketbase:/pb/pocketbase:ro
-      - ./data/pb_data:/pb/pb_data
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - armory-net
 

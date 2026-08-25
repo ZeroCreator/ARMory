@@ -36,12 +36,6 @@ SCRIPTS_PROJECT_SSH=dcript=user@192.168.1.10,flat-parser=user@192.168.1.20
 SCHEDULER_SSH_KEY=/app/ssh/id_ed25519
 SCHEDULER_SSH_KEY_HOST=./deploy/id_ed25519
 
-# PocketBase
-POCKETBASE_PROJECTS=intraservice,armory
-POCKETBASE_DEFAULT_PROJECT=intraservice
-POCKETBASE_BASE_PORT=8091
-POCKETBASE_ADMIN_EMAIL=admin@example.com
-POCKETBASE_ADMIN_PASSWORD=<сложный пароль>
 ```
 
 ```bash
@@ -53,11 +47,7 @@ mkdir -p data/uploads
 # mv armory.db data/
 # mv uploads/* data/uploads/
 
-# 5. Если используется PocketBase — скопируй данные:
-# rsync -av source/data/pb_data/ data/pb_data/
-# Для чистой базы импортируй схему через админку: data/pb_schema.json
-
-# 6. Запуск
+# 5. Запуск
 docker compose up -d --build
 ```
 
@@ -153,6 +143,10 @@ docker compose logs -f
 # Или напрямую
 docker logs -f <container-name>
 ```
+
+## Подключаемые приложения
+
+В Compose страница **Приложения → Управление** передаёт операции внутреннему сервису `extension-manager`. Только он монтирует Docker socket; основной ARMory не получает прямого доступа к Docker Engine. Не публикуйте порт менеджера и обязательно ограничьте страницу административной аутентификацией gateway. При запуске ARMory без Docker используется локальный Docker CLI текущего пользователя. Подробности: [Подключаемые приложения](applications.md).
 
 ## Проверка статуса
 

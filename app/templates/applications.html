@@ -1,0 +1,89 @@
+{% extends "base_project.html" %}
+
+{% block title %}Приложения · {{ title }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-grid me-2"></i>Приложения</h2>
+        <p class="text-muted mb-0">Подключение уже запущенных приложений или развёртывание Docker-образов.</p>
+    </div>
+</div>
+
+<div class="extension-deploy-layout mb-4">
+    <form id="connect-extension-form" class="application-card">
+        <h5><i class="bi bi-link-45deg me-2"></i>Подключить уже запущенное приложение</h5>
+        <p class="text-muted small">Docker-образ не требуется. Укажите адрес работающего приложения.</p>
+        <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Название</label><input class="form-control" name="name" placeholder="LEXory" required></div>
+            <div class="col-md-6"><label class="form-label">Идентификатор</label><input class="form-control" name="id" pattern="[a-z][a-z0-9-]{1,62}" placeholder="lexory" required></div>
+            <div class="col-12"><label class="form-label">Адрес для меню</label><input class="form-control" name="url" type="url" placeholder="http://127.0.0.1:8091/" required></div>
+            <div class="col-12"><label class="form-label">Health URL</label><input class="form-control" name="health_url" type="url" placeholder="http://127.0.0.1:8091/health"></div>
+            <div class="col-md-6"><label class="form-label">Иконка Bootstrap</label><input class="form-control" name="icon" value="bi-box"></div>
+            <div class="col-md-6"><label class="form-label">Описание</label><input class="form-control" name="description"></div>
+        </div>
+        <button class="btn btn-primary mt-3" type="submit" id="connect-extension-button"><i class="bi bi-link me-1"></i>Подключить по адресу</button>
+    </form>
+    <section class="deployment-log-panel" aria-live="polite">
+        <div class="deployment-log-title"><i class="bi bi-terminal me-2"></i>Журнал подключения</div>
+        <pre id="connection-log">Заполните адрес работающего приложения и нажмите «Подключить по адресу».</pre>
+    </section>
+</div>
+
+<h4 class="mb-3"><i class="bi bi-box-seam me-2"></i>Развернуть новое приложение из Docker-образа</h4>
+<div class="extension-deploy-layout mb-4">
+    <form id="deploy-extension-form" class="application-card">
+        <h5><i class="bi bi-cloud-arrow-down me-2"></i>Параметры Docker-контейнера</h5>
+        <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Название</label><input class="form-control" name="name" required></div>
+            <div class="col-md-6"><label class="form-label">Идентификатор</label><input class="form-control" name="id" pattern="[a-z][a-z0-9-]{1,62}" placeholder="example-app" required></div>
+            <div class="col-12"><label class="form-label">Docker-образ</label><input class="form-control" name="image" placeholder="registry.example.com/example/app:1.0" required></div>
+            <div class="col-md-6"><label class="form-label">Порт приложения</label><input class="form-control" name="container_port" type="number" min="1" max="65535" required></div>
+            <div class="col-md-6"><label class="form-label">Локальный порт</label><input class="form-control" name="host_port" type="number" min="1024" max="65535" required></div>
+            <div class="col-12"><label class="form-label">Адрес для меню</label><input class="form-control" name="public_url" type="url" placeholder="https://app.example.com" required></div>
+            <div class="col-md-6"><label class="form-label">Проверка запуска</label><input class="form-control" name="health_path" value="/health"></div>
+            <div class="col-md-6"><label class="form-label">Иконка Bootstrap</label><input class="form-control" name="icon" value="bi-box"></div>
+            <div class="col-12"><label class="form-label">Описание</label><input class="form-control" name="description"></div>
+        </div>
+        <button class="btn btn-primary mt-3" type="submit" id="deploy-extension-button"><i class="bi bi-rocket-takeoff me-1"></i>Развернуть и подключить</button>
+    </form>
+    <section class="deployment-log-panel" aria-live="polite">
+        <div class="deployment-log-title"><i class="bi bi-terminal me-2"></i>Журнал подключения</div>
+        <pre id="deployment-log">Заполните поля и нажмите «Развернуть и подключить».</pre>
+    </section>
+</div>
+
+<div class="applications-grid" id="applications-grid">
+    {% for extension in extensions %}
+    <article class="application-card" data-extension-id="{{ extension.id }}">
+        <div class="d-flex justify-content-between gap-3">
+            <div>
+                <h5>
+                    <span class="application-menu-icon application-menu-icon-{{ extension.id }} me-2">
+                        <i class="bi {{ extension.icon }}"></i>
+                    </span>{{ extension.name }}
+                </h5>
+                <p class="text-muted mb-2">{{ extension.description or 'Описание не указано' }}</p>
+                <small class="text-muted">{{ extension.id }}</small>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input extension-toggle" type="checkbox" role="switch"
+                       aria-label="Подключить {{ extension.name }}" {% if extension.enabled %}checked{% endif %}>
+            </div>
+        </div>
+        <div class="mt-3 d-flex gap-2">
+            <a class="btn btn-sm btn-outline-primary {% if not extension.enabled %}disabled{% endif %}" href="{{ extension.url }}"
+               {% if extension.url.startswith('http') %}target="_blank" rel="noopener"{% endif %}>Открыть</a>
+            <span class="badge {% if extension.enabled %}text-bg-success{% else %}text-bg-secondary{% endif %} align-self-center extension-status">
+                {% if extension.enabled %}Подключено{% else %}Отключено{% endif %}
+            </span>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/extensions.js?v=3"></script>
+{% endblock %}

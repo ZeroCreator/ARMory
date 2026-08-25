@@ -1,0 +1,20 @@
+{
+  "lexory": {
+    "id": "lexory",
+    "name": "LEXory",
+    "description": "Глоссарий и учебные карточки",
+    "url": "http://127.0.0.1:8091/",
+    "health_url": "http://127.0.0.1:8091/health",
+    "icon": "bi-book-half",
+    "enabled": true
+  },
+  "pocketbase": {
+    "id": "pocketbase",
+    "name": "PocketBase",
+    "description": "Управление схемами и данными PocketBase",
+    "url": "http://127.0.0.1:8090/_/",
+    "health_url": "http://127.0.0.1:8090/api/health",
+    "icon": "bi-database",
+    "enabled": true
+  }
+}

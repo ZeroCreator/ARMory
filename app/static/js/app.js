@@ -306,7 +306,7 @@ function detectCategoryFromItem(item) {
 
 let allProjects = [];
 let currentProjectsPage = 1;
-const PROJECTS_PER_PAGE = 6;
+const PROJECTS_PER_PAGE = 12;
 
 async function loadProjects() {
     const container = document.getElementById('projects-list');
@@ -3386,6 +3386,9 @@ function setAlexandriteBackupProgress(visible, percent = 0, text = '') {
 }
 
 function computeBackupPercent(data) {
+    if (data.status === 'uploading' && data.total_size > 0) {
+        return Math.round((data.processed_size / data.total_size) * 100);
+    }
     // Процент по количеству файлов, а не по объёму — визуально понятнее
     if (data.total && data.total > 0) {
         return Math.round((data.processed / data.total) * 100);
@@ -3398,7 +3401,9 @@ function computeBackupPercent(data) {
 
 function formatBackupProgressText(data, label) {
     const parts = [label];
-    if (data.processed !== undefined && data.total) {
+    if (data.status === 'uploading') {
+        parts.push('загрузка на Яндекс.Диск');
+    } else if (data.processed !== undefined && data.total) {
         parts.push(`${data.processed} из ${data.total}`);
     }
     if (data.current_file) {

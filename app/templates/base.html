@@ -7,7 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="/static/css/datepicker.min.css?v=1">
-    <link rel="stylesheet" href="/static/css/style.css?v=121">
+    <link rel="stylesheet" href="/static/css/style.css?v=124">
     {% block extra_css %}{% endblock %}
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
@@ -26,9 +26,35 @@
                 <a href="/alexandrite" class="header-nav-link">Alexandrite</a>
                 <a href="/kanban" class="header-nav-link">Kanban</a>
                 <a href="/tasks" class="header-nav-link">ToDo</a>
-                <a href="{{ pocketbase_url }}" class="header-nav-link" target="_blank" rel="noopener">PocketBase</a>
-                <a href="/glossary" class="header-nav-link">Глоссарий</a>
-                <a href="/docs/" class="header-nav-link" target="_blank" rel="noopener">Документация</a>
+                <div class="dropdown header-nav-dropdown">
+                    <button class="header-nav-link header-nav-button dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        Приложения
+                    </button>
+                    <ul class="dropdown-menu">
+                        {% for extension in enabled_extensions() %}
+                        <li>
+                            <a class="dropdown-item" href="{{ extension.url }}" target="_blank" rel="noopener">
+                                <span class="application-menu-icon application-menu-icon-{{ extension.id }} me-2">
+                                    <i class="bi {{ extension.icon }}"></i>
+                                </span>{{ extension.name }}
+                            </a>
+                        </li>
+                        {% else %}
+                        <li><span class="dropdown-item-text text-muted">Нет подключённых приложений</span></li>
+                        {% endfor %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/applications"><i class="bi bi-sliders me-2"></i>Управление</a></li>
+                    </ul>
+                </div>
+                <div class="dropdown header-nav-dropdown">
+                    <button class="header-nav-link header-nav-button dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        Инструменты
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a href="/synchronization" class="dropdown-item"><span class="tool-menu-icon tool-menu-icon-sync me-2"><i class="bi bi-arrow-repeat"></i></span>Синхронизация</a></li>
+                        <li><a href="/docs/" class="dropdown-item" target="_blank" rel="noopener"><span class="tool-menu-icon tool-menu-icon-docs me-2"><i class="bi bi-file-text"></i></span>Документация</a></li>
+                    </ul>
+                </div>
             </div>
             <div class="arsenal-brand-wrapper">
                 <span class="arsenal-brand" id="arsenal-brand-text">Арсенал</span>
@@ -38,6 +64,7 @@
     </nav>
 
     <div class="app-layout">
+        {% if not sync_page|default(false) %}
         {% block left_sidebar %}
         <!-- Левый сайдбар -->
         <aside class="sidebar sidebar-left" id="sidebar-left">
@@ -51,12 +78,14 @@
             </div>
         </aside>
         {% endblock %}
+        {% endif %}
 
         <!-- Основной контент -->
         <main class="{% block main_class %}main-content{% endblock %}">
             {% block content %}{% endblock %}
         </main>
 
+        {% if not sync_page|default(false) %}
         {% block right_sidebar %}
         <!-- Правый сайдбар -->
         <aside class="sidebar sidebar-right" id="sidebar-right">
@@ -70,6 +99,7 @@
             </div>
         </aside>
         {% endblock %}
+        {% endif %}
     </div>
 
     <footer class="text-center text-muted py-3 mt-auto">
@@ -251,7 +281,7 @@
     <script src="/static/js/fullcalendar-ru.min.js"></script>
     <script src="/static/js/datepicker.min.js?v=1"></script>
     <script src="/static/js/datepicker-locales/ru.min.js?v=1"></script>
-<script src="/static/js/app.js?v=92"></script>
+<script src="/static/js/app.js?v=93"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

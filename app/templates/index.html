@@ -6,9 +6,11 @@
 {% endblock %}
 
 {% block content %}
-<!-- Планировщик / Календарь / Синхронизация -->
+<!-- Планировщик / Календарь; синхронизация открывается отдельной страницей -->
 <div class="scheduler-section mb-4">
     <div class="scheduler-card">
+        {% if sync_page %}<h1 class="sync-page-title mb-4"><span class="tool-menu-icon tool-menu-icon-sync me-2"><i class="bi bi-arrow-repeat"></i></span>Синхронизация</h1>{% endif %}
+        {% if not sync_page %}
         <ul class="nav nav-tabs scheduler-tabs" id="schedulerTab" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="calendar-tab" data-bs-toggle="tab" data-bs-target="#calendar-pane" type="button" role="tab">
@@ -20,15 +22,11 @@
                     <i class="bi bi-clock-history me-1"></i>Планировщик
                 </button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup-pane" type="button" role="tab">
-                    <i class="bi bi-arrow-repeat me-1"></i>Синхронизация
-                </button>
-            </li>
         </ul>
+        {% endif %}
         <div class="tab-content scheduler-tab-content" id="schedulerTabContent">
             <!-- Календарь -->
-            <div class="tab-pane fade show active" id="calendar-pane" role="tabpanel" aria-labelledby="calendar-tab">
+            <div class="tab-pane fade {% if sync_page %}d-none{% else %}show active{% endif %}" id="calendar-pane" role="tabpanel" aria-labelledby="calendar-tab">
                 <div class="calendar-layout">
                     <div class="calendar-view" id="calendar"></div>
                     <div class="calendar-events-list">
@@ -45,7 +43,7 @@
                 </div>
             </div>
             <!-- Планировщик -->
-            <div class="tab-pane fade" id="planner-pane" role="tabpanel" aria-labelledby="planner-tab">
+            <div class="tab-pane fade {% if sync_page %}d-none{% endif %}" id="planner-pane" role="tabpanel" aria-labelledby="planner-tab">
                 <div class="scheduler-body">
                     <div class="scheduler-form-row">
                         <div class="scheduler-form-group scheduler-form-group-half">
@@ -116,7 +114,7 @@
                 </div>
             </div>
             <!-- Синхронизация / Backup -->
-            <div class="tab-pane fade" id="backup-pane" role="tabpanel" aria-labelledby="backup-tab">
+            <div class="tab-pane fade {% if sync_page %}show active{% else %}d-none{% endif %}" id="backup-pane" role="tabpanel">
                 <div class="backup-body">
                     <!-- Яндекс.Диск — всегда виден -->
                     <div class="backup-card mb-4">
@@ -128,10 +126,10 @@
 
                     <!-- Статистика -->
                     <div class="backup-sync-section">
-                        <h5 class="backup-section-title collapsible-section-title" data-bs-toggle="collapse" data-bs-target="#backup-stats-content" aria-expanded="false" aria-controls="backup-stats-content" role="button" data-collapse-key="backup-stats">
+                        <h5 class="backup-section-title collapsible-section-title" data-bs-toggle="collapse" data-bs-target="#backup-stats-content" aria-expanded="true" aria-controls="backup-stats-content" role="button" data-collapse-key="backup-stats-v2" data-collapse-default="true">
                             <i class="bi bi-chevron-right section-toggle-icon me-2"></i><i class="bi bi-bar-chart-line me-2"></i>Статистика
                         </h5>
-                        <div class="collapse" id="backup-stats-content">
+                        <div class="collapse show" id="backup-stats-content">
                             <div class="backup-card">
                                 <h5 class="backup-card-title"><i class="bi bi-hdd me-2"></i>Локальные данные</h5>
                                 <div id="backup-local-stats" class="backup-stats">
@@ -143,10 +141,10 @@
 
                     <!-- Синхронизация с Яндекс.Диском -->
                     <div class="backup-sync-section mt-4">
-                        <h5 class="backup-section-title collapsible-section-title" data-bs-toggle="collapse" data-bs-target="#backup-sync-content" aria-expanded="false" aria-controls="backup-sync-content" role="button" data-collapse-key="backup-sync">
+                        <h5 class="backup-section-title collapsible-section-title" data-bs-toggle="collapse" data-bs-target="#backup-sync-content" aria-expanded="true" aria-controls="backup-sync-content" role="button" data-collapse-key="backup-sync-v2" data-collapse-default="true">
                             <i class="bi bi-chevron-right section-toggle-icon me-2"></i><i class="bi bi-arrow-repeat me-2"></i>Синхронизация с Яндекс.Диском
                         </h5>
-                        <div class="collapse" id="backup-sync-content">
+                        <div class="collapse show" id="backup-sync-content">
                             <div class="backup-actions">
                                 <button id="sync-export-btn" class="scheduler-btn scheduler-btn-green" onclick="syncExport()">
                                     <i class="bi bi-cloud-upload me-1"></i> Сохранить на Яндекс.Диск
@@ -192,10 +190,10 @@
 
                     <!-- Alexandrite -->
                     <div class="backup-sync-section mt-4">
-                        <h5 class="backup-section-title collapsible-section-title" data-bs-toggle="collapse" data-bs-target="#alexandrite-backup-content" aria-expanded="false" aria-controls="alexandrite-backup-content" role="button" data-collapse-key="alexandrite-backup">
+                        <h5 class="backup-section-title collapsible-section-title" data-bs-toggle="collapse" data-bs-target="#alexandrite-backup-content" aria-expanded="true" aria-controls="alexandrite-backup-content" role="button" data-collapse-key="alexandrite-backup-v2" data-collapse-default="true">
                             <i class="bi bi-chevron-right section-toggle-icon me-2"></i><i class="bi bi-gem me-2"></i>Alexandrite
                         </h5>
-                        <div class="collapse" id="alexandrite-backup-content">
+                        <div class="collapse show" id="alexandrite-backup-content">
                             <div class="row g-4">
                                 <div class="col-md-12">
                                     <div class="backup-card">
@@ -307,6 +305,7 @@
     </div>
 </div>
 
+{% if not sync_page %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="mb-0">Проекты</h2>
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#projectModal">
@@ -346,6 +345,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 {% endblock %}
 
@@ -353,19 +353,22 @@
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
+        {% if sync_page %}
+        initCollapsibleBackupSections();
+        loadBackupStats();
+        loadBackupArchives();
+        loadAlexandriteBackupStats();
+        loadAlexandriteArchives();
+        {% else %}
         loadProjects().then(() => {
             initScheduler();
             fillSchedulerTasks();
         });
         loadSidebars();
         initSchedulerTabs();
-        initCollapsibleBackupSections();
-        loadBackupStats();
-        loadBackupArchives();
-        loadAlexandriteBackupStats();
-        loadAlexandriteArchives();
         if (!calendarInstance) initCalendar();
         loadCalendarEvents();
+        {% endif %}
     });
 </script>
 {% endblock %}
