@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 
 from app.database import engine, Base, AsyncSessionLocal
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, wopi, collabora, tasks, assignees, extensions, mcp as mcp_router, events, comments
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, wopi, collabora, tasks, assignees, extensions, mcp as mcp_router, events, comments, affairs
 from app.config import get_settings
 from app.extensions import enabled_extensions
 from app.telegram import check_and_send_calendar_reminders
@@ -90,6 +90,7 @@ app.include_router(assignees.router)
 app.include_router(mcp_router.router)
 app.include_router(events.router)
 app.include_router(comments.router)
+app.include_router(affairs.router)
 app.include_router(extensions.router)
 
 
@@ -144,6 +145,14 @@ async def global_kanban_page(request: Request):
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
         },
+    )
+
+
+@app.get("/affairs", response_class=HTMLResponse)
+async def affairs_page(request: Request):
+    return templates.TemplateResponse(
+        "affairs.html",
+        {"request": request, "title": settings.app_name},
     )
 
 

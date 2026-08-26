@@ -146,6 +146,22 @@ class CalendarEvent(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class Affair(Base):
+    __tablename__ = "affairs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    owner_email = Column(String(255), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    is_completed = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    project = relationship("Project", lazy="selectin")
+
+
 class Assignee(Base):
     __tablename__ = "assignees"
 

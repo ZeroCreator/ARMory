@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Дела — {{ title }}{% endblock %}
+
+{% block main_class %}main-content affairs-main-content{% endblock %}
+{% block left_sidebar %}{% endblock %}
+{% block right_sidebar %}{% endblock %}
+
+{% block content %}
+<div class="affairs-page container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-journal-check me-2"></i>Дела</h2>
+            <p class="text-muted mb-0">Ваши обсуждения, общие события и личные дела</p>
+        </div>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#affairModal">
+            <i class="bi bi-plus-lg me-1"></i> Добавить дело
+        </button>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#affairs-overview" type="button">Обзор</button></li>
+        <li class="nav-item"><button class="nav-link affairs-my-tab" data-bs-toggle="tab" data-bs-target="#my-affairs" type="button">Мои дела</button></li>
+    </ul>
+
+    <div class="tab-content">
+        <section class="tab-pane fade show active" id="affairs-overview">
+            <div class="affairs-toolbar d-flex flex-wrap gap-2 align-items-center mb-3">
+                <label class="form-label mb-0" for="overview-mode">Отображение</label>
+                <select class="form-select form-select-sm affairs-control" id="overview-mode">
+                    <option value="projects">По проектам</option>
+                    <option value="date">По датам</option>
+                </select>
+                <select class="form-select form-select-sm affairs-control" id="overview-project-filter">
+                    <option value="">Все проекты</option>
+                </select>
+            </div>
+            <div id="affairs-overview-content" class="text-center text-muted py-5"><div class="spinner-border"></div></div>
+        </section>
+
+        <section class="tab-pane fade" id="my-affairs">
+            <div class="affairs-toolbar d-flex flex-wrap gap-2 mb-3">
+                <select class="form-select form-select-sm affairs-control" id="affair-project-filter"><option value="">Все проекты</option></select>
+                <select class="form-select form-select-sm affairs-control" id="affair-status-filter">
+                    <option value="active">Активные</option><option value="completed">Выполненные</option><option value="all">Все</option>
+                </select>
+            </div>
+            <div id="affairs-list" class="affairs-list"></div>
+        </section>
+    </div>
+</div>
+
+<div class="modal fade" id="affairModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Новое дело</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <form id="affair-form">
+            <div class="modal-body">
+                <div class="mb-3"><label class="form-label">Название</label><input class="form-control" name="title" required maxlength="255"></div>
+                <div class="mb-3"><label class="form-label">Описание</label><textarea class="form-control" name="description" rows="3"></textarea></div>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="form-label">Проект</label><select class="form-select" name="project_id" id="affair-project"><option value="">Без проекта</option></select></div>
+                    <div class="col-md-6 mb-3"><label class="form-label">Дедлайн</label><input class="form-control" type="datetime-local" name="due_date"></div>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button><button class="btn btn-primary" type="submit">Сохранить</button></div>
+        </form>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}<script src="/static/js/affairs.js?v=1"></script>{% endblock %}
