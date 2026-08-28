@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadFilters();
     await loadKanbanBoard(PROJECT_ID);
     handleTaskDeepLink();
+    handleAffairTaskDraft();
     connectKanbanEvents(PROJECT_ID);
 
     const board = document.getElementById('kanban-board');
@@ -1412,6 +1413,38 @@ function handleTaskDeepLink() {
         card.classList.add('kanban-card-highlighted');
     }
     openTaskModal(parseInt(taskId, 10));
+}
+
+function handleAffairTaskDraft() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('newTask') !== 'affair') return;
+
+    const rawDraft = sessionStorage.getItem('affairs-kanban-task-draft');
+    history.replaceState(null, '', window.location.pathname);
+    if (!rawDraft) return;
+
+    let draft;
+    try {
+        draft = JSON.parse(rawDraft);
+    } catch (_) {
+        sessionStorage.removeItem('affairs-kanban-task-draft');
+        return;
+    }
+    sessionStorage.removeItem('affairs-kanban-task-draft');
+    if (Number(draft.project_id) !== Number(PROJECT_ID)) return;
+
+    const defaultStatus = kanbanData.statuses.find(status => status.name === 'К выполнению') || kanbanData.statuses[0];
+    if (!defaultStatus) {
+        showToast('Сначала создайте колонку Kanban', 'warning');
+        return;
+    }
+
+    openTaskModal(null, defaultStatus.id);
+    const form = document.getElementById('task-form');
+    form.title.value = draft.title || '';
+    form.description.value = draft.description || '';
+    form.due_date.value = draft.due_date ? formatDateTimeLocal(draft.due_date) : '';
+    form.due_date.dispatchEvent(new Event('change'));
 }
 
 // ═══════════════════════════════════════════════════

@@ -2,16 +2,18 @@ import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.config import get_settings
 from app.models import Affair, CalendarEvent, Project, ProjectComment
 from app.routers.comments import _get_current_email
 
 
 router = APIRouter(prefix="/api/affairs", tags=["affairs"])
+settings = get_settings()
 
 
 class AffairCreate(BaseModel):
@@ -19,6 +21,7 @@ class AffairCreate(BaseModel):
     description: str | None = None
     due_date: datetime.datetime | None = None
     project_id: int | None = None
+    is_shared: bool | None = None
 
 
 class AffairUpdate(BaseModel):
@@ -34,6 +37,7 @@ def _affair_out(affair: Affair) -> dict:
         "id": affair.id,
         "project_id": affair.project_id,
         "project_name": affair.project.name if affair.project else None,
+        "is_shared": affair.is_shared,
         "title": affair.title,
         "description": affair.description,
         "due_date": affair.due_date.isoformat() if affair.due_date else None,
@@ -54,21 +58,48 @@ async def _validate_project(project_id: int | None, db: AsyncSession) -> None:
 @router.get("/overview")
 async def overview(request: Request, db: AsyncSession = Depends(get_db)):
     user_email = _get_current_email(request)
+    now = datetime.datetime.now()
     projects_result = await db.execute(select(Project).order_by(Project.sort_order, Project.name))
+    affairs_result = await db.execute(
+        select(Affair)
+        .where(Affair.is_shared.is_(True))
+        .order_by(Affair.is_completed, Affair.updated_at.desc())
+    )
     comments_result = await db.execute(
         select(ProjectComment)
         .where(ProjectComment.author_email == user_email)
         .order_by(ProjectComment.created_at.desc())
     )
     events_result = await db.execute(
-        select(CalendarEvent).order_by(CalendarEvent.start_date.asc())
+        select(CalendarEvent)
+        .where(
+            or_(
+                CalendarEvent.end_date >= now,
+                and_(CalendarEvent.end_date.is_(None), CalendarEvent.start_date >= now),
+            )
+        )
+        .order_by(CalendarEvent.start_date.asc())
     )
     projects = projects_result.scalars().all()
     project_names = {project.id: project.name for project in projects}
 
     return {
-        "user_email": user_email,
+        "user_email": _get_current_email(request),
         "projects": [{"id": project.id, "name": project.name} for project in projects],
+        "notes": [
+            {
+                "id": affair.id,
+                "project_id": affair.project_id,
+                "project_name": project_names.get(affair.project_id),
+                "is_shared": affair.is_shared,
+                "title": affair.title,
+                "description": affair.description,
+                "due_date": affair.due_date.isoformat() if affair.due_date else None,
+                "is_completed": affair.is_completed,
+                "updated_at": affair.updated_at.isoformat(),
+            }
+            for affair in affairs_result.scalars().all()
+        ],
         "comments": [
             {
                 "id": comment.id,
@@ -100,7 +131,10 @@ async def overview(request: Request, db: AsyncSession = Depends(get_db)):
 async def list_affairs(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Affair)
-        .where(Affair.owner_email == _get_current_email(request))
+        .where(
+            Affair.owner_email == _get_current_email(request),
+            Affair.is_shared.is_(False),
+        )
         .options(selectinload(Affair.project))
         .order_by(Affair.is_completed, Affair.due_date.asc(), Affair.created_at.desc())
     )
@@ -115,6 +149,7 @@ async def create_affair(data: AffairCreate, request: Request, db: AsyncSession =
     await _validate_project(data.project_id, db)
     affair = Affair(
         owner_email=_get_current_email(request),
+        is_shared=data.is_shared if data.is_shared is not None else not settings.personal_notes_enabled,
         title=title,
         description=data.description.strip() if data.description else None,
         due_date=data.due_date,
@@ -138,12 +173,12 @@ async def update_affair(
     result = await db.execute(
         select(Affair).where(
             Affair.id == affair_id,
-            Affair.owner_email == _get_current_email(request),
+            or_(Affair.is_shared.is_(True), Affair.owner_email == _get_current_email(request)),
         )
     )
     affair = result.scalar_one_or_none()
     if not affair:
-        raise HTTPException(status_code=404, detail="Дело не найдено")
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
     values = data.model_dump(exclude_unset=True)
     if "title" in values:
         values["title"] = (values["title"] or "").strip()
@@ -168,12 +203,12 @@ async def delete_affair(affair_id: int, request: Request, db: AsyncSession = Dep
     result = await db.execute(
         select(Affair).where(
             Affair.id == affair_id,
-            Affair.owner_email == _get_current_email(request),
+            or_(Affair.is_shared.is_(True), Affair.owner_email == _get_current_email(request)),
         )
     )
     affair = result.scalar_one_or_none()
     if not affair:
-        raise HTTPException(status_code=404, detail="Дело не найдено")
+        raise HTTPException(status_code=404, detail="Заметка не найдена")
     await db.delete(affair)
     await db.commit()
     return None

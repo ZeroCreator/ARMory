@@ -27,7 +27,7 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
-def _backup_database_before_collapsed_migration() -> Path:
+def _backup_database_before_migration(label: str) -> Path:
     database_url = make_url(settings.database_url)
     if not database_url.drivername.startswith("sqlite") or not database_url.database:
         raise RuntimeError("Automatic collapsed-state migration requires a SQLite database backup")
@@ -36,7 +36,7 @@ def _backup_database_before_collapsed_migration() -> Path:
     backup_dir = Path("data/backups")
     backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    destination = backup_dir / f"armory_pre_collapsed_{timestamp}.db"
+    destination = backup_dir / f"armory_pre_{label}_{timestamp}.db"
     with sqlite3.connect(source) as source_db, sqlite3.connect(destination) as backup_db:
         source_db.backup(backup_db)
     return destination
@@ -53,10 +53,22 @@ async def _ensure_collapsed_columns(conn) -> None:
     if not missing_tables:
         return
 
-    backup_path = _backup_database_before_collapsed_migration()
+    backup_path = _backup_database_before_migration("collapsed")
     logger.info("Создан бэкап перед миграцией collapsed: %s", backup_path)
     for table in missing_tables:
         await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN collapsed BOOLEAN NOT NULL DEFAULT 1"))
+
+
+async def _ensure_affair_shared_column(conn) -> None:
+    columns = await conn.run_sync(
+        lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("affairs")}
+    )
+    if "is_shared" in columns:
+        return
+
+    backup_path = _backup_database_before_migration("shared_notes")
+    logger.info("Создан бэкап перед миграцией общих заметок: %s", backup_path)
+    await conn.execute(text("ALTER TABLE affairs ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT 0"))
 
 
 async def _reminder_loop():
@@ -74,6 +86,7 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _ensure_collapsed_columns(conn)
+        await _ensure_affair_shared_column(conn)
 
         # Создаём data-директории, если их нет
         Path(settings.local_storage_path).expanduser().mkdir(parents=True, exist_ok=True)
@@ -189,7 +202,11 @@ async def global_kanban_page(request: Request):
 async def affairs_page(request: Request):
     return templates.TemplateResponse(
         "affairs.html",
-        {"request": request, "title": settings.app_name},
+        {
+            "request": request,
+            "title": settings.app_name,
+            "personal_notes_enabled": settings.personal_notes_enabled,
+        },
     )
 
 

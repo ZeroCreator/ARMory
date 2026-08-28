@@ -521,6 +521,7 @@ async def _bulk_create_tasks(
             tags=task_data.tags,
             list_name=task_data.list_name,
             sort_order=max_orders[status_id],
+            assignees=[],
         )
         db.add(task)
         created_tasks.append(task)
@@ -530,7 +531,7 @@ async def _bulk_create_tasks(
     for task in created_tasks:
         await _record_status_history(db, task.id, task.status_id, entered_at=task.created_at)
 
-    for task in created_tasks:
+    for task, task_data in zip(created_tasks, tasks_data):
         assignee_emails = _extract_assignee_emails(task_data)
         await _apply_task_assignees(task, assignee_emails, db)
         for attachment_data in attachments_data:

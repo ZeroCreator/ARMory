@@ -5,6 +5,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     app_name: str = "ARMory"
     database_url: str = "sqlite+aiosqlite:///./armory.db"
+    personal_notes_enabled: bool = False
     
     # Хранилище: "local" или "s3"
     storage_type: str = "local"

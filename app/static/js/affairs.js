@@ -1,14 +1,16 @@
-let affairsOverview = { projects: [], comments: [], events: [] };
+let affairsOverview = { projects: [], notes: [], comments: [], events: [] };
 let myAffairs = [];
 let affairsProjectSortable = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('overview-mode').addEventListener('change', renderOverview);
     document.getElementById('overview-project-filter').addEventListener('change', renderOverview);
-    document.getElementById('affair-project-filter').addEventListener('change', renderMyAffairs);
-    document.getElementById('affair-status-filter').addEventListener('change', renderMyAffairs);
-    document.getElementById('affair-form').addEventListener('submit', createAffair);
-    await Promise.all([loadOverview(), loadAffairs()]);
+    if (PERSONAL_NOTES_ENABLED) {
+        document.getElementById('affair-project-filter').addEventListener('change', renderMyAffairs);
+        document.getElementById('affair-status-filter').addEventListener('change', renderMyAffairs);
+        document.getElementById('quick-affair-form').addEventListener('submit', createQuickAffair);
+    }
+    await Promise.all([loadOverview(), ...(PERSONAL_NOTES_ENABLED ? [loadAffairs()] : [])]);
 });
 
 async function loadOverview() {
@@ -16,6 +18,7 @@ async function loadOverview() {
         affairsOverview = await api('/api/affairs/overview');
         populateProjectFilters();
         renderOverview();
+        if (PERSONAL_NOTES_ENABLED) renderMyAffairs();
     } catch (error) {
         showAffairsError('affairs-overview-content', error);
     }
@@ -35,14 +38,15 @@ function populateProjectFilters() {
     const targets = [
         ['overview-project-filter', 'Все проекты'],
         ['affair-project-filter', 'Все проекты'],
-        ['affair-project', 'Без проекта'],
+        ['quick-affair-project', 'Без проекта'],
     ];
     targets.forEach(([id, firstLabel]) => {
         const select = document.getElementById(id);
+        if (!select) return;
         const selected = select.value;
         select.innerHTML = `<option value="">${firstLabel}</option>` + projects.map(project =>
             `<option value="${project.id}">${escapeAffairsHtml(project.name)}</option>`
-        ).join('');
+        ).join('') + (id === 'affair-project-filter' ? '<option value="none">Без проекта</option>' : '');
         select.value = selected;
     });
 }
@@ -51,12 +55,13 @@ function renderOverview() {
     const container = document.getElementById('affairs-overview-content');
     const mode = document.getElementById('overview-mode').value;
     const projectFilter = document.getElementById('overview-project-filter').value;
+    const notes = filterByProject(affairsOverview.notes || [], projectFilter);
     const comments = filterByProject(affairsOverview.comments || [], projectFilter);
     const events = filterByProject(affairsOverview.events || [], projectFilter);
 
     if (mode === 'date') {
         destroyProjectSortable();
-        container.innerHTML = renderTwoColumns(comments, events);
+        container.innerHTML = renderColumns(notes, comments, events, '');
         return;
     }
 
@@ -71,27 +76,35 @@ function renderOverview() {
     });
     groups.push(...projectMap.values());
     const visibleGroups = projectFilter ? groups.filter(project => String(project.id) === projectFilter) : groups;
-    const hasUnassigned = !projectFilter && events.some(event => event.project_id === null);
+    const hasUnassigned = !projectFilter && (
+        PERSONAL_NOTES_ENABLED || notes.some(note => note.project_id === null) || events.some(event => event.project_id === null)
+    );
     container.innerHTML = `<div class="affairs-projects" id="affairs-projects">${visibleGroups.map(project =>
-        renderProjectBlock(project, comments, events)
-    ).join('')}${hasUnassigned ? renderProjectBlock({ id: '', name: 'Без проекта' }, comments, events) : ''}</div>`;
+        renderProjectBlock(project, notes, comments, events)
+    ).join('')}${hasUnassigned ? renderProjectBlock({ id: '', name: 'Без проекта' }, notes, comments, events) : ''}</div>`;
     initProjectSortable();
 }
 
-function renderProjectBlock(project, comments, events) {
+function renderProjectBlock(project, notes, comments, events) {
+    const projectNotes = notes.filter(item => String(item.project_id ?? '') === String(project.id));
     const projectComments = comments.filter(item => String(item.project_id ?? '') === String(project.id));
     const projectEvents = events.filter(item => String(item.project_id ?? '') === String(project.id));
-    const collapsed = isProjectCollapsed(project.id, projectComments.length === 0 && projectEvents.length === 0);
+    const collapsed = isProjectCollapsed(project.id, projectNotes.length === 0 && projectComments.length === 0 && projectEvents.length === 0);
+    const projectLinks = project.id === '' ? '' : `<nav class="affairs-project-links" aria-label="Разделы проекта">
+        <a href="/projects/${project.id}/kanban"><i class="bi bi-kanban me-1"></i>Kanban</a>
+        <a href="/projects/${project.id}/tasks"><i class="bi bi-list-task me-1"></i>ToDo</a>
+    </nav>`;
     return `<article class="affairs-project-block ${collapsed ? 'is-collapsed' : ''}" data-project-id="${project.id}">
         <header class="affairs-project-header">
             <i class="bi bi-grip-vertical affairs-drag-handle"></i>
             <span>${escapeAffairsHtml(project.name)}</span>
-            <span class="affairs-project-summary">${projectComments.length} обсужд. · ${projectEvents.length} событ.</span>
+            <span class="affairs-project-summary">${projectNotes.length} замет. · ${projectComments.length} обсужд. · ${projectEvents.length} событ.</span>
+            ${projectLinks}
             <button class="affairs-project-toggle" type="button" onclick="toggleProjectBlock(this)" aria-expanded="${!collapsed}" title="${collapsed ? 'Показать данные' : 'Скрыть данные'}">
                 <i class="bi bi-chevron-${collapsed ? 'down' : 'up'}"></i>
             </button>
         </header>
-        ${renderTwoColumns(projectComments, projectEvents)}
+        ${renderColumns(projectNotes, projectComments, projectEvents, project.id)}
     </article>`;
 }
 
@@ -106,10 +119,27 @@ function toggleProjectBlock(button) {
     localStorage.setItem(projectCollapseKey(), JSON.stringify(states));
 }
 
-function renderTwoColumns(comments, events) {
+function renderColumns(notes, comments, events, projectId = null) {
+    const noteEditor = projectId === null ? '' : `<form class="affairs-inline-note" onsubmit="createInlineAffair(event, '${projectId}')">
+        <input name="title" maxlength="255" placeholder="Заголовок (необязательно)" aria-label="Заголовок заметки">
+        <textarea name="text" rows="4" required placeholder="Введите заметку…" aria-label="Текст заметки"></textarea>
+        <button class="affairs-note-submit" type="submit" title="Сохранить заметку" aria-label="Сохранить заметку"><i class="bi bi-plus-lg"></i></button>
+    </form>`;
     return `<div class="affairs-columns">
+        <section class="affairs-column"><h5><span><i class="bi bi-journal-text me-1"></i> Заметки <span class="badge text-bg-light">${notes.length}</span></span></h5>${noteEditor}<div class="affairs-scroll">${notes.length ? notes.map(renderNote).join('') : emptyAffairs('Нет заметок')}</div></section>
         <section class="affairs-column"><h5><i class="bi bi-chat-dots me-1"></i> Мои обсуждения <span class="badge text-bg-light">${comments.length}</span></h5><div class="affairs-scroll">${comments.length ? comments.map(renderComment).join('') : emptyAffairs('Нет сообщений')}</div></section>
         <section class="affairs-column"><h5><i class="bi bi-calendar-event me-1"></i> События <span class="badge text-bg-light">${events.length}</span></h5><div class="affairs-scroll">${events.length ? events.map(renderEvent).join('') : emptyAffairs('Нет событий')}</div></section>
+    </div>`;
+}
+
+function renderNote(note) {
+    return `<div class="affairs-item affairs-editable-note ${note.is_completed ? 'opacity-50' : ''}" data-affair-id="${note.id}">
+        <div class="affairs-item-meta"><span>${escapeAffairsHtml(note.project_name || 'Без проекта')}</span><time>${formatAffairsDate(note.updated_at)}</time></div>
+        <div class="affairs-note-view">
+            <div class="d-flex align-items-start gap-2"><div class="fw-semibold flex-grow-1">${escapeAffairsHtml(note.title)}</div>${renderAffairActions(note)}</div>
+            ${note.description ? `<div class="small text-muted mt-1 affairs-note-text">${escapeAffairsHtml(note.description)}</div>` : ''}
+        </div>
+        ${renderAffairEditForm(note)}
     </div>`;
 }
 
@@ -133,43 +163,204 @@ function renderMyAffairs() {
     const project = document.getElementById('affair-project-filter').value;
     const status = document.getElementById('affair-status-filter').value;
     const filtered = myAffairs.filter(item => {
-        if (project && String(item.project_id ?? '') !== project) return false;
+        if (project === 'none' && item.project_id !== null) return false;
+        if (project && project !== 'none' && String(item.project_id ?? '') !== project) return false;
         if (status === 'active' && item.is_completed) return false;
         if (status === 'completed' && !item.is_completed) return false;
         return true;
     });
-    container.innerHTML = filtered.length ? filtered.map(renderAffair).join('') : emptyAffairs('Дел по выбранному фильтру нет');
+    renderAffairProjectCards(project, filtered);
+    container.innerHTML = project === ''
+        ? (filtered.length ? filtered.map(renderAffair).join('') : emptyAffairs('Заметок по выбранному фильтру нет'))
+        : '';
+}
+
+function renderAffairProjectCards(selectedProject, filteredNotes) {
+    const container = document.getElementById('affair-project-cards');
+    const notes = myAffairs;
+    const cards = [
+        { id: '', name: 'Все проекты', icon: 'collection', count: notes.length },
+        ...(affairsOverview.projects || []).map(project => ({
+            ...project,
+            icon: 'folder',
+            count: notes.filter(item => String(item.project_id ?? '') === String(project.id)).length,
+        })),
+        { id: 'none', name: 'Без проекта', icon: 'journal-text', count: notes.filter(item => item.project_id === null).length },
+    ];
+    container.innerHTML = cards.map(card => {
+        const filterValue = String(card.id);
+        const isActive = selectedProject === filterValue;
+        const expandedNotes = isActive && filterValue !== ''
+            ? `<div class="affair-project-card-notes">${filteredNotes.length ? filteredNotes.map(renderAffair).join('') : emptyAffairs('Заметок по выбранному фильтру нет')}</div>`
+            : '';
+        return `<article class="affair-project-card ${isActive ? 'is-active' : ''} ${isActive && filterValue !== '' ? 'is-expanded' : ''}">
+            <button class="affair-project-card-button" type="button" onclick="selectAffairProject('${isActive && filterValue !== '' ? '' : filterValue}')" aria-expanded="${isActive && filterValue !== ''}">
+                <span class="affair-project-card-topline">
+                    <i class="bi bi-${card.icon} affair-project-card-icon"></i>
+                    <span class="affair-project-card-count">${card.count} ${affairsNoteWord(card.count)}</span>
+                </span>
+                <span class="affair-project-card-title">${escapeAffairsHtml(card.name)}${filterValue !== '' ? `<i class="bi bi-chevron-${isActive ? 'up' : 'down'} affair-project-card-chevron"></i>` : ''}</span>
+            </button>
+            ${expandedNotes}
+        </article>`;
+    }).join('');
+}
+
+function selectAffairProject(projectId) {
+    document.getElementById('affair-project-filter').value = projectId;
+    document.getElementById('quick-affair-project').value = projectId === 'none' ? '' : projectId;
+    renderMyAffairs();
+}
+
+function affairsNoteWord(count) {
+    const mod100 = count % 100;
+    const mod10 = count % 10;
+    if (mod100 >= 11 && mod100 <= 14) return 'заметок';
+    if (mod10 === 1) return 'заметка';
+    if (mod10 >= 2 && mod10 <= 4) return 'заметки';
+    return 'заметок';
 }
 
 function renderAffair(item) {
-    return `<article class="affair-card ${item.is_completed ? 'is-completed' : ''}">
-        <button class="btn btn-sm ${item.is_completed ? 'btn-success' : 'btn-outline-secondary'} affair-check" onclick="toggleAffair(${item.id}, ${!item.is_completed})" title="${item.is_completed ? 'Вернуть в работу' : 'Выполнить'}"><i class="bi bi-check-lg"></i></button>
-        <div class="flex-grow-1 min-width-0"><div class="d-flex flex-wrap justify-content-between gap-2"><h5 class="mb-1">${escapeAffairsHtml(item.title)}</h5><span class="small text-muted">${item.due_date ? `до ${formatAffairsDate(item.due_date)}` : 'без дедлайна'}</span></div>
-        <div class="small text-muted mb-1">${escapeAffairsHtml(item.project_name || 'Без проекта')}</div>${item.description ? `<div>${escapeAffairsHtml(item.description)}</div>` : ''}</div>
-        <button class="btn btn-sm btn-outline-danger" onclick="deleteAffair(${item.id})" title="Удалить"><i class="bi bi-trash"></i></button>
+    return `<article class="affair-card affairs-editable-note ${item.is_completed ? 'is-completed' : ''}" data-affair-id="${item.id}">
+        <button class="btn btn-sm ${item.is_completed ? 'btn-success' : 'btn-outline-secondary'} affair-check" onclick="toggleAffair(${item.id}, ${!item.is_completed})" title="${item.is_completed ? 'Вернуть из архива' : 'В архив'}"><i class="bi bi-check-lg"></i></button>
+        <div class="flex-grow-1 min-width-0"><div class="affairs-note-view"><div class="d-flex flex-wrap justify-content-between gap-2"><h5 class="mb-1">${escapeAffairsHtml(item.title)}</h5><span class="small text-muted">${item.due_date ? `до ${formatAffairsDate(item.due_date)}` : 'без дедлайна'}</span></div>
+        <div class="small text-muted mb-1">${escapeAffairsHtml(item.project_name || 'Без проекта')}</div>${item.description ? `<div class="affairs-note-text">${escapeAffairsHtml(item.description)}</div>` : ''}</div>${renderAffairEditForm(item)}</div>
+        ${renderAffairActions(item)}
     </article>`;
 }
 
-async function createAffair(event) {
+function renderAffairActions(item) {
+    return `<span class="affairs-note-actions">
+        <button class="affairs-note-task-button" type="button" onclick="${item.project_id ? `addAffairToTasks(${item.id}, ${item.project_id}, ${!!item.is_shared})` : `chooseAffairTaskProject(this, ${item.id}, ${!!item.is_shared})`}" title="Добавить в Kanban и ToDo"><i class="bi bi-kanban me-1"></i>В Kanban и ToDo</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button" onclick="startAffairEdit(this)" title="Редактировать" aria-label="Редактировать заметку"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteAffair(${item.id})" title="Удалить" aria-label="Удалить заметку"><i class="bi bi-trash"></i></button>
+    </span>`;
+}
+
+function renderAffairEditForm(item) {
+    return `<form class="affairs-note-edit-form d-none" onsubmit="saveAffairEdit(event, ${item.id})">
+        <input class="form-control form-control-sm" name="title" maxlength="255" value="${escapeAffairsHtml(item.title)}" placeholder="Заголовок (необязательно)" aria-label="Заголовок заметки">
+        <textarea class="form-control form-control-sm" name="description" rows="4" aria-label="Текст заметки">${escapeAffairsHtml(item.description || '')}</textarea>
+        <div class="d-flex justify-content-end gap-2">
+            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="cancelAffairEdit(this)">Отмена</button>
+            <button class="btn btn-sm btn-success" type="submit">Сохранить</button>
+        </div>
+    </form>`;
+}
+
+function startAffairEdit(button) {
+    const card = button.closest('.affairs-editable-note');
+    card.querySelector('.affairs-note-view').classList.add('d-none');
+    card.querySelector('.affairs-note-actions').classList.add('d-none');
+    const form = card.querySelector('.affairs-note-edit-form');
+    form.classList.remove('d-none');
+    form.querySelector('input[name="title"]').focus();
+}
+
+function cancelAffairEdit(button) {
+    const card = button.closest('.affairs-editable-note');
+    card.querySelector('.affairs-note-edit-form').classList.add('d-none');
+    card.querySelector('.affairs-note-view').classList.remove('d-none');
+    card.querySelector('.affairs-note-actions').classList.remove('d-none');
+}
+
+async function saveAffairEdit(event, id) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
-    data.project_id = data.project_id ? Number(data.project_id) : null;
-    data.due_date = data.due_date || null;
+    const note = affairFieldsFromText(data.description, data.title);
+    if (!note) {
+        showToast('Введите заголовок или текст заметки', 'warning');
+        return;
+    }
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    try {
+        await api(`/api/affairs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(note),
+        });
+        await refreshAffairsViews();
+        showToast('Заметка обновлена', 'success');
+    } catch (error) {
+        showToast(error.message || 'Не удалось обновить заметку', 'danger');
+        submitButton.disabled = false;
+    }
+}
+
+async function createQuickAffair(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form).entries());
+    const note = affairFieldsFromText(data.text, data.title);
+    if (!note) return;
+    const projectId = data.project_id ? Number(data.project_id) : null;
+    const addToTasks = data.add_to_tasks === 'on';
+    if (addToTasks && !projectId) {
+        showToast('Для добавления в Kanban и ToDo выберите проект', 'warning');
+        return;
+    }
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
     try {
         const created = await api('/api/affairs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
+            body: JSON.stringify({ ...note, project_id: projectId, due_date: data.due_date || null, is_shared: false }),
         });
         myAffairs.unshift(created);
         form.reset();
-        bootstrap.Modal.getInstance(document.getElementById('affairModal')).hide();
         renderMyAffairs();
-        showToast('Дело добавлено', 'success');
+        if (addToTasks) {
+            openAffairDraftInKanban(created, projectId);
+            return;
+        }
+        await loadOverview();
+        showToast('Заметка добавлена', 'success');
     } catch (error) {
-        showToast(error.message || 'Не удалось добавить дело', 'danger');
+        showToast(error.message || 'Не удалось добавить заметку', 'danger');
+    } finally {
+        submitButton.disabled = false;
     }
+}
+
+async function createInlineAffair(event, projectId) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const note = affairFieldsFromText(formData.get('text'), formData.get('title'));
+    if (!note) return;
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    try {
+        const created = await api('/api/affairs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...note, project_id: projectId ? Number(projectId) : null, is_shared: true }),
+        });
+        form.reset();
+        await loadOverview();
+        showToast('Заметка сохранена', 'success');
+    } catch (error) {
+        showToast(error.message || 'Не удалось сохранить заметку', 'danger');
+    } finally {
+        submitButton.disabled = false;
+    }
+}
+
+function affairFieldsFromText(value, customTitle = '') {
+    const text = String(value || '').trim();
+    const title = String(customTitle || '').trim();
+    if (!text && !title) return null;
+    if (!text) return { title: title.slice(0, 255), description: null };
+    if (title) return { title: title.slice(0, 255), description: text };
+    const [firstLine, ...rest] = text.split(/\r?\n/);
+    if (firstLine.length <= 255) {
+        return { title: firstLine, description: rest.join('\n').trim() || null };
+    }
+    return { title: `${firstLine.slice(0, 252)}…`, description: text };
 }
 
 async function toggleAffair(id, isCompleted) {
@@ -182,20 +373,57 @@ async function toggleAffair(id, isCompleted) {
         const index = myAffairs.findIndex(item => item.id === id);
         if (index !== -1) myAffairs[index] = updated;
         renderMyAffairs();
+        await loadOverview();
     } catch (error) {
-        showToast(error.message || 'Не удалось обновить дело', 'danger');
+        showToast(error.message || 'Не удалось обновить заметку', 'danger');
     }
 }
 
 async function deleteAffair(id) {
-    if (!await showConfirm('Удалить это дело?', 'Удаление')) return;
+    if (!await showConfirm('Удалить эту заметку?', 'Удаление')) return;
     try {
         await api(`/api/affairs/${id}`, { method: 'DELETE' });
-        myAffairs = myAffairs.filter(item => item.id !== id);
-        renderMyAffairs();
+        await refreshAffairsViews();
     } catch (error) {
-        showToast(error.message || 'Не удалось удалить дело', 'danger');
+        showToast(error.message || 'Не удалось удалить заметку', 'danger');
     }
+}
+
+function addAffairToTasks(id, projectId, isShared) {
+    const notes = isShared ? (affairsOverview.notes || []) : myAffairs;
+    const note = notes.find(item => item.id === id);
+    if (!note) return;
+    openAffairDraftInKanban(note, projectId);
+}
+
+function openAffairDraftInKanban(note, projectId) {
+    sessionStorage.setItem('affairs-kanban-task-draft', JSON.stringify({
+        project_id: Number(projectId),
+        title: note.title,
+        description: note.description || '',
+        due_date: note.due_date || null,
+    }));
+    window.location.href = `/projects/${projectId}/kanban?newTask=affair`;
+}
+
+function chooseAffairTaskProject(button, id, isShared) {
+    const actions = button.closest('.affairs-note-actions');
+    const options = (affairsOverview.projects || []).map(project =>
+        `<option value="${project.id}">${escapeAffairsHtml(project.name)}</option>`
+    ).join('');
+    if (!options) {
+        showToast('Сначала создайте проект', 'warning');
+        return;
+    }
+    button.classList.add('d-none');
+    actions.insertAdjacentHTML('afterbegin', `<select class="form-select form-select-sm affairs-note-task-project" onchange="if (this.value) addAffairToTasks(${id}, Number(this.value), ${isShared})">
+        <option value="">Выберите проект…</option>${options}
+    </select>`);
+    actions.querySelector('.affairs-note-task-project').focus();
+}
+
+async function refreshAffairsViews() {
+    await Promise.all([loadOverview(), ...(PERSONAL_NOTES_ENABLED ? [loadAffairs()] : [])]);
 }
 
 function initProjectSortable() {

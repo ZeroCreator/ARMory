@@ -11,20 +11,19 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
         <div>
             <h2 class="mb-1"><i class="bi bi-journal-check me-2"></i>Дела</h2>
-            <p class="text-muted mb-0">Ваши обсуждения, общие события и личные дела</p>
+            <p class="text-muted mb-0">Ваши заметки, обсуждения и события по проектам</p>
         </div>
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#affairModal">
-            <i class="bi bi-plus-lg me-1"></i> Добавить дело
-        </button>
     </div>
 
+    {% if personal_notes_enabled %}
     <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#affairs-overview" type="button">Обзор</button></li>
-        <li class="nav-item"><button class="nav-link affairs-my-tab" data-bs-toggle="tab" data-bs-target="#my-affairs" type="button">Мои дела</button></li>
+        <li class="nav-item"><button class="nav-link affairs-my-tab active" data-bs-toggle="tab" data-bs-target="#my-affairs" type="button">Мои заметки</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#affairs-overview" type="button">Все дела</button></li>
     </ul>
+    {% endif %}
 
     <div class="tab-content">
-        <section class="tab-pane fade show active" id="affairs-overview">
+        <section class="tab-pane fade {% if not personal_notes_enabled %}show active{% endif %}" id="affairs-overview">
             <div class="affairs-toolbar d-flex flex-wrap gap-2 align-items-center mb-3">
                 <label class="form-label mb-0" for="overview-mode">Отображение</label>
                 <select class="form-select form-select-sm affairs-control" id="overview-mode">
@@ -38,34 +37,37 @@
             <div id="affairs-overview-content" class="text-center text-muted py-5"><div class="spinner-border"></div></div>
         </section>
 
-        <section class="tab-pane fade" id="my-affairs">
-            <div class="affairs-toolbar d-flex flex-wrap gap-2 mb-3">
+        {% if personal_notes_enabled %}
+        <section class="tab-pane fade show active" id="my-affairs">
+            <div class="affairs-toolbar d-flex flex-wrap gap-2 align-items-center mb-3">
                 <select class="form-select form-select-sm affairs-control" id="affair-project-filter"><option value="">Все проекты</option></select>
                 <select class="form-select form-select-sm affairs-control" id="affair-status-filter">
-                    <option value="active">Активные</option><option value="completed">Выполненные</option><option value="all">Все</option>
+                    <option value="active">Актуальные</option><option value="completed">Архивные</option><option value="all">Все</option>
                 </select>
             </div>
+            <form id="quick-affair-form" class="affairs-quick-add mb-4">
+                <input class="form-control affairs-quick-heading" name="title" maxlength="255" placeholder="Заголовок (необязательно)" aria-label="Заголовок заметки">
+                <textarea class="form-control affairs-quick-title" id="quick-affair-title" name="text" required rows="6" placeholder="Введите заметку…" aria-label="Текст заметки"></textarea>
+                <div class="affairs-quick-controls">
+                    <select class="form-select form-select-sm" id="quick-affair-project" name="project_id" aria-label="Проект"><option value="">Без проекта</option></select>
+                    <input class="form-control form-control-sm" type="datetime-local" name="due_date" aria-label="Дедлайн">
+                    <label class="form-check affairs-quick-task mb-0">
+                        <input class="form-check-input" type="checkbox" name="add_to_tasks">
+                        <span class="form-check-label"><i class="bi bi-kanban me-1"></i>Добавить заметку также в Kanban и ToDo</span>
+                    </label>
+                    <button class="affairs-note-submit" type="submit" title="Сохранить заметку" aria-label="Сохранить заметку"><i class="bi bi-plus-lg"></i></button>
+                </div>
+            </form>
+            <div id="affair-project-cards" class="affair-project-cards mb-4"></div>
             <div id="affairs-list" class="affairs-list"></div>
         </section>
+        {% endif %}
     </div>
 </div>
 
-<div class="modal fade" id="affairModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog"><div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title">Новое дело</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <form id="affair-form">
-            <div class="modal-body">
-                <div class="mb-3"><label class="form-label">Название</label><input class="form-control" name="title" required maxlength="255"></div>
-                <div class="mb-3"><label class="form-label">Описание</label><textarea class="form-control" name="description" rows="3"></textarea></div>
-                <div class="row">
-                    <div class="col-md-6 mb-3"><label class="form-label">Проект</label><select class="form-select" name="project_id" id="affair-project"><option value="">Без проекта</option></select></div>
-                    <div class="col-md-6 mb-3"><label class="form-label">Дедлайн</label><input class="form-control" type="datetime-local" name="due_date"></div>
-                </div>
-            </div>
-            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button><button class="btn btn-primary" type="submit">Сохранить</button></div>
-        </form>
-    </div></div>
-</div>
 {% endblock %}
 
-{% block extra_js %}<script src="/static/js/affairs.js?v=1"></script>{% endblock %}
+{% block extra_js %}
+<script>const PERSONAL_NOTES_ENABLED = {{ personal_notes_enabled | tojson }};</script>
+<script src="/static/js/affairs.js?v=14"></script>
+{% endblock %}

@@ -154,6 +154,7 @@ class Affair(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     owner_email = Column(String(255), nullable=False, index=True)
+    is_shared = Column(Boolean, nullable=False, default=False, server_default=text("0"), index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     due_date = Column(DateTime, nullable=True)
