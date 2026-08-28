@@ -7,6 +7,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.events import broadcast
 from app.models import CalendarEvent
 from app.telegram import send_telegram_message
 from app.config import get_settings
@@ -94,6 +95,7 @@ async def create_event(data: EventCreate, db: AsyncSession = Depends(get_db)):
     db.add(event)
     await db.commit()
     await db.refresh(event)
+    broadcast({"event": "project", "type": "calendar_changed", "project_id": event.project_id})
     return {"id": event.id, "message": "Событие создано"}
 
 
@@ -104,6 +106,7 @@ async def update_event(event_id: int, data: EventUpdate, db: AsyncSession = Depe
     if not event:
         raise HTTPException(status_code=404, detail="Событие не найдено")
 
+    old_project_id = event.project_id
     reset_notification = False
     if data.title is not None:
         event.title = data.title
@@ -131,6 +134,8 @@ async def update_event(event_id: int, data: EventUpdate, db: AsyncSession = Depe
 
     await db.commit()
     await db.refresh(event)
+    project_ids = [project_id for project_id in {old_project_id, event.project_id} if project_id is not None]
+    broadcast({"event": "project", "type": "calendar_changed", "project_ids": project_ids})
     return {"id": event.id, "message": "Событие обновлено"}
 
 
@@ -140,8 +145,10 @@ async def delete_event(event_id: int, db: AsyncSession = Depends(get_db)):
     event = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Событие не найдено")
+    project_id = event.project_id
     await db.delete(event)
     await db.commit()
+    broadcast({"event": "project", "type": "calendar_changed", "project_id": project_id})
     return {"message": "Событие удалено"}
 
 

@@ -44,6 +44,7 @@ class DocumentOut(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     sort_order: int = 0
+    collapsed: bool = True
     created_at: datetime
     updated_at: datetime
     items: List[DocumentItemOut] = []
@@ -56,6 +57,7 @@ class SectionOut(BaseModel):
     name: str
     description: Optional[str] = None
     sort_order: int = 0
+    collapsed: bool = True
     created_at: datetime
     documents: List[DocumentOut] = []
 

@@ -642,84 +642,124 @@ async function deleteProject() {
 
 let sectionsCache = [];
 let sectionSortable = null;
+let projectEventSource = null;
+let projectReloadTimer = null;
 
-function getCollapsedState(projectId) {
-    const key = `sections_collapsed_${projectId}`;
-    return JSON.parse(localStorage.getItem(key) || '{}');
+function connectProjectEvents(projectId) {
+    if (!window.EventSource || projectEventSource) return;
+    projectEventSource = new EventSource(`${API_BASE}/events`);
+    projectEventSource.addEventListener('project', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const projectIds = event.project_ids || [event.project_id];
+            if (!projectIds.includes(projectId)) return;
+            clearTimeout(projectReloadTimer);
+            projectReloadTimer = setTimeout(() => {
+                if (event.type === 'project_changed') loadProject(projectId);
+                else if (event.type === 'calendar_changed') loadProjectCalendarEvents();
+                else loadSections(projectId);
+            }, 150);
+        } catch (err) {
+            console.error('Failed to parse project SSE event:', err);
+        }
+    });
+    projectEventSource.addEventListener('unread', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            if (event.project_id === projectId && event.type === 'comments_changed') loadProjectComments(projectId);
+        } catch (err) {
+            console.error('Failed to parse comments SSE event:', err);
+        }
+    });
+    window.addEventListener('beforeunload', () => {
+        projectEventSource?.close();
+        projectEventSource = null;
+    });
 }
 
-function isSectionCollapsed(projectId, sectionId) {
-    return getCollapsedState(projectId)[sectionId] !== false;
+async function saveProjectCollapseState(kind, id, collapsed) {
+    const data = new FormData();
+    data.set('collapsed', String(collapsed));
+    const resource = kind === 'section' ? `sections/${id}` : `documents/${id}`;
+    await api(`${API_BASE}/projects/${PROJECT_ID}/${resource}`, {
+        method: 'PATCH',
+        body: data,
+    });
 }
 
-function toggleSection(sectionId) {
-    const state = getCollapsedState(PROJECT_ID);
-    state[sectionId] = !state[sectionId];
-    localStorage.setItem(`sections_collapsed_${PROJECT_ID}`, JSON.stringify(state));
+async function toggleSection(sectionId) {
     const card = document.querySelector(`.section-card[data-id="${sectionId}"]`);
     if (!card) return;
     const body = card.querySelector('.section-body');
     const icon = card.querySelector('.section-toggle-icon');
     if (body) body.classList.toggle('d-none');
+    const collapsed = body ? body.classList.contains('d-none') : true;
     if (icon) {
         icon.classList.toggle('bi-chevron-down');
         icon.classList.toggle('bi-chevron-right');
     }
+    try {
+        await saveProjectCollapseState('section', sectionId, collapsed);
+    } catch (e) {
+        console.error('Failed to save section state:', e);
+        loadSections(PROJECT_ID);
+    }
 }
 
-function getGroupCollapsedState(projectId) {
-    const key = `groups_collapsed_${projectId}`;
-    return JSON.parse(localStorage.getItem(key) || '{}');
-}
-
-function isGroupCollapsed(projectId, groupId) {
-    return getGroupCollapsedState(projectId)[groupId] !== false;
-}
-
-function toggleGroup(groupId) {
-    const state = getGroupCollapsedState(PROJECT_ID);
-    state[groupId] = !state[groupId];
-    localStorage.setItem(`groups_collapsed_${PROJECT_ID}`, JSON.stringify(state));
+async function toggleGroup(groupId) {
     const card = document.querySelector(`.doc-group[data-id="${groupId}"]`);
     if (!card) return;
     const body = card.querySelector('.doc-group-body');
     const icon = card.querySelector('.group-toggle-icon');
     if (body) body.classList.toggle('d-none');
+    const collapsed = body ? body.classList.contains('d-none') : true;
     if (icon) {
         icon.classList.toggle('bi-chevron-down');
         icon.classList.toggle('bi-chevron-right');
     }
+    try {
+        await saveProjectCollapseState('group', groupId, collapsed);
+    } catch (e) {
+        console.error('Failed to save group state:', e);
+        loadSections(PROJECT_ID);
+    }
 }
 
-function expandSection(sectionId) {
-    const state = getCollapsedState(PROJECT_ID);
-    if (state[sectionId] === false) return;
-    state[sectionId] = false;
-    localStorage.setItem(`sections_collapsed_${PROJECT_ID}`, JSON.stringify(state));
+async function expandSection(sectionId) {
     const card = document.querySelector(`.section-card[data-id="${sectionId}"]`);
     if (!card) return;
     const body = card.querySelector('.section-body');
+    if (body && !body.classList.contains('d-none')) return;
     const icon = card.querySelector('.section-toggle-icon');
     if (body) body.classList.remove('d-none');
     if (icon) {
         icon.classList.remove('bi-chevron-right');
         icon.classList.add('bi-chevron-down');
     }
+    try {
+        await saveProjectCollapseState('section', sectionId, false);
+    } catch (e) {
+        console.error('Failed to expand section:', e);
+    }
 }
 
-function expandGroup(groupId) {
-    const state = getGroupCollapsedState(PROJECT_ID);
-    if (state[groupId] === false) return;
-    state[groupId] = false;
-    localStorage.setItem(`groups_collapsed_${PROJECT_ID}`, JSON.stringify(state));
+async function expandGroup(groupId) {
     const card = document.querySelector(`.doc-group[data-id="${groupId}"]`);
     if (!card) return;
     const body = card.querySelector('.doc-group-body');
+    const wasCollapsed = body && body.classList.contains('d-none');
     const icon = card.querySelector('.group-toggle-icon');
     if (body) body.classList.remove('d-none');
     if (icon) {
         icon.classList.remove('bi-chevron-right');
         icon.classList.add('bi-chevron-down');
+    }
+    if (wasCollapsed) {
+        try {
+            await saveProjectCollapseState('group', groupId, false);
+        } catch (e) {
+            console.error('Failed to expand group:', e);
+        }
     }
     const sectionCard = card.closest('.section-card');
     if (sectionCard) {
@@ -878,7 +918,7 @@ function clearOpenUrlParams() {
 }
 
 function renderSection(section, idx) {
-    const collapsed = isSectionCollapsed(PROJECT_ID, section.id);
+    const collapsed = section.collapsed !== false;
     const docsHtml = (section.documents || []).map((d, iidx) => renderGroup(d, iidx)).join('');
     const descHtml = section.description ? `<div class="section-desc small">${escapeHtml(section.description)}</div>` : '';
     return `
@@ -922,7 +962,7 @@ function renderGroup(doc, idx) {
         : '';
     const descHtml = doc.description ? `<div class="group-desc small">${escapeHtml(doc.description)}</div>` : '';
 
-    const groupCollapsed = isGroupCollapsed(PROJECT_ID, doc.id);
+    const groupCollapsed = doc.collapsed !== false;
     return `
         <div class="doc-group fade-in" data-id="${doc.id}">
             <div class="doc-group-header" onclick="toggleGroup(${doc.id})" oncontextmenu="handleShareContextMenu(event, '/projects/${PROJECT_ID}?open_group=${doc.id}')">

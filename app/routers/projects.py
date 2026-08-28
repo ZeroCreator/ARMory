@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
 from app.database import get_db
+from app.events import broadcast
 from app.models import Project, Document, DocumentItem, DocType, TaskStatus, ProjectComment, ProjectCommentRead
 from app.schemas import ProjectCreate, ProjectUpdate, ProjectOut, ProjectDetailOut, ProjectReorderRequest
 from app.storage import get_storage, StorageBackend, slugify
@@ -161,6 +162,7 @@ async def update_project(
                 item.file_path = item.file_path.replace(old_prefix, new_prefix, 1)
         await db.commit()
 
+    broadcast({"event": "project", "type": "project_changed", "project_id": project_id})
     return project
 
 

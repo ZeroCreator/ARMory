@@ -11,6 +11,7 @@ from sqlalchemy import select, update, delete
 from typing import Optional
 
 from app.database import get_db
+from app.events import broadcast
 from app.models import Document, DocumentItem, Project, Section, DocType
 from app.schemas import (
     DocumentOut, DocumentItemOut, ReorderRequest, DocumentItemReorderRequest,
@@ -132,6 +133,7 @@ async def create_document(
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return doc
 
 
@@ -148,6 +150,7 @@ async def reorder_documents(
             .values(sort_order=idx)
         )
     await db.commit()
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return None
 
 
@@ -158,6 +161,7 @@ async def update_document(
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     section_id: Optional[int] = Form(None),
+    collapsed: Optional[bool] = Form(None),
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ):
@@ -171,6 +175,8 @@ async def update_document(
         doc.title = title
     if description is not None:
         doc.description = description
+    if collapsed is not None:
+        doc.collapsed = collapsed
     if section_id is not None:
         if section_id == -1:
             doc.section_id = None
@@ -206,6 +212,7 @@ async def update_document(
                     item.file_path = item.file_path.replace(old_prefix, new_prefix, 1)
             await db.commit()
 
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return doc
 
 
@@ -228,6 +235,7 @@ async def delete_document(
 
     await db.delete(doc)
     await db.commit()
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return None
 
 
@@ -316,6 +324,7 @@ async def create_item(
         doc.category = category
         await db.commit()
 
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return item
 
 
@@ -333,6 +342,7 @@ async def reorder_items(
             .values(sort_order=idx)
         )
     await db.commit()
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return None
 
 
@@ -397,6 +407,7 @@ async def update_item(
 
     await db.commit()
     await db.refresh(item)
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return item
 
 
@@ -422,6 +433,7 @@ async def delete_item(
 
     await db.delete(item)
     await db.commit()
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return None
 
 
@@ -625,6 +637,7 @@ async def create_section(
     db.add(section)
     await db.commit()
     await db.refresh(section)
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return section
 
 
@@ -641,6 +654,7 @@ async def reorder_sections(
             .values(sort_order=idx)
         )
     await db.commit()
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return None
 
 
@@ -650,6 +664,7 @@ async def update_section(
     sec_id: int,
     name: str = Form(None),
     description: Optional[str] = Form(None),
+    collapsed: Optional[bool] = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Section).where(Section.id == sec_id, Section.project_id == project_id))
@@ -660,8 +675,11 @@ async def update_section(
         section.name = name
     if description is not None:
         section.description = description
+    if collapsed is not None:
+        section.collapsed = collapsed
     await db.commit()
     await db.refresh(section)
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return section
 
 
@@ -691,6 +709,7 @@ async def delete_section(
 
     await db.execute(delete(Section).where(Section.id == sec_id))
     await db.commit()
+    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return None
 
 

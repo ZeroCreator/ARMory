@@ -4,14 +4,18 @@ ProJectDocsHub — веб-приложение для сбора и управл
 Author: Shkola Olga
 """
 import asyncio
+import datetime
 import logging
 import os
+import sqlite3
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import make_url
 
 from app.database import engine, Base, AsyncSessionLocal
 from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, wopi, collabora, tasks, assignees, extensions, mcp as mcp_router, events, comments, affairs
@@ -21,6 +25,38 @@ from app.telegram import check_and_send_calendar_reminders
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+def _backup_database_before_collapsed_migration() -> Path:
+    database_url = make_url(settings.database_url)
+    if not database_url.drivername.startswith("sqlite") or not database_url.database:
+        raise RuntimeError("Automatic collapsed-state migration requires a SQLite database backup")
+
+    source = Path(database_url.database).resolve()
+    backup_dir = Path("data/backups")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    destination = backup_dir / f"armory_pre_collapsed_{timestamp}.db"
+    with sqlite3.connect(source) as source_db, sqlite3.connect(destination) as backup_db:
+        source_db.backup(backup_db)
+    return destination
+
+
+async def _ensure_collapsed_columns(conn) -> None:
+    columns = await conn.run_sync(
+        lambda sync_conn: {
+            table: {column["name"] for column in inspect(sync_conn).get_columns(table)}
+            for table in ("sections", "documents")
+        }
+    )
+    missing_tables = [table for table, names in columns.items() if "collapsed" not in names]
+    if not missing_tables:
+        return
+
+    backup_path = _backup_database_before_collapsed_migration()
+    logger.info("Создан бэкап перед миграцией collapsed: %s", backup_path)
+    for table in missing_tables:
+        await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN collapsed BOOLEAN NOT NULL DEFAULT 1"))
 
 
 async def _reminder_loop():
@@ -37,6 +73,7 @@ async def _reminder_loop():
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _ensure_collapsed_columns(conn)
 
         # Создаём data-директории, если их нет
         Path(settings.local_storage_path).expanduser().mkdir(parents=True, exist_ok=True)

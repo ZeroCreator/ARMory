@@ -36,6 +36,7 @@ class Section(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
+    collapsed = Column(Boolean, nullable=False, default=True, server_default=text("1"))
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     project = relationship("Project", back_populates="sections")
@@ -52,6 +53,7 @@ class Document(Base):
     description = Column(Text, nullable=True)
     category = Column(String(50), nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
+    collapsed = Column(Boolean, nullable=False, default=True, server_default=text("1"))
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 

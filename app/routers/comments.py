@@ -101,7 +101,7 @@ async def create_comment(
     db.add(comment)
     await db.commit()
     await db.refresh(comment)
-    broadcast({"event": "unread"})
+    broadcast({"event": "unread", "type": "comments_changed", "project_id": project_id})
 
     author_name = await _resolve_author_name(author_email, db)
     return _comment_out(comment, author_name)
@@ -130,7 +130,7 @@ async def delete_comment(
 
     await db.delete(comment)
     await db.commit()
-    broadcast({"event": "unread"})
+    broadcast({"event": "unread", "type": "comments_changed", "project_id": project_id})
     return None
 
 
@@ -164,7 +164,7 @@ async def update_comment(
     comment.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(comment)
-    broadcast({"event": "unread"})
+    broadcast({"event": "unread", "type": "comments_changed", "project_id": project_id})
 
     author_name = await _resolve_author_name(comment.author_email, db)
     return _comment_out(comment, author_name)
@@ -202,5 +202,5 @@ async def mark_comments_read(
         )
         db.add(read_state)
     await db.commit()
-    broadcast({"event": "unread"})
+    broadcast({"event": "unread", "project_id": project_id})
     return None
