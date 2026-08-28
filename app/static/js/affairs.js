@@ -1,6 +1,8 @@
 let affairsOverview = { projects: [], notes: [], comments: [], events: [] };
 let myAffairs = [];
 let affairsProjectSortable = null;
+let currentAffairReader = null;
+let affairContextTarget = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('overview-mode').addEventListener('change', renderOverview);
@@ -11,6 +13,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('quick-affair-form').addEventListener('submit', createQuickAffair);
     }
     await Promise.all([loadOverview(), ...(PERSONAL_NOTES_ENABLED ? [loadAffairs()] : [])]);
+    initAffairContextMenu();
+    applyAffairsUrlState();
 });
 
 async function loadOverview() {
@@ -91,6 +95,7 @@ function renderProjectBlock(project, notes, comments, events) {
     const projectEvents = events.filter(item => String(item.project_id ?? '') === String(project.id));
     const collapsed = isProjectCollapsed(project.id, projectNotes.length === 0 && projectComments.length === 0 && projectEvents.length === 0);
     const projectLinks = project.id === '' ? '' : `<nav class="affairs-project-links" aria-label="Разделы проекта">
+        <a href="/projects/${project.id}"><i class="bi bi-folder2-open me-1"></i>Проект</a>
         <a href="/projects/${project.id}/kanban"><i class="bi bi-kanban me-1"></i>Kanban</a>
         <a href="/projects/${project.id}/tasks"><i class="bi bi-list-task me-1"></i>ToDo</a>
     </nav>`;
@@ -133,7 +138,7 @@ function renderColumns(notes, comments, events, projectId = null) {
 }
 
 function renderNote(note) {
-    return `<div class="affairs-item affairs-editable-note ${note.is_completed ? 'opacity-50' : ''}" data-affair-id="${note.id}">
+    return `<div class="affairs-item affairs-editable-note ${note.is_completed ? 'opacity-50' : ''}" data-affair-id="${note.id}" data-affair-shared="true" onclick="openAffairReader(event, ${note.id}, true)" oncontextmenu="openAffairContextMenu(event, ${note.id}, true)">
         <div class="affairs-item-meta"><span>${escapeAffairsHtml(note.project_name || 'Без проекта')}</span><time>${formatAffairsDate(note.updated_at)}</time></div>
         <div class="affairs-note-view">
             <div class="d-flex align-items-start gap-2"><div class="fw-semibold flex-grow-1">${escapeAffairsHtml(note.title)}</div>${renderAffairActions(note)}</div>
@@ -222,7 +227,7 @@ function affairsNoteWord(count) {
 }
 
 function renderAffair(item) {
-    return `<article class="affair-card affairs-editable-note ${item.is_completed ? 'is-completed' : ''}" data-affair-id="${item.id}">
+    return `<article class="affair-card affairs-editable-note ${item.is_completed ? 'is-completed' : ''}" data-affair-id="${item.id}" data-affair-shared="false" onclick="openAffairReader(event, ${item.id}, false)" oncontextmenu="openAffairContextMenu(event, ${item.id}, false)">
         <button class="btn btn-sm ${item.is_completed ? 'btn-success' : 'btn-outline-secondary'} affair-check" onclick="toggleAffair(${item.id}, ${!item.is_completed})" title="${item.is_completed ? 'Вернуть из архива' : 'В архив'}"><i class="bi bi-check-lg"></i></button>
         <div class="flex-grow-1 min-width-0"><div class="affairs-note-view"><div class="d-flex flex-wrap justify-content-between gap-2"><h5 class="mb-1">${escapeAffairsHtml(item.title)}</h5><span class="small text-muted">${item.due_date ? `до ${formatAffairsDate(item.due_date)}` : 'без дедлайна'}</span></div>
         <div class="small text-muted mb-1">${escapeAffairsHtml(item.project_name || 'Без проекта')}</div>${item.description ? `<div class="affairs-note-text">${escapeAffairsHtml(item.description)}</div>` : ''}</div>${renderAffairEditForm(item)}</div>
@@ -467,3 +472,123 @@ function emptyAffairs(text) { return `<div class="text-center text-muted py-4">$
 function formatAffairsDate(value) { return value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : ''; }
 function escapeAffairsHtml(value) { const el = document.createElement('div'); el.textContent = value ?? ''; return el.innerHTML; }
 function showAffairsError(id, error) { document.getElementById(id).innerHTML = `<div class="alert alert-danger">${escapeAffairsHtml(error.message || 'Ошибка загрузки')}</div>`; }
+
+function findAffair(id, isShared) {
+    const source = isShared ? (affairsOverview.notes || []) : myAffairs;
+    return source.find(item => item.id === Number(id)) || null;
+}
+
+function openAffairReader(event, id, isShared) {
+    if (event?.target?.closest('button, a, form, input, textarea, select')) return;
+    const note = findAffair(id, isShared);
+    if (!note) return;
+    currentAffairReader = { note, isShared };
+    document.getElementById('affair-reader-project').textContent = note.project_name || 'Без проекта';
+    document.getElementById('affair-reader-title').textContent = note.title || 'Заметка';
+    const content = document.getElementById('affair-reader-content');
+    content.textContent = note.description || '';
+    content.classList.toggle('is-empty', !note.description);
+    if (!note.description) content.textContent = 'У заметки нет дополнительного текста.';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('affairReaderModal')).show();
+}
+
+function openAffairContextMenu(event, id, isShared) {
+    event.preventDefault();
+    event.stopPropagation();
+    const note = findAffair(id, isShared);
+    const menu = document.getElementById('affair-context-menu');
+    if (!note || !menu) return;
+    affairContextTarget = { note, isShared, element: event.currentTarget };
+    menu.style.display = 'block';
+    menu.style.left = `${Math.min(event.clientX, window.innerWidth - 230)}px`;
+    menu.style.top = `${Math.min(event.clientY, window.innerHeight - 230)}px`;
+}
+
+function hideAffairContextMenu() {
+    const menu = document.getElementById('affair-context-menu');
+    if (menu) menu.style.display = 'none';
+}
+
+function copyAffairLink(note) {
+    const url = new URL('/affairs', window.location.origin);
+    if (note.project_id != null) url.searchParams.set('project', note.project_id);
+    url.searchParams.set('note', note.id);
+    copyTextToClipboard(url.toString());
+    showToast('Ссылка на заметку скопирована', 'success');
+}
+
+function editAffairTarget(target) {
+    if (!target) return;
+    bootstrap.Modal.getInstance(document.getElementById('affairReaderModal'))?.hide();
+    const selector = `.affairs-editable-note[data-affair-id="${target.note.id}"][data-affair-shared="${target.isShared}"]`;
+    const card = target.element?.isConnected ? target.element : document.querySelector(selector);
+    const button = card?.querySelector('.affairs-note-actions .btn-outline-secondary');
+    if (button) startAffairEdit(button);
+}
+
+function sendAffairTargetToKanban(target) {
+    if (!target) return;
+    if (!target.note.project_id) {
+        showToast('Сначала назначьте заметке проект', 'warning');
+        return;
+    }
+    addAffairToTasks(target.note.id, target.note.project_id, target.isShared);
+}
+
+function editCurrentAffair() {
+    if (!currentAffairReader) return;
+    editAffairTarget({ ...currentAffairReader, element: null });
+}
+
+async function deleteCurrentAffair() {
+    if (!currentAffairReader) return;
+    const id = currentAffairReader.note.id;
+    bootstrap.Modal.getInstance(document.getElementById('affairReaderModal'))?.hide();
+    currentAffairReader = null;
+    await deleteAffair(id);
+}
+
+function sendCurrentAffairToKanban() {
+    sendAffairTargetToKanban(currentAffairReader ? { ...currentAffairReader, element: null } : null);
+}
+
+function initAffairContextMenu() {
+    const menu = document.getElementById('affair-context-menu');
+    if (!menu || menu.dataset.initialized === 'true') return;
+    menu.dataset.initialized = 'true';
+    menu.addEventListener('click', async event => {
+        const item = event.target.closest('.affair-context-item');
+        if (!item || !affairContextTarget) return;
+        const target = affairContextTarget;
+        hideAffairContextMenu();
+        if (item.dataset.action === 'copy-link') copyAffairLink(target.note);
+        if (item.dataset.action === 'open') openAffairReader(null, target.note.id, target.isShared);
+        if (item.dataset.action === 'edit') editAffairTarget(target);
+        if (item.dataset.action === 'kanban') sendAffairTargetToKanban(target);
+        if (item.dataset.action === 'delete') await deleteAffair(target.note.id);
+    });
+    document.addEventListener('click', event => {
+        if (!event.target.closest('#affair-context-menu')) hideAffairContextMenu();
+    });
+}
+
+function applyAffairsUrlState() {
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get('project');
+    if (projectId) {
+        const projectFilter = document.getElementById('overview-project-filter');
+        if (projectFilter && [...projectFilter.options].some(option => option.value === projectId)) {
+            projectFilter.value = projectId;
+            document.getElementById('overview-mode').value = 'projects';
+            renderOverview();
+        }
+        const overviewTab = document.querySelector('[data-bs-target="#affairs-overview"]');
+        if (overviewTab) bootstrap.Tab.getOrCreateInstance(overviewTab).show();
+    }
+    const noteId = Number(params.get('note'));
+    if (!noteId) return;
+    const sharedNote = (affairsOverview.notes || []).find(item => item.id === noteId);
+    const personalNote = myAffairs.find(item => item.id === noteId);
+    if (sharedNote) openAffairReader(null, noteId, true);
+    else if (personalNote) openAffairReader(null, noteId, false);
+}

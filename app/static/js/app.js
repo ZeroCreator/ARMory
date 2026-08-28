@@ -4152,3 +4152,79 @@ document.addEventListener('DOMContentLoaded', () => {
         initDateTimePicker(hidden.id, { defaultTime: wrap.dataset.defaultTime, defaultDate: wrap.dataset.defaultDate === 'true' });
     });
 });
+
+// ═══════════════════════════════════════════════════
+// ДНЕВНЫЕ НОВОСТИ НА ГЛАВНОЙ
+// ═══════════════════════════════════════════════════
+
+
+function positionDailyNews() {
+    const panel = document.getElementById('daily-news-panel');
+    const navbar = document.querySelector('.custom-navbar');
+    if (!panel || panel.hidden) return;
+    panel.style.top = `${(navbar ? navbar.getBoundingClientRect().bottom : 0) + 14}px`;
+}
+
+async function closeDailyNews() {
+    const panel = document.getElementById('daily-news-panel');
+    if (!panel) return;
+    panel.hidden = true;
+    try {
+        await api(`${API_BASE}/affairs/daily/dismiss`, { method: 'POST' });
+    } catch (error) {
+        console.error('Daily news dismiss error:', error);
+    }
+}
+
+function formatDailyNewsDate(item) {
+    const date = new Date(item.date);
+    if (Number.isNaN(date.getTime())) return '';
+    const time = date.toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+    if (item.type === 'task') {
+        const dateText = date.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit'});
+        return item.is_overdue ? `Просрочено · ${dateText} ${time}` : `Сегодня · ${time}`;
+    }
+    return `Сегодня · ${time}`;
+}
+
+function renderDailyNews(data) {
+    const panel = document.getElementById('daily-news-panel');
+    const container = document.getElementById('daily-news-content');
+    if (!panel || !container || !data.projects?.length) return;
+
+    const icons = {task: 'bi-check2-square', event: 'bi-calendar-event', note: 'bi-sticky', comment: 'bi-chat-dots'};
+    const labels = {task: 'Задача', event: 'Событие', note: 'Заметка', comment: 'Обсуждение'};
+    container.innerHTML = data.projects.map(project => `
+        <section class="daily-news-project">
+            <a class="daily-news-project-title" href="/projects/${project.id}">${escapeHtml(project.name)}</a>
+            <div class="daily-news-items">
+                ${project.items.map(item => `
+                    <a class="daily-news-item ${item.is_overdue ? 'is-overdue' : ''}" href="${escapeHtml(item.url)}">
+                        <i class="bi ${icons[item.type] || 'bi-circle'} daily-news-item-icon"></i>
+                        <span class="daily-news-item-body">
+                            <span class="daily-news-item-kind">${labels[item.type] || ''}</span>
+                            <span class="daily-news-item-title">${escapeHtml(item.title)}</span>
+                            ${item.description ? `<span class="daily-news-item-description">${escapeHtml(item.description)}</span>` : ''}
+                            <time>${formatDailyNewsDate(item)}</time>
+                        </span>
+                    </a>
+                `).join('')}
+            </div>
+        </section>
+    `).join('');
+    panel.hidden = false;
+    positionDailyNews();
+}
+
+async function loadDailyNews() {
+    const panel = document.getElementById('daily-news-panel');
+    if (!panel) return;
+    try {
+        const data = await api(`${API_BASE}/affairs/daily`);
+        renderDailyNews(data);
+    } catch (error) {
+        console.error('Daily news load error:', error);
+    }
+}
+
+window.addEventListener('resize', positionDailyNews);

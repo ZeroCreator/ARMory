@@ -65,6 +65,37 @@
     </div>
 </div>
 
+
+<div id="affair-context-menu" class="sidebar-context-menu" style="display:none;">
+    <div class="sidebar-context-item affair-context-item" data-action="copy-link"><i class="bi bi-link-45deg"></i> Получить ссылку</div>
+    <div class="sidebar-context-divider"></div>
+    <div class="sidebar-context-item affair-context-item" data-action="open"><i class="bi bi-arrows-fullscreen"></i> Открыть полностью</div>
+    <div class="sidebar-context-item affair-context-item" data-action="edit"><i class="bi bi-pencil"></i> Редактировать</div>
+    <div class="sidebar-context-item affair-context-item" data-action="kanban"><i class="bi bi-kanban"></i> Отправить в Kanban</div>
+    <div class="sidebar-context-divider"></div>
+    <div class="sidebar-context-item affair-context-item text-danger" data-action="delete"><i class="bi bi-trash"></i> Удалить</div>
+</div>
+
+<div class="modal fade affair-reader-modal" id="affairReaderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <div class="small text-muted" id="affair-reader-project"></div>
+                    <h5 class="modal-title" id="affair-reader-title"></h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body affair-reader-content" id="affair-reader-content"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-primary me-auto" onclick="sendCurrentAffairToKanban()"><i class="bi bi-kanban me-1"></i>В Kanban и ToDo</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="editCurrentAffair()"><i class="bi bi-pencil me-1"></i>Редактировать</button>
+                <button type="button" class="btn btn-outline-danger" onclick="deleteCurrentAffair()"><i class="bi bi-trash me-1"></i>Удалить</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

@@ -1,4 +1,5 @@
 import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -8,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.config import get_settings
-from app.models import Affair, CalendarEvent, Project, ProjectComment
+from app.models import Affair, CalendarEvent, DailyNewsRead, Project, ProjectComment, Task
 from app.routers.comments import _get_current_email
 
 
@@ -125,6 +126,124 @@ async def overview(request: Request, db: AsyncSession = Depends(get_db)):
             for event in events_result.scalars().all()
         ],
     }
+
+
+@router.get("/daily")
+async def daily_news(request: Request, db: AsyncSession = Depends(get_db)):
+    now = datetime.datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + datetime.timedelta(days=1)
+    user_email = _get_current_email(request)
+    read_result = await db.execute(select(DailyNewsRead).where(DailyNewsRead.user_email == user_email))
+    read_state = read_result.scalar_one_or_none()
+    if read_state and read_state.dismissed_date == day_start.date():
+        return {"date": day_start.date().isoformat(), "projects": [], "dismissed": True}
+
+
+    projects_result = await db.execute(select(Project).order_by(Project.sort_order, Project.name))
+    tasks_result = await db.execute(
+        select(Task)
+        .where(Task.is_closed.is_(False), Task.due_date.is_not(None), Task.due_date < day_end)
+        .order_by(Task.due_date.asc())
+    )
+    notes_result = await db.execute(
+        select(Affair)
+        .where(
+            Affair.project_id.is_not(None),
+            Affair.is_completed.is_(False),
+            or_(Affair.is_shared.is_(True), Affair.owner_email == user_email),
+            Affair.updated_at >= day_start,
+            Affair.updated_at < day_end,
+        )
+        .order_by(Affair.updated_at.desc())
+    )
+    comments_result = await db.execute(
+        select(ProjectComment)
+        .where(ProjectComment.created_at >= day_start, ProjectComment.created_at < day_end)
+        .order_by(ProjectComment.created_at.desc())
+    )
+    events_result = await db.execute(
+        select(CalendarEvent)
+        .where(
+            CalendarEvent.project_id.is_not(None),
+            CalendarEvent.start_date < day_end,
+            or_(
+                CalendarEvent.end_date >= day_start,
+                and_(CalendarEvent.end_date.is_(None), CalendarEvent.start_date >= day_start),
+            ),
+        )
+        .order_by(CalendarEvent.start_date.asc())
+    )
+
+    projects = projects_result.scalars().all()
+    items_by_project: dict[int, list[dict]] = {project.id: [] for project in projects}
+
+    for task in tasks_result.scalars().all():
+        items_by_project.setdefault(task.project_id, []).append({
+            "type": "task",
+            "title": task.title,
+            "description": task.description,
+            "date": task.due_date.isoformat(),
+            "is_overdue": task.due_date < now,
+            "url": f"/projects/{task.project_id}/kanban?task={task.id}",
+        })
+    for event in events_result.scalars().all():
+        items_by_project.setdefault(event.project_id, []).append({
+            "type": "event",
+            "title": event.title,
+            "description": event.description,
+            "date": event.start_date.isoformat(),
+            "is_overdue": False,
+            "url": f"/projects/{event.project_id}",
+        })
+    for note in notes_result.scalars().all():
+        items_by_project.setdefault(note.project_id, []).append({
+            "type": "note",
+            "title": note.title,
+            "description": note.description,
+            "date": note.updated_at.isoformat(),
+            "is_overdue": False,
+            "url": f"/affairs?project={note.project_id}&note={note.id}",
+        })
+    for comment in comments_result.scalars().all():
+        items_by_project.setdefault(comment.project_id, []).append({
+            "type": "comment",
+            "title": comment.content,
+            "description": None,
+            "date": comment.created_at.isoformat(),
+            "is_overdue": False,
+            "url": f"/projects/{comment.project_id}",
+        })
+
+    result = []
+    for project in projects:
+        items = items_by_project.get(project.id, [])
+        if not items:
+            continue
+        items.sort(key=lambda item: item["date"])
+        result.append({
+            "id": project.id,
+            "name": project.name,
+            "sort_date": items[0]["date"],
+            "items": items,
+        })
+    result.sort(key=lambda project: project["sort_date"])
+    return {"date": day_start.date().isoformat(), "projects": result}
+
+
+@router.post("/daily/dismiss")
+async def dismiss_daily_news(request: Request, db: AsyncSession = Depends(get_db)):
+    user_email = _get_current_email(request)
+    dismissed_date = datetime.datetime.now(ZoneInfo(settings.timezone)).date()
+    result = await db.execute(select(DailyNewsRead).where(DailyNewsRead.user_email == user_email))
+    read_state = result.scalar_one_or_none()
+    if read_state:
+        read_state.dismissed_date = dismissed_date
+        read_state.updated_at = datetime.datetime.utcnow()
+    else:
+        db.add(DailyNewsRead(user_email=user_email, dismissed_date=dismissed_date))
+    await db.commit()
+    return {"dismissed_date": dismissed_date.isoformat()}
 
 
 @router.get("")

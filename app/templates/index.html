@@ -6,6 +6,22 @@
 {% endblock %}
 
 {% block content %}
+{% if not sync_page %}
+<aside class="daily-news-panel" id="daily-news-panel" hidden aria-labelledby="daily-news-title">
+    <header class="daily-news-header">
+        <div>
+            <div class="daily-news-kicker">Сегодня</div>
+            <h2 id="daily-news-title">Что нужно сделать</h2>
+        </div>
+        <button type="button" class="daily-news-close" onclick="closeDailyNews()" aria-label="Скрыть новости на сегодня" title="Скрыть">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </header>
+    <div class="daily-news-content" id="daily-news-content">
+        <div class="text-muted small text-center py-4">Загрузка...</div>
+    </div>
+</aside>
+{% endif %}
 <!-- Планировщик / Календарь; синхронизация открывается отдельной страницей -->
 <div class="scheduler-section mb-4">
     <div class="scheduler-card">
@@ -374,6 +390,7 @@
         initSchedulerTabs();
         if (!calendarInstance) initCalendar();
         loadCalendarEvents();
+        loadDailyNews();
         {% endif %}
     });
 </script>

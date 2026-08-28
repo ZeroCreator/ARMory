@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum, Boolean, text
+from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, Enum, Boolean, text
 from sqlalchemy.orm import relationship
 import enum
 from app.database import Base
@@ -146,6 +146,15 @@ class CalendarEvent(Base):
     notified_at = Column(DateTime, nullable=True)
     dismissed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class DailyNewsRead(Base):
+    __tablename__ = "daily_news_reads"
+
+    id = Column(Integer, primary_key=True)
+    user_email = Column(String(255), nullable=False, unique=True, index=True)
+    dismissed_date = Column(Date, nullable=True)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 
 class Affair(Base):
