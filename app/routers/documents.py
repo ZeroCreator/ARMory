@@ -212,7 +212,8 @@ async def update_document(
                     item.file_path = item.file_path.replace(old_prefix, new_prefix, 1)
             await db.commit()
 
-    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
+    if title is not None or description is not None or section_id is not None:
+        broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return doc
 
 
@@ -679,7 +680,8 @@ async def update_section(
         section.collapsed = collapsed
     await db.commit()
     await db.refresh(section)
-    broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
+    if name is not None or description is not None:
+        broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return section
 
 
