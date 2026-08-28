@@ -144,7 +144,7 @@ function renderNote(note) {
 }
 
 function renderComment(comment) {
-    return `<a class="affairs-item" href="/projects/${comment.project_id}">
+    return `<a class="affairs-item affairs-comment-item" href="/projects/${comment.project_id}">
         <div class="affairs-item-meta"><span>${escapeAffairsHtml(comment.project_name || 'Проект')}</span><time>${formatAffairsDate(comment.created_at)}</time></div>
         <div>${escapeAffairsHtml(comment.content)}</div>
     </a>`;

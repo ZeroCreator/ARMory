@@ -315,6 +315,9 @@ async function loadProjects() {
         allProjects = projects;
         currentProjectsPage = 1;
         renderProjectsPage();
+        if (document.getElementById('calendar-events-container')) {
+            renderCalendarEventsList();
+        }
         startUnreadStream();
     } catch (e) {
         container.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${e.message}</div>`;
@@ -3085,11 +3088,14 @@ function renderCalendarEventsList() {
         const isOverdue = isPast && activeReminderIds.has(e.id);
         const dateStr = start.toLocaleDateString('ru-RU');
         const timeStr = e.all_day ? 'весь день' : start.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+        const project = e.project_id == null ? null : allProjects.find(p => p.id === e.project_id);
+        const projectStr = project ? `<div class="calendar-event-project">${escapeHtml(project.name)}</div>` : '';
         const reminderStr = e.reminder_minutes != null ? ` · <i class="bi bi-bell"></i> за ${e.reminder_minutes} мин` : '';
         return `
         <div class="calendar-event-item ${isPast ? 'past' : ''} ${isOverdue ? 'overdue' : ''}" onclick="editCalendarEvent(${e.id})">
             <div class="calendar-event-bar" style="background:${escapeHtml(e.color || '#a78bfa')}"></div>
             <div class="calendar-event-info">
+                ${projectStr}
                 <div class="calendar-event-title">${escapeHtml(e.title)}</div>
                 <div class="calendar-event-meta">${dateStr} · ${timeStr}${reminderStr}</div>
             </div>
@@ -3124,6 +3130,15 @@ function initCalendar() {
     calendarInstance.render();
 }
 
+function fillCalendarEventProjectSelect(selectedProjectId = null) {
+    const select = document.getElementById('calendar-event-project');
+    if (!select) return;
+    select.innerHTML = '<option value="">Без проекта</option>' + allProjects.map(project =>
+        `<option value="${project.id}">${escapeHtml(project.name)}</option>`
+    ).join('');
+    select.value = selectedProjectId == null ? '' : String(selectedProjectId);
+}
+
 function showCalendarEventModal(eventId, dateStr) {
     const form = document.getElementById('calendar-event-form');
     const titleEl = document.getElementById('calendar-event-modal-title');
@@ -3132,6 +3147,7 @@ function showCalendarEventModal(eventId, dateStr) {
     if (eventId) {
         const event = calendarEventsCache.find(e => e.id === eventId);
         if (!event) return;
+        fillCalendarEventProjectSelect(event.project_id);
         titleEl.textContent = 'Редактировать событие';
         document.getElementById('calendar-event-id').value = event.id;
         document.getElementById('calendar-event-title').value = event.title || '';
@@ -3143,6 +3159,7 @@ function showCalendarEventModal(eventId, dateStr) {
         document.getElementById('calendar-event-reminder').value = event.reminder_minutes != null ? event.reminder_minutes : '';
         deleteBtn.style.display = 'inline-block';
     } else {
+        fillCalendarEventProjectSelect();
         titleEl.textContent = 'Новое событие';
         document.getElementById('calendar-event-id').value = '';
         document.getElementById('calendar-event-color').value = '#a78bfa';
@@ -3176,8 +3193,11 @@ async function saveCalendarEvent() {
         showToast('Введите название и дату начала', 'warning');
         return;
     }
+    const projectSelect = document.getElementById('calendar-event-project');
     const payload = { title, description, start_date: start, end_date: end || null, color, all_day: allDay, reminder_minutes: reminderMinutes };
-    if (typeof PROJECT_ID !== 'undefined') {
+    if (projectSelect) {
+        payload.project_id = projectSelect.value ? Number(projectSelect.value) : null;
+    } else if (typeof PROJECT_ID !== 'undefined') {
         payload.project_id = PROJECT_ID;
     }
     try {

@@ -275,6 +275,12 @@
                         <textarea class="form-control" name="description" id="calendar-event-description" rows="2"></textarea>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label" for="calendar-event-project">Проект</label>
+                        <select class="form-select" name="project_id" id="calendar-event-project">
+                            <option value="">Без проекта</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Начало</label>
                         {{ datetime_picker('calendar-event-start', name='start_date', label='', required=True, default_date=True) }}
                     </div>

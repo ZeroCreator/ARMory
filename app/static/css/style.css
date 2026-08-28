@@ -1955,6 +1955,13 @@ footer {
     text-overflow: ellipsis;
 }
 
+.calendar-event-project {
+    color: var(--sand-muted);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    margin-bottom: 0.1rem;
+}
+
 .calendar-event-meta {
     font-size: 0.78rem;
     color: var(--sand-muted);
@@ -4280,6 +4287,7 @@ footer {
 .affairs-column-add:hover { background: #e9e1d9; }
 .affairs-scroll { overflow-y: auto; padding: .6rem; min-height: 0; }
 .affairs-item { display: block; color: #29231f; text-decoration: none; border-left: 3px solid var(--affair-accent, #a78bfa); padding: .65rem .75rem; margin-bottom: .55rem; background: #fafafa; border-radius: .35rem; overflow-wrap: anywhere; }
+.affairs-comment-item { text-align: left; }
 .affairs-project-block .text-muted { color: #6d625a !important; }
 a.affairs-item:hover { background: #f3eee9; color: inherit; }
 .affairs-item-meta { display: flex; justify-content: space-between; gap: .5rem; color: #7b7169; font-size: .75rem; margin-bottom: .3rem; }
