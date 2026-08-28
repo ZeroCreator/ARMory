@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.config import get_settings
-from app.models import Affair, CalendarEvent, DailyNewsRead, Project, ProjectComment, Task
+from app.models import Affair, CalendarEvent, DailyNewsRead, Project, ProjectComment, Task, TaskStatus
 from app.routers.comments import _get_current_email
 
 
@@ -141,9 +141,22 @@ async def daily_news(request: Request, db: AsyncSession = Depends(get_db)):
 
 
     projects_result = await db.execute(select(Project).order_by(Project.sort_order, Project.name))
+    final_status_id = (
+        select(TaskStatus.id)
+        .where(TaskStatus.project_id == Task.project_id)
+        .order_by(TaskStatus.sort_order.desc(), TaskStatus.id.desc())
+        .limit(1)
+        .correlate(Task)
+        .scalar_subquery()
+    )
     tasks_result = await db.execute(
         select(Task)
-        .where(Task.is_closed.is_(False), Task.due_date.is_not(None), Task.due_date < day_end)
+        .where(
+            Task.is_closed.is_(False),
+            Task.status_id != final_status_id,
+            Task.due_date.is_not(None),
+            Task.due_date < day_end,
+        )
         .order_by(Task.due_date.asc())
     )
     notes_result = await db.execute(
