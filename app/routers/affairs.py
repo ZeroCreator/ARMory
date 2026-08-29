@@ -23,6 +23,7 @@ class AffairCreate(BaseModel):
     due_date: datetime.datetime | None = None
     project_id: int | None = None
     is_shared: bool | None = None
+    show_in_news: bool = False
 
 
 class AffairUpdate(BaseModel):
@@ -31,6 +32,7 @@ class AffairUpdate(BaseModel):
     due_date: datetime.datetime | None = None
     project_id: int | None = None
     is_completed: bool | None = None
+    show_in_news: bool | None = None
 
 
 def _affair_out(affair: Affair) -> dict:
@@ -39,6 +41,7 @@ def _affair_out(affair: Affair) -> dict:
         "project_id": affair.project_id,
         "project_name": affair.project.name if affair.project else None,
         "is_shared": affair.is_shared,
+        "show_in_news": affair.show_in_news,
         "title": affair.title,
         "description": affair.description,
         "due_date": affair.due_date.isoformat() if affair.due_date else None,
@@ -93,6 +96,7 @@ async def overview(request: Request, db: AsyncSession = Depends(get_db)):
                 "project_id": affair.project_id,
                 "project_name": project_names.get(affair.project_id),
                 "is_shared": affair.is_shared,
+                "show_in_news": affair.show_in_news,
                 "title": affair.title,
                 "description": affair.description,
                 "due_date": affair.due_date.isoformat() if affair.due_date else None,
@@ -164,6 +168,7 @@ async def daily_news(request: Request, db: AsyncSession = Depends(get_db)):
         .where(
             Affair.project_id.is_not(None),
             Affair.is_completed.is_(False),
+            Affair.show_in_news.is_(True),
             or_(Affair.is_shared.is_(True), Affair.owner_email == user_email),
             Affair.updated_at >= day_start,
             Affair.updated_at < day_end,
@@ -282,6 +287,7 @@ async def create_affair(data: AffairCreate, request: Request, db: AsyncSession =
     affair = Affair(
         owner_email=_get_current_email(request),
         is_shared=data.is_shared if data.is_shared is not None else not settings.personal_notes_enabled,
+        show_in_news=data.show_in_news,
         title=title,
         description=data.description.strip() if data.description else None,
         due_date=data.due_date,

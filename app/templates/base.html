@@ -243,7 +243,7 @@
                         <input type="hidden" name="target_id" id="sidebar-note-target-id">
                         <input type="hidden" name="target_type" id="sidebar-note-target-type">
                         <div class="mb-3">
-                            <textarea class="form-control" name="note" id="sidebar-note-text" rows="5" placeholder="Введите заметку..."></textarea>
+                            <textarea class="form-control" name="note" id="sidebar-note-text" rows="1" placeholder="Введите заметку..." oninput="resizeSidebarNoteTextarea(this)"></textarea>
                         </div>
                     </form>
                 </div>
@@ -282,7 +282,7 @@
     <script src="/static/js/fullcalendar-ru.min.js"></script>
     <script src="/static/js/datepicker.min.js?v=1"></script>
     <script src="/static/js/datepicker-locales/ru.min.js?v=1"></script>
-    <script src="/static/js/app.js?v=96"></script>
+    <script src="/static/js/app.js?v=100"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -71,6 +71,18 @@ async def _ensure_affair_shared_column(conn) -> None:
     await conn.execute(text("ALTER TABLE affairs ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT 0"))
 
 
+async def _ensure_affair_news_column(conn) -> None:
+    columns = await conn.run_sync(
+        lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("affairs")}
+    )
+    if "show_in_news" in columns:
+        return
+
+    backup_path = _backup_database_before_migration("affair_news")
+    logger.info("Создан бэкап перед миграцией новостной ленты заметок: %s", backup_path)
+    await conn.execute(text("ALTER TABLE affairs ADD COLUMN show_in_news BOOLEAN NOT NULL DEFAULT 0"))
+
+
 async def _reminder_loop():
     while True:
         try:
@@ -87,6 +99,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         await _ensure_collapsed_columns(conn)
         await _ensure_affair_shared_column(conn)
+        await _ensure_affair_news_column(conn)
 
         # Создаём data-директории, если их нет
         Path(settings.local_storage_path).expanduser().mkdir(parents=True, exist_ok=True)

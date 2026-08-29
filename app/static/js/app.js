@@ -2480,6 +2480,11 @@ async function updateSidebarLink() {
 
 // ── Заметка ──
 
+function resizeSidebarNoteTextarea(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
 async function openSidebarNoteModal(type, id) {
     try {
         let note = '';
@@ -2496,8 +2501,11 @@ async function openSidebarNoteModal(type, id) {
         }
         document.getElementById('sidebar-note-target-id').value = id;
         document.getElementById('sidebar-note-target-type').value = type;
-        document.getElementById('sidebar-note-text').value = note;
-        new bootstrap.Modal(document.getElementById('sidebarNoteModal')).show();
+        const textarea = document.getElementById('sidebar-note-text');
+        textarea.value = note;
+        const modalElement = document.getElementById('sidebarNoteModal');
+        modalElement.addEventListener('shown.bs.modal', () => resizeSidebarNoteTextarea(textarea), { once: true });
+        bootstrap.Modal.getOrCreateInstance(modalElement).show();
     } catch (e) {
         showToast('Ошибка: ' + e.message, 'danger');
     }
@@ -3913,6 +3921,173 @@ async function dismissActiveReminder(id) {
 // ═══════════════════════════════════════════════════
 // ЧАТ-ПАНЕЛЬ ПРОЕКТА
 // ═══════════════════════════════════════════════════
+
+let projectAffairNotes = [];
+let currentProjectAffairNote = null;
+
+async function loadProjectAffairNotes(projectId) {
+    const container = document.getElementById('project-affair-notes');
+    if (!container) return;
+    try {
+        const overview = await api(`${API_BASE}/affairs/overview`);
+        const notes = (overview.notes || []).filter(note => Number(note.project_id) === Number(projectId));
+        projectAffairNotes = notes;
+        container.innerHTML = notes.length ? notes.map(note => `
+            <article class="project-affair-note ${note.is_completed ? 'is-completed' : ''}" role="button" tabindex="0" onclick="openProjectAffairNote(${note.id})" onkeydown="if (event.target === event.currentTarget && event.key === 'Enter') openProjectAffairNote(${note.id})">
+                <span class="project-affair-note-topline">
+                    <span class="project-affair-note-meta"><time>${formatDate(note.updated_at)}</time>${note.show_in_news ? '<i class="bi bi-newspaper" title="Показывается в новостной ленте"></i>' : ''}</span>
+                    <span class="project-affair-note-actions">
+                        <button type="button" onclick="editProjectAffairNoteFromCard(event, ${note.id})" title="Редактировать" aria-label="Редактировать заметку"><i class="bi bi-pencil"></i></button>
+                        <button type="button" onclick="addProjectAffairNoteToKanban(event, ${note.id})" title="Добавить в Kanban и ToDo" aria-label="Добавить заметку в Kanban и ToDo"><i class="bi bi-kanban"></i></button>
+                        <button type="button" class="is-danger" onclick="deleteProjectAffairNote(event, ${note.id})" title="Удалить" aria-label="Удалить заметку"><i class="bi bi-trash"></i></button>
+                    </span>
+                </span>
+                <strong>${escapeHtml(note.title)}</strong>
+                ${note.description ? `<span>${escapeHtml(note.description)}</span>` : ''}
+            </article>
+        `).join('') : '<div class="project-chat-empty"><i class="bi bi-journal-text"></i><br>Заметок пока нет</div>';
+    } catch (e) {
+        container.innerHTML = `<div class="project-chat-empty">Ошибка загрузки: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function openProjectAffairNote(noteId) {
+    const note = projectAffairNotes.find(item => item.id === Number(noteId));
+    if (!note) return;
+    currentProjectAffairNote = note;
+    document.getElementById('project-affair-modal-title').textContent = note.title || 'Заметка';
+    const content = document.getElementById('project-affair-modal-content');
+    content.textContent = note.description || 'У заметки нет дополнительного текста.';
+    content.classList.toggle('is-empty', !note.description);
+    cancelProjectAffairNoteEdit();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('projectAffairNoteModal')).show();
+}
+
+function editProjectAffairNote() {
+    if (!currentProjectAffairNote) return;
+    document.getElementById('project-affair-edit-title').value = currentProjectAffairNote.title || '';
+    document.getElementById('project-affair-edit-description').value = currentProjectAffairNote.description || '';
+    document.getElementById('project-affair-edit-news').checked = !!currentProjectAffairNote.show_in_news;
+    document.getElementById('project-affair-modal-content').classList.add('d-none');
+    document.getElementById('project-affair-modal-footer').classList.add('d-none');
+    document.getElementById('project-affair-edit-form').classList.remove('d-none');
+    document.getElementById('project-affair-edit-title').focus();
+}
+
+function editProjectAffairNoteFromCard(event, noteId) {
+    event.stopPropagation();
+    openProjectAffairNote(noteId);
+    editProjectAffairNote();
+}
+
+function addProjectAffairNoteToKanban(event, noteId) {
+    event?.stopPropagation();
+    const note = projectAffairNotes.find(item => item.id === Number(noteId));
+    if (!note) return;
+    sessionStorage.setItem('affairs-kanban-task-draft', JSON.stringify({
+        project_id: Number(note.project_id),
+        title: note.title,
+        description: note.description || '',
+        due_date: note.due_date || null,
+    }));
+    window.location.href = `/projects/${note.project_id}/kanban?newTask=affair`;
+}
+
+function addCurrentProjectAffairNoteToKanban() {
+    if (currentProjectAffairNote) addProjectAffairNoteToKanban(null, currentProjectAffairNote.id);
+}
+
+async function deleteProjectAffairNote(event = null, noteId = null) {
+    event?.stopPropagation();
+    const id = Number(noteId || currentProjectAffairNote?.id);
+    if (!id || !await showConfirm('Удалить эту заметку?', 'Удаление')) return;
+    try {
+        await api(`${API_BASE}/affairs/${id}`, { method: 'DELETE' });
+        if (currentProjectAffairNote?.id === id) {
+            bootstrap.Modal.getInstance(document.getElementById('projectAffairNoteModal'))?.hide();
+            currentProjectAffairNote = null;
+        }
+        await loadProjectAffairNotes(PROJECT_ID);
+        showToast('Заметка удалена', 'success');
+    } catch (e) {
+        showToast(e.message || 'Не удалось удалить заметку', 'danger');
+    }
+}
+
+function cancelProjectAffairNoteEdit() {
+    document.getElementById('project-affair-edit-form')?.classList.add('d-none');
+    document.getElementById('project-affair-modal-content')?.classList.remove('d-none');
+    document.getElementById('project-affair-modal-footer')?.classList.remove('d-none');
+}
+
+async function saveProjectAffairNote(event) {
+    event.preventDefault();
+    if (!currentProjectAffairNote) return;
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form).entries());
+    const title = String(data.title || '').trim();
+    const description = String(data.description || '').trim();
+    if (!title) {
+        showToast('Введите заголовок заметки', 'warning');
+        return;
+    }
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    try {
+        const updated = await api(`${API_BASE}/affairs/${currentProjectAffairNote.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, description: description || null, show_in_news: data.show_in_news === 'on' }),
+        });
+        currentProjectAffairNote = updated;
+        document.getElementById('project-affair-modal-title').textContent = updated.title;
+        const content = document.getElementById('project-affair-modal-content');
+        content.textContent = updated.description || 'У заметки нет дополнительного текста.';
+        content.classList.toggle('is-empty', !updated.description);
+        cancelProjectAffairNoteEdit();
+        await loadProjectAffairNotes(PROJECT_ID);
+        showToast('Заметка обновлена', 'success');
+    } catch (e) {
+        showToast(e.message || 'Не удалось обновить заметку', 'danger');
+    } finally {
+        submitButton.disabled = false;
+    }
+}
+
+async function createProjectAffairNote(event, projectId) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form).entries());
+    const title = String(data.title || '').trim();
+    const text = String(data.text || '').trim();
+    if (!title && !text) return;
+    const lines = text.split(/\r?\n/);
+    const firstLine = lines.shift() || '';
+    const noteTitle = title || (firstLine.length <= 255 ? firstLine : `${firstLine.slice(0, 252)}…`);
+    const description = title ? text : (firstLine.length <= 255 ? lines.join('\n').trim() : text);
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    try {
+        await api(`${API_BASE}/affairs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project_id: Number(projectId),
+                is_shared: true,
+                show_in_news: data.show_in_news === 'on',
+                title: noteTitle,
+                description: description || null,
+            }),
+        });
+        form.reset();
+        await loadProjectAffairNotes(projectId);
+        showToast('Заметка сохранена', 'success');
+    } catch (e) {
+        showToast(e.message || 'Не удалось сохранить заметку', 'danger');
+    } finally {
+        submitButton.disabled = false;
+    }
+}
 
 let projectChatCurrentUser = null;
 let projectChatRefreshInterval = null;

@@ -6,14 +6,33 @@
 
 {% block content %}
 <div class="project-layout">
-    <!-- Левый сайдбар — обсуждение проекта -->
+    <!-- Левый сайдбар — заметки и обсуждение проекта -->
     <aside class="project-sidebar-left">
-        <div id="project-chat-panel" class="project-chat-panel">
+        <section class="project-notes-panel">
             <div class="project-chat-header">
-                <span class="project-chat-title"><i class="bi bi-chat-dots me-2"></i>Обсуждение</span>
+                <span class="project-chat-title"><i class="bi bi-journal-text me-2"></i>Заметки</span>
                 <button type="button" class="project-chat-close" onclick="toggleProjectSidebar('chat')" aria-label="Закрыть">
                     <i class="bi bi-x-lg"></i>
                 </button>
+            </div>
+            <form class="project-note-form" onsubmit="createProjectAffairNote(event, PROJECT_ID)">
+                <input name="title" maxlength="255" placeholder="Заголовок (необязательно)" aria-label="Заголовок заметки">
+                <textarea name="text" rows="3" required placeholder="Введите заметку…" aria-label="Текст заметки"></textarea>
+                <div class="project-note-form-actions">
+                    <label class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" name="show_in_news">
+                        <span class="form-check-label">В новостной ленте</span>
+                    </label>
+                    <button class="affairs-note-submit" type="submit" title="Сохранить заметку" aria-label="Сохранить заметку"><i class="bi bi-plus-lg"></i></button>
+                </div>
+            </form>
+            <div id="project-affair-notes" class="project-affair-notes">
+                <div class="text-center text-muted small py-3">Загрузка...</div>
+            </div>
+        </section>
+        <div id="project-chat-panel" class="project-chat-panel">
+            <div class="project-chat-header">
+                <span class="project-chat-title"><i class="bi bi-chat-dots me-2"></i>Обсуждения</span>
             </div>
             <div id="project-chat-messages" class="project-chat-messages">
                 <div class="text-center text-muted small py-3">Загрузка...</div>
@@ -88,6 +107,43 @@
     <button type="button" id="project-calendar-toggle" class="project-calendar-toggle" onclick="toggleProjectSidebar('calendar')" aria-label="Календарь">
         <i class="bi bi-calendar3"></i>
     </button>
+</div>
+
+<div class="modal fade affair-reader-modal" id="projectAffairNoteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <div class="small text-muted">Заметка проекта</div>
+                    <h5 class="modal-title" id="project-affair-modal-title"></h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body affair-reader-content" id="project-affair-modal-content"></div>
+            <form class="d-none" id="project-affair-edit-form" onsubmit="saveProjectAffairNote(event)">
+                <div class="modal-body affairs-note-edit-form">
+                    <label class="form-label" for="project-affair-edit-title">Заголовок</label>
+                    <input class="form-control mb-3" id="project-affair-edit-title" name="title" maxlength="255">
+                    <label class="form-label" for="project-affair-edit-description">Текст заметки</label>
+                    <textarea class="form-control mb-3" id="project-affair-edit-description" name="description" rows="12"></textarea>
+                    <label class="form-check">
+                        <input class="form-check-input" id="project-affair-edit-news" type="checkbox" name="show_in_news">
+                        <span class="form-check-label"><i class="bi bi-newspaper me-1"></i>Показывать в новостной ленте</span>
+                    </label>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary ms-auto" onclick="cancelProjectAffairNoteEdit()">Отмена</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Сохранить</button>
+                </div>
+            </form>
+            <div class="modal-footer" id="project-affair-modal-footer">
+                <button type="button" class="btn btn-outline-primary me-auto" onclick="addCurrentProjectAffairNoteToKanban()"><i class="bi bi-kanban me-1"></i>В Kanban и ToDo</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="editProjectAffairNote()"><i class="bi bi-pencil me-1"></i>Редактировать</button>
+                <button type="button" class="btn btn-outline-danger" onclick="deleteProjectAffairNote()"><i class="bi bi-trash me-1"></i>Удалить</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Модал создания раздела -->
@@ -413,6 +469,7 @@
         loadProject(PROJECT_ID);
         loadSections(PROJECT_ID);
         initProjectChat(PROJECT_ID);
+        loadProjectAffairNotes(PROJECT_ID);
         initProjectCalendar();
         loadProjectCalendarEvents();
         connectProjectEvents(PROJECT_ID);

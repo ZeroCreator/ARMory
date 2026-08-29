@@ -60,12 +60,11 @@ function renderOverview() {
     const mode = document.getElementById('overview-mode').value;
     const projectFilter = document.getElementById('overview-project-filter').value;
     const notes = filterByProject(affairsOverview.notes || [], projectFilter);
-    const comments = filterByProject(affairsOverview.comments || [], projectFilter);
     const events = filterByProject(affairsOverview.events || [], projectFilter);
 
     if (mode === 'date') {
         destroyProjectSortable();
-        container.innerHTML = renderColumns(notes, comments, events, '');
+        container.innerHTML = renderColumns(notes, events, '');
         return;
     }
 
@@ -84,16 +83,15 @@ function renderOverview() {
         PERSONAL_NOTES_ENABLED || notes.some(note => note.project_id === null) || events.some(event => event.project_id === null)
     );
     container.innerHTML = `<div class="affairs-projects" id="affairs-projects">${visibleGroups.map(project =>
-        renderProjectBlock(project, notes, comments, events)
-    ).join('')}${hasUnassigned ? renderProjectBlock({ id: '', name: 'Без проекта' }, notes, comments, events) : ''}</div>`;
+        renderProjectBlock(project, notes, events)
+    ).join('')}${hasUnassigned ? renderProjectBlock({ id: '', name: 'Без проекта' }, notes, events) : ''}</div>`;
     initProjectSortable();
 }
 
-function renderProjectBlock(project, notes, comments, events) {
+function renderProjectBlock(project, notes, events) {
     const projectNotes = notes.filter(item => String(item.project_id ?? '') === String(project.id));
-    const projectComments = comments.filter(item => String(item.project_id ?? '') === String(project.id));
     const projectEvents = events.filter(item => String(item.project_id ?? '') === String(project.id));
-    const collapsed = isProjectCollapsed(project.id, projectNotes.length === 0 && projectComments.length === 0 && projectEvents.length === 0);
+    const collapsed = isProjectCollapsed(project.id, projectNotes.length === 0 && projectEvents.length === 0);
     const projectLinks = project.id === '' ? '' : `<nav class="affairs-project-links" aria-label="Разделы проекта">
         <a href="/projects/${project.id}"><i class="bi bi-folder2-open me-1"></i>Проект</a>
         <a href="/projects/${project.id}/kanban"><i class="bi bi-kanban me-1"></i>Kanban</a>
@@ -103,13 +101,13 @@ function renderProjectBlock(project, notes, comments, events) {
         <header class="affairs-project-header">
             <i class="bi bi-grip-vertical affairs-drag-handle"></i>
             <span>${escapeAffairsHtml(project.name)}</span>
-            <span class="affairs-project-summary">${projectNotes.length} замет. · ${projectComments.length} обсужд. · ${projectEvents.length} событ.</span>
+            <span class="affairs-project-summary">${projectNotes.length} замет. · ${projectEvents.length} событ.</span>
             ${projectLinks}
             <button class="affairs-project-toggle" type="button" onclick="toggleProjectBlock(this)" aria-expanded="${!collapsed}" title="${collapsed ? 'Показать данные' : 'Скрыть данные'}">
                 <i class="bi bi-chevron-${collapsed ? 'down' : 'up'}"></i>
             </button>
         </header>
-        ${renderColumns(projectNotes, projectComments, projectEvents, project.id)}
+        ${renderColumns(projectNotes, projectEvents, project.id)}
     </article>`;
 }
 
@@ -124,15 +122,15 @@ function toggleProjectBlock(button) {
     localStorage.setItem(projectCollapseKey(), JSON.stringify(states));
 }
 
-function renderColumns(notes, comments, events, projectId = null) {
+function renderColumns(notes, events, projectId = null) {
     const noteEditor = projectId === null ? '' : `<form class="affairs-inline-note" onsubmit="createInlineAffair(event, '${projectId}')">
         <input name="title" maxlength="255" placeholder="Заголовок (необязательно)" aria-label="Заголовок заметки">
         <textarea name="text" rows="4" required placeholder="Введите заметку…" aria-label="Текст заметки"></textarea>
+        <label class="form-check mb-0"><input class="form-check-input" type="checkbox" name="show_in_news"><span class="form-check-label small"><i class="bi bi-newspaper me-1"></i>Показывать в новостной ленте</span></label>
         <button class="affairs-note-submit" type="submit" title="Сохранить заметку" aria-label="Сохранить заметку"><i class="bi bi-plus-lg"></i></button>
     </form>`;
     return `<div class="affairs-columns">
         <section class="affairs-column"><h5><span><i class="bi bi-journal-text me-1"></i> Заметки <span class="badge text-bg-light">${notes.length}</span></span></h5>${noteEditor}<div class="affairs-scroll">${notes.length ? notes.map(renderNote).join('') : emptyAffairs('Нет заметок')}</div></section>
-        <section class="affairs-column"><h5><i class="bi bi-chat-dots me-1"></i> Мои обсуждения <span class="badge text-bg-light">${comments.length}</span></h5><div class="affairs-scroll">${comments.length ? comments.map(renderComment).join('') : emptyAffairs('Нет сообщений')}</div></section>
         <section class="affairs-column"><h5><i class="bi bi-calendar-event me-1"></i> События <span class="badge text-bg-light">${events.length}</span></h5><div class="affairs-scroll">${events.length ? events.map(renderEvent).join('') : emptyAffairs('Нет событий')}</div></section>
     </div>`;
 }
@@ -247,6 +245,7 @@ function renderAffairEditForm(item) {
     return `<form class="affairs-note-edit-form d-none" onsubmit="saveAffairEdit(event, ${item.id})">
         <input class="form-control form-control-sm" name="title" maxlength="255" value="${escapeAffairsHtml(item.title)}" placeholder="Заголовок (необязательно)" aria-label="Заголовок заметки">
         <textarea class="form-control form-control-sm" name="description" rows="4" aria-label="Текст заметки">${escapeAffairsHtml(item.description || '')}</textarea>
+        <label class="form-check"><input class="form-check-input" type="checkbox" name="show_in_news" ${item.show_in_news ? 'checked' : ''}><span class="form-check-label small"><i class="bi bi-newspaper me-1"></i>Показывать в новостной ленте</span></label>
         <div class="d-flex justify-content-end gap-2">
             <button class="btn btn-sm btn-outline-secondary" type="button" onclick="cancelAffairEdit(this)">Отмена</button>
             <button class="btn btn-sm btn-success" type="submit">Сохранить</button>
@@ -285,7 +284,7 @@ async function saveAffairEdit(event, id) {
         await api(`/api/affairs/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(note),
+            body: JSON.stringify({ ...note, show_in_news: data.show_in_news === 'on' }),
         });
         await refreshAffairsViews();
         showToast('Заметка обновлена', 'success');
@@ -303,6 +302,7 @@ async function createQuickAffair(event) {
     if (!note) return;
     const projectId = data.project_id ? Number(data.project_id) : null;
     const addToTasks = data.add_to_tasks === 'on';
+    const showInNews = data.show_in_news === 'on';
     if (addToTasks && !projectId) {
         showToast('Для добавления в Kanban и ToDo выберите проект', 'warning');
         return;
@@ -313,7 +313,7 @@ async function createQuickAffair(event) {
         const created = await api('/api/affairs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...note, project_id: projectId, due_date: data.due_date || null, is_shared: false }),
+            body: JSON.stringify({ ...note, project_id: projectId, due_date: data.due_date || null, is_shared: false, show_in_news: showInNews }),
         });
         myAffairs.unshift(created);
         form.reset();
@@ -343,7 +343,7 @@ async function createInlineAffair(event, projectId) {
         const created = await api('/api/affairs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...note, project_id: projectId ? Number(projectId) : null, is_shared: true }),
+            body: JSON.stringify({ ...note, project_id: projectId ? Number(projectId) : null, is_shared: true, show_in_news: formData.get('show_in_news') === 'on' }),
         });
         form.reset();
         await loadOverview();
@@ -489,7 +489,41 @@ function openAffairReader(event, id, isShared) {
     content.textContent = note.description || '';
     content.classList.toggle('is-empty', !note.description);
     if (!note.description) content.textContent = 'У заметки нет дополнительного текста.';
+    cancelCurrentAffairEdit();
     bootstrap.Modal.getOrCreateInstance(document.getElementById('affairReaderModal')).show();
+}
+
+async function saveCurrentAffair(event) {
+    event.preventDefault();
+    if (!currentAffairReader) return;
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form).entries());
+    const note = affairFieldsFromText(data.description, data.title);
+    if (!note) {
+        showToast('Введите заголовок или текст заметки', 'warning');
+        return;
+    }
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    try {
+        const updated = await api(`/api/affairs/${currentAffairReader.note.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...note, show_in_news: data.show_in_news === 'on' }),
+        });
+        currentAffairReader.note = updated;
+        document.getElementById('affair-reader-title').textContent = updated.title;
+        const content = document.getElementById('affair-reader-content');
+        content.textContent = updated.description || 'У заметки нет дополнительного текста.';
+        content.classList.toggle('is-empty', !updated.description);
+        cancelCurrentAffairEdit();
+        await refreshAffairsViews();
+        showToast('Заметка обновлена', 'success');
+    } catch (error) {
+        showToast(error.message || 'Не удалось обновить заметку', 'danger');
+    } finally {
+        submitButton.disabled = false;
+    }
 }
 
 function openAffairContextMenu(event, id, isShared) {
@@ -537,7 +571,20 @@ function sendAffairTargetToKanban(target) {
 
 function editCurrentAffair() {
     if (!currentAffairReader) return;
-    editAffairTarget({ ...currentAffairReader, element: null });
+    const note = currentAffairReader.note;
+    document.getElementById('affair-reader-title-input').value = note.title || '';
+    document.getElementById('affair-reader-description').value = note.description || '';
+    document.getElementById('affair-reader-show-in-news').checked = !!note.show_in_news;
+    document.getElementById('affair-reader-content').classList.add('d-none');
+    document.getElementById('affair-reader-footer').classList.add('d-none');
+    document.getElementById('affair-reader-form').classList.remove('d-none');
+    document.getElementById('affair-reader-title-input').focus();
+}
+
+function cancelCurrentAffairEdit() {
+    document.getElementById('affair-reader-form').classList.add('d-none');
+    document.getElementById('affair-reader-content').classList.remove('d-none');
+    document.getElementById('affair-reader-footer').classList.remove('d-none');
 }
 
 async function deleteCurrentAffair() {

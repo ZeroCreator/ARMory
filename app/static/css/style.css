@@ -3832,7 +3832,50 @@ footer {
     overflow-y: auto;
 }
 
-/* ── Чат-панель проекта ── */
+/* ── Заметки и чат-панель проекта ── */
+.project-notes-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background: linear-gradient(180deg, #e8d5c4 0%, #faf3e8 18%, #faf3e8 82%, #e8d5c4 100%);
+    border-radius: 14px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.15);
+}
+
+.project-note-form {
+    padding: .75rem;
+    border-bottom: 1px solid rgba(107, 80, 56, 0.14);
+    background: rgba(255,255,255,.28);
+}
+.project-note-form input[name="title"],
+.project-note-form textarea {
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid #cdb59d;
+    outline: 0;
+    padding: .3rem .2rem;
+    resize: vertical;
+    background: transparent;
+    color: var(--sand-text);
+}
+.project-note-form input[name="title"] { font-weight: 700; }
+.project-note-form input::placeholder,
+.project-note-form textarea::placeholder { color: #6d5845; opacity: 1; }
+.project-note-form-actions { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding-top: .5rem; color: var(--sand-text); font-size: .78rem; }
+.project-affair-notes { flex: 1; min-height: 0; overflow-y: auto; padding: .75rem; display: flex; flex-direction: column; gap: .55rem; }
+.project-affair-note { width: 100%; display: flex; flex-direction: column; gap: .25rem; padding: .65rem .75rem; border: 1px solid rgba(167,139,250,.12); border-radius: 10px; background: linear-gradient(180deg, #fdf8f0 0%, #f5e6d3 100%); color: var(--sand-text); text-align: left; text-decoration: none; cursor: pointer; }
+.project-affair-note:hover { color: var(--sand-text); border-color: rgba(139,124,246,.3); transform: translateY(-1px); }
+.project-affair-note.is-completed { opacity: .55; }
+.project-affair-note-topline { display: flex; align-items: flex-start; justify-content: space-between; gap: .4rem; }
+.project-affair-note-meta { display: flex; justify-content: space-between; gap: .5rem; color: #7a6048; font-size: .7rem; }
+.project-affair-note-actions { display: inline-flex; gap: .15rem; margin: -.2rem -.25rem 0 0; }
+.project-affair-note-actions button { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #756658; font-size: .75rem; }
+.project-affair-note-actions button:hover { background: rgba(91,33,182,.12); color: #5b21b6; }
+.project-affair-note-actions button.is-danger:hover { background: rgba(180,35,24,.1); color: #b42318; }
+.project-affair-note > span:last-child { display: -webkit-box; overflow: hidden; font-size: .82rem; line-height: 1.35; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+
 .project-chat-panel {
     flex: 1;
     display: flex;
@@ -4208,6 +4251,7 @@ footer {
     }
 
     .project-sidebar-left.open .project-chat-panel,
+    .project-sidebar-left.open .project-notes-panel,
     .project-sidebar-right.open .project-calendar-panel,
     .project-sidebar-right.open .project-events-list {
         border-radius: 0;
@@ -4279,7 +4323,7 @@ footer {
 .affairs-project-summary { color: #8d8178; font-size: .8rem; font-weight: 400; }
 .affairs-project-toggle { border: 0; background: transparent; color: #76685d; padding: .2rem .4rem; border-radius: .3rem; line-height: 1; }
 .affairs-project-toggle:hover { background: #e9e1d9; }
-.affairs-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; min-height: 0; flex: 1; }
+.affairs-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; min-height: 0; flex: 1; }
 .affairs-project-block > .affairs-columns { padding: 1rem; }
 .affairs-column { border: 1px solid #ece7e1; border-radius: .6rem; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .affairs-column h5 { font-size: 1rem; padding: .7rem .8rem; margin: 0; color: #211c19; background: #faf8f5; border-bottom: 1px solid #ece7e1; display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
@@ -4343,7 +4387,7 @@ a.affairs-item:hover { background: #f3eee9; color: inherit; }
     .affairs-project-header { flex-wrap: wrap; }
     .affairs-project-links { order: 3; width: 100%; margin-left: 1.5rem; }
     .affairs-quick-controls > * { width: 100% !important; }
-    .affairs-columns { grid-template-columns: 1fr; grid-template-rows: repeat(3, minmax(0, 1fr)); }
+    .affairs-columns { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); }
     .affairs-control { width: 100%; }
 }
 

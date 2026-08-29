@@ -11,7 +11,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
         <div>
             <h2 class="mb-1"><i class="bi bi-journal-check me-2"></i>Дела</h2>
-            <p class="text-muted mb-0">Ваши заметки, обсуждения и события по проектам</p>
+            <p class="text-muted mb-0">Ваши заметки и события по проектам</p>
         </div>
     </div>
 
@@ -55,6 +55,10 @@
                         <input class="form-check-input" type="checkbox" name="add_to_tasks">
                         <span class="form-check-label"><i class="bi bi-kanban me-1"></i>Добавить заметку также в Kanban и ToDo</span>
                     </label>
+                    <label class="form-check affairs-quick-task mb-0">
+                        <input class="form-check-input" type="checkbox" name="show_in_news">
+                        <span class="form-check-label"><i class="bi bi-newspaper me-1"></i>Показывать в новостной ленте</span>
+                    </label>
                     <button class="affairs-note-submit" type="submit" title="Сохранить заметку" aria-label="Сохранить заметку"><i class="bi bi-plus-lg"></i></button>
                 </div>
             </form>
@@ -87,7 +91,23 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
             </div>
             <div class="modal-body affair-reader-content" id="affair-reader-content"></div>
-            <div class="modal-footer">
+            <form class="d-none" id="affair-reader-form" onsubmit="saveCurrentAffair(event)">
+                <div class="modal-body affairs-note-edit-form">
+                    <label class="form-label" for="affair-reader-title-input">Заголовок</label>
+                    <input class="form-control mb-3" id="affair-reader-title-input" name="title" maxlength="255">
+                    <label class="form-label" for="affair-reader-description">Текст заметки</label>
+                    <textarea class="form-control mb-3" id="affair-reader-description" name="description" rows="12"></textarea>
+                    <label class="form-check">
+                        <input class="form-check-input" id="affair-reader-show-in-news" type="checkbox" name="show_in_news">
+                        <span class="form-check-label"><i class="bi bi-newspaper me-1"></i>Показывать в новостной ленте</span>
+                    </label>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary ms-auto" onclick="cancelCurrentAffairEdit()">Отмена</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Сохранить</button>
+                </div>
+            </form>
+            <div class="modal-footer" id="affair-reader-footer">
                 <button type="button" class="btn btn-outline-primary me-auto" onclick="sendCurrentAffairToKanban()"><i class="bi bi-kanban me-1"></i>В Kanban и ToDo</button>
                 <button type="button" class="btn btn-outline-secondary" onclick="editCurrentAffair()"><i class="bi bi-pencil me-1"></i>Редактировать</button>
                 <button type="button" class="btn btn-outline-danger" onclick="deleteCurrentAffair()"><i class="bi bi-trash me-1"></i>Удалить</button>
@@ -100,5 +120,5 @@
 
 {% block extra_js %}
 <script>const PERSONAL_NOTES_ENABLED = {{ personal_notes_enabled | tojson }};</script>
-<script src="/static/js/affairs.js?v=14"></script>
+<script src="/static/js/affairs.js?v=16"></script>
 {% endblock %}
