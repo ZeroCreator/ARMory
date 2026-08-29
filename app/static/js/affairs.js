@@ -140,7 +140,7 @@ function renderNote(note) {
         <div class="affairs-item-meta"><span>${escapeAffairsHtml(note.project_name || 'Без проекта')}</span><time>${formatAffairsDate(note.updated_at)}</time></div>
         <div class="affairs-note-view">
             <div class="d-flex align-items-start gap-2"><div class="fw-semibold flex-grow-1">${escapeAffairsHtml(note.title)}</div>${renderAffairActions(note)}</div>
-            ${note.description ? `<div class="small text-muted mt-1 affairs-note-text">${escapeAffairsHtml(note.description)}</div>` : ''}
+            ${note.description ? `<div class="small text-muted mt-1 affairs-note-text">${linkifyText(note.description)}</div>` : ''}
         </div>
         ${renderAffairEditForm(note)}
     </div>`;
@@ -228,7 +228,7 @@ function renderAffair(item) {
     return `<article class="affair-card affairs-editable-note ${item.is_completed ? 'is-completed' : ''}" data-affair-id="${item.id}" data-affair-shared="false" onclick="openAffairReader(event, ${item.id}, false)" oncontextmenu="openAffairContextMenu(event, ${item.id}, false)">
         <button class="btn btn-sm ${item.is_completed ? 'btn-success' : 'btn-outline-secondary'} affair-check" onclick="toggleAffair(${item.id}, ${!item.is_completed})" title="${item.is_completed ? 'Вернуть из архива' : 'В архив'}"><i class="bi bi-check-lg"></i></button>
         <div class="flex-grow-1 min-width-0"><div class="affairs-note-view"><div class="d-flex flex-wrap justify-content-between gap-2"><h5 class="mb-1">${escapeAffairsHtml(item.title)}</h5><span class="small text-muted">${item.due_date ? `до ${formatAffairsDate(item.due_date)}` : 'без дедлайна'}</span></div>
-        <div class="small text-muted mb-1">${escapeAffairsHtml(item.project_name || 'Без проекта')}</div>${item.description ? `<div class="affairs-note-text">${escapeAffairsHtml(item.description)}</div>` : ''}</div>${renderAffairEditForm(item)}</div>
+        <div class="small text-muted mb-1">${escapeAffairsHtml(item.project_name || 'Без проекта')}</div>${item.description ? `<div class="affairs-note-text">${linkifyText(item.description)}</div>` : ''}</div>${renderAffairEditForm(item)}</div>
         ${renderAffairActions(item)}
     </article>`;
 }
@@ -486,7 +486,7 @@ function openAffairReader(event, id, isShared) {
     document.getElementById('affair-reader-project').textContent = note.project_name || 'Без проекта';
     document.getElementById('affair-reader-title').textContent = note.title || 'Заметка';
     const content = document.getElementById('affair-reader-content');
-    content.textContent = note.description || '';
+    content.innerHTML = note.description ? linkifyText(note.description) : '';
     content.classList.toggle('is-empty', !note.description);
     if (!note.description) content.textContent = 'У заметки нет дополнительного текста.';
     cancelCurrentAffairEdit();
@@ -514,7 +514,7 @@ async function saveCurrentAffair(event) {
         currentAffairReader.note = updated;
         document.getElementById('affair-reader-title').textContent = updated.title;
         const content = document.getElementById('affair-reader-content');
-        content.textContent = updated.description || 'У заметки нет дополнительного текста.';
+        content.innerHTML = updated.description ? linkifyText(updated.description) : 'У заметки нет дополнительного текста.';
         content.classList.toggle('is-empty', !updated.description);
         cancelCurrentAffairEdit();
         await refreshAffairsViews();

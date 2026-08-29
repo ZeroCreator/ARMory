@@ -3831,6 +3831,26 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function linkifyText(value) {
+    const text = String(value || '');
+    const urlPattern = /https?:\/\/[^\s<>"']+/gi;
+    let html = '';
+    let lastIndex = 0;
+    for (const match of text.matchAll(urlPattern)) {
+        let url = match[0];
+        let trailing = '';
+        while (/[.,;:!?)]$/.test(url)) {
+            trailing = url.slice(-1) + trailing;
+            url = url.slice(0, -1);
+        }
+        html += escapeHtml(text.slice(lastIndex, match.index));
+        const safeUrl = escapeHtml(url);
+        html += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${safeUrl}</a>${escapeHtml(trailing)}`;
+        lastIndex = match.index + match[0].length;
+    }
+    return html + escapeHtml(text.slice(lastIndex));
+}
+
 function truncate(str, len) {
     if (!str) return '';
     return str.length > len ? str.slice(0, len) + '…' : str;
@@ -3924,6 +3944,10 @@ async function dismissActiveReminder(id) {
 
 let projectAffairNotes = [];
 let currentProjectAffairNote = null;
+let projectNoteContextTarget = null;
+let projectCommentContextTarget = null;
+let projectAffairUrlApplied = false;
+let projectCommentUrlApplied = false;
 
 async function loadProjectAffairNotes(projectId) {
     const container = document.getElementById('project-affair-notes');
@@ -3933,7 +3957,7 @@ async function loadProjectAffairNotes(projectId) {
         const notes = (overview.notes || []).filter(note => Number(note.project_id) === Number(projectId));
         projectAffairNotes = notes;
         container.innerHTML = notes.length ? notes.map(note => `
-            <article class="project-affair-note ${note.is_completed ? 'is-completed' : ''}" role="button" tabindex="0" onclick="openProjectAffairNote(${note.id})" onkeydown="if (event.target === event.currentTarget && event.key === 'Enter') openProjectAffairNote(${note.id})">
+            <article class="project-affair-note ${note.is_completed ? 'is-completed' : ''}" role="button" tabindex="0" onclick="openProjectAffairNote(${note.id})" oncontextmenu="openProjectNoteContextMenu(event, ${note.id})" onkeydown="if (event.target === event.currentTarget && event.key === 'Enter') openProjectAffairNote(${note.id})">
                 <span class="project-affair-note-topline">
                     <span class="project-affair-note-meta"><time>${formatDate(note.updated_at)}</time>${note.show_in_news ? '<i class="bi bi-newspaper" title="Показывается в новостной ленте"></i>' : ''}</span>
                     <span class="project-affair-note-actions">
@@ -3943,12 +3967,90 @@ async function loadProjectAffairNotes(projectId) {
                     </span>
                 </span>
                 <strong>${escapeHtml(note.title)}</strong>
-                ${note.description ? `<span>${escapeHtml(note.description)}</span>` : ''}
+                ${note.description ? `<span>${linkifyText(note.description)}</span>` : ''}
             </article>
         `).join('') : '<div class="project-chat-empty"><i class="bi bi-journal-text"></i><br>Заметок пока нет</div>';
+        if (!projectAffairUrlApplied) {
+            projectAffairUrlApplied = true;
+            const linkedNoteId = Number(new URLSearchParams(window.location.search).get('note'));
+            if (linkedNoteId && notes.some(note => note.id === linkedNoteId)) openProjectAffairNote(linkedNoteId);
+        }
     } catch (e) {
         container.innerHTML = `<div class="project-chat-empty">Ошибка загрузки: ${escapeHtml(e.message)}</div>`;
     }
+}
+
+function showProjectContextMenu(menu, event) {
+    event.preventDefault();
+    event.stopPropagation();
+    hideProjectAffairContextMenus();
+    menu.style.display = 'block';
+    menu.style.left = `${Math.min(event.clientX, window.innerWidth - 230)}px`;
+    menu.style.top = `${Math.min(event.clientY, window.innerHeight - 230)}px`;
+}
+
+function openProjectNoteContextMenu(event, noteId) {
+    projectNoteContextTarget = projectAffairNotes.find(note => note.id === Number(noteId)) || null;
+    const menu = document.getElementById('project-note-context-menu');
+    if (projectNoteContextTarget && menu) showProjectContextMenu(menu, event);
+}
+
+function openProjectCommentContextMenu(event, commentId) {
+    const comment = (window._lastLoadedComments || []).find(item => item.id === Number(commentId));
+    if (!comment) return;
+    projectCommentContextTarget = comment;
+    const menu = document.getElementById('project-comment-context-menu');
+    menu.querySelectorAll('.project-comment-own-action').forEach(item => item.classList.toggle('d-none', comment.author_email !== projectChatCurrentUser));
+    showProjectContextMenu(menu, event);
+}
+
+function hideProjectAffairContextMenus() {
+    document.getElementById('project-note-context-menu')?.style.setProperty('display', 'none');
+    document.getElementById('project-comment-context-menu')?.style.setProperty('display', 'none');
+}
+
+function initProjectAffairContextMenus() {
+    const noteMenu = document.getElementById('project-note-context-menu');
+    const commentMenu = document.getElementById('project-comment-context-menu');
+    if (!noteMenu || !commentMenu || noteMenu.dataset.initialized) return;
+    noteMenu.dataset.initialized = 'true';
+    noteMenu.addEventListener('click', async event => {
+        const action = event.target.closest('[data-action]')?.dataset.action;
+        const note = projectNoteContextTarget;
+        if (!action || !note) return;
+        hideProjectAffairContextMenus();
+        if (action === 'copy-link') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('note', note.id);
+            copyTextToClipboard(url.toString());
+            showToast('Ссылка на заметку скопирована', 'success');
+        }
+        if (action === 'open') openProjectAffairNote(note.id);
+        if (action === 'edit') editProjectAffairNoteFromCard(event, note.id);
+        if (action === 'kanban') addProjectAffairNoteToKanban(event, note.id);
+        if (action === 'delete') await deleteProjectAffairNote(event, note.id);
+    });
+    commentMenu.addEventListener('click', async event => {
+        const action = event.target.closest('[data-action]')?.dataset.action;
+        const comment = projectCommentContextTarget;
+        if (!action || !comment) return;
+        hideProjectAffairContextMenus();
+        if (action === 'copy-link') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('comment', comment.id);
+            copyTextToClipboard(url.toString());
+            showToast('Ссылка на обсуждение скопирована', 'success');
+        }
+        if (action === 'copy') {
+            copyTextToClipboard(comment.content);
+            showToast('Текст обсуждения скопирован', 'success');
+        }
+        if (action === 'edit') startEditProjectComment(comment.id);
+        if (action === 'delete') await deleteProjectComment(comment.id);
+    });
+    document.addEventListener('click', event => {
+        if (!event.target.closest('#project-note-context-menu, #project-comment-context-menu')) hideProjectAffairContextMenus();
+    });
 }
 
 function openProjectAffairNote(noteId) {
@@ -3957,7 +4059,7 @@ function openProjectAffairNote(noteId) {
     currentProjectAffairNote = note;
     document.getElementById('project-affair-modal-title').textContent = note.title || 'Заметка';
     const content = document.getElementById('project-affair-modal-content');
-    content.textContent = note.description || 'У заметки нет дополнительного текста.';
+    content.innerHTML = note.description ? linkifyText(note.description) : 'У заметки нет дополнительного текста.';
     content.classList.toggle('is-empty', !note.description);
     cancelProjectAffairNoteEdit();
     bootstrap.Modal.getOrCreateInstance(document.getElementById('projectAffairNoteModal')).show();
@@ -4042,7 +4144,7 @@ async function saveProjectAffairNote(event) {
         currentProjectAffairNote = updated;
         document.getElementById('project-affair-modal-title').textContent = updated.title;
         const content = document.getElementById('project-affair-modal-content');
-        content.textContent = updated.description || 'У заметки нет дополнительного текста.';
+        content.innerHTML = updated.description ? linkifyText(updated.description) : 'У заметки нет дополнительного текста.';
         content.classList.toggle('is-empty', !updated.description);
         cancelProjectAffairNoteEdit();
         await loadProjectAffairNotes(PROJECT_ID);
@@ -4213,9 +4315,9 @@ function renderProjectComments(comments) {
                   <button class="btn btn-sm btn-secondary" onclick="cancelEditProjectComment()">Отмена</button>
                 </div>
               </div>`
-            : `<div class="project-chat-text">${escapeHtml(c.content)}</div>`;
+            : `<div class="project-chat-text">${linkifyText(c.content)}</div>`;
         return `
-            <div class="project-chat-message ${isOwn ? 'own' : ''}" data-id="${c.id}">
+            <div class="project-chat-message ${isOwn ? 'own' : ''}" data-id="${c.id}" oncontextmenu="openProjectCommentContextMenu(event, ${c.id})">
                 <div class="project-chat-message-header">
                     <span class="project-chat-author">
                         <span class="project-chat-avatar">${escapeHtml(getInitials(c.author_name || c.author_email))}</span>
@@ -4230,6 +4332,20 @@ function renderProjectComments(comments) {
 
     if (wasAtBottom) {
         container.scrollTop = container.scrollHeight;
+    }
+    if (!projectCommentUrlApplied) {
+        projectCommentUrlApplied = true;
+        const linkedCommentId = Number(new URLSearchParams(window.location.search).get('comment'));
+        const linkedComment = linkedCommentId ? container.querySelector(`.project-chat-message[data-id="${linkedCommentId}"]`) : null;
+        if (linkedComment) {
+            const sidebar = document.querySelector('.project-sidebar-left');
+            if (sidebar && getComputedStyle(sidebar).display === 'none') toggleProjectSidebar('chat');
+            requestAnimationFrame(() => {
+                linkedComment.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                linkedComment.classList.add('is-linked');
+                setTimeout(() => linkedComment.classList.remove('is-linked'), 3000);
+            });
+        }
     }
 }
 

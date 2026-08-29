@@ -109,6 +109,24 @@
     </button>
 </div>
 
+<div id="project-note-context-menu" class="sidebar-context-menu" style="display:none;">
+    <div class="sidebar-context-item" data-action="copy-link"><i class="bi bi-link-45deg"></i> Копировать ссылку</div>
+    <div class="sidebar-context-divider"></div>
+    <div class="sidebar-context-item" data-action="open"><i class="bi bi-arrows-fullscreen"></i> Открыть</div>
+    <div class="sidebar-context-item" data-action="edit"><i class="bi bi-pencil"></i> Редактировать</div>
+    <div class="sidebar-context-item" data-action="kanban"><i class="bi bi-kanban"></i> Добавить в Kanban</div>
+    <div class="sidebar-context-divider"></div>
+    <div class="sidebar-context-item text-danger" data-action="delete"><i class="bi bi-trash"></i> Удалить</div>
+</div>
+
+<div id="project-comment-context-menu" class="sidebar-context-menu" style="display:none;">
+    <div class="sidebar-context-item" data-action="copy-link"><i class="bi bi-link-45deg"></i> Копировать ссылку</div>
+    <div class="sidebar-context-item" data-action="copy"><i class="bi bi-copy"></i> Копировать текст</div>
+    <div class="sidebar-context-item project-comment-own-action" data-action="edit"><i class="bi bi-pencil"></i> Редактировать</div>
+    <div class="sidebar-context-divider project-comment-own-action"></div>
+    <div class="sidebar-context-item text-danger project-comment-own-action" data-action="delete"><i class="bi bi-trash"></i> Удалить</div>
+</div>
+
 <div class="modal fade affair-reader-modal" id="projectAffairNoteModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -470,6 +488,7 @@
         loadSections(PROJECT_ID);
         initProjectChat(PROJECT_ID);
         loadProjectAffairNotes(PROJECT_ID);
+        initProjectAffairContextMenus();
         initProjectCalendar();
         loadProjectCalendarEvents();
         connectProjectEvents(PROJECT_ID);

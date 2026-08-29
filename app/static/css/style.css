@@ -3948,6 +3948,7 @@ footer {
     background: linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%);
     border-color: rgba(139, 124, 246, 0.18);
 }
+.project-chat-message.is-linked { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,.2), 0 4px 14px rgba(0,0,0,.12); }
 
 .project-chat-message-header {
     display: flex;
@@ -3998,6 +3999,14 @@ footer {
     white-space: pre-wrap;
     word-break: break-word;
 }
+.project-chat-text a,
+.project-affair-note a,
+.affairs-note-text a,
+.affair-reader-content a { color: #5b21b6; text-decoration: underline; overflow-wrap: anywhere; }
+.project-chat-text a:hover,
+.project-affair-note a:hover,
+.affairs-note-text a:hover,
+.affair-reader-content a:hover { color: #7c3aed; }
 
 .project-chat-actions {
     display: inline-flex;

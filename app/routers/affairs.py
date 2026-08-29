@@ -159,7 +159,7 @@ async def daily_news(request: Request, db: AsyncSession = Depends(get_db)):
             Task.is_closed.is_(False),
             Task.status_id != final_status_id,
             Task.due_date.is_not(None),
-            Task.due_date < day_end,
+            or_(Task.start_date.is_(None), Task.start_date <= now),
         )
         .order_by(Task.due_date.asc())
     )
