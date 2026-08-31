@@ -19,6 +19,16 @@
 | PATCH | `/api/projects/{id}` | Обновить проект |
 | DELETE | `/api/projects/{id}` | Удалить проект (+ файлы из хранилища) |
 
+## Комментарии проектов
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/projects/{id}/comments` | Получить комментарии проекта |
+| POST | `/api/projects/{id}/comments` | Добавить комментарий |
+| PUT | `/api/projects/{id}/comments/{comment_id}` | Изменить комментарий |
+| DELETE | `/api/projects/{id}/comments/{comment_id}` | Удалить комментарий |
+| POST | `/api/projects/{id}/comments/read` | Отметить обсуждение прочитанным |
+
 ## Разделы
 
 | Метод | Путь | Описание |
@@ -65,6 +75,20 @@
 | POST | `/api/calendar/events` | Создать событие |
 | PATCH | `/api/calendar/events/{id}` | Обновить событие |
 | DELETE | `/api/calendar/events/{id}` | Удалить событие |
+
+## Дела
+
+API доступен при `PERSONAL_NOTES_ENABLED=true`.
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/affairs` | Список доступных пользователю дел |
+| POST | `/api/affairs` | Создать дело |
+| PATCH | `/api/affairs/{id}` | Обновить дело или отметить выполненным |
+| DELETE | `/api/affairs/{id}` | Удалить дело |
+| GET | `/api/affairs/overview` | Сводка дел для интерфейса |
+| GET | `/api/affairs/daily` | Ежедневная лента общих заметок |
+| POST | `/api/affairs/daily/dismiss` | Скрыть сводку на текущий день |
 
 ## Планировщик
 

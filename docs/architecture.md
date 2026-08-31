@@ -81,6 +81,10 @@ Project
 - **TaskStatus** — колонка kanban-доски проекта.
 - **TaskAttachment** — вложение к задаче: ссылка, файл или git-репозиторий.
 - **CalendarEvent** — событие календаря.
+- **TaskStatusHistory** — история входа задачи в каждую стадию проекта.
+- **ProjectComment / ProjectCommentRead** — обсуждение проекта и состояние прочтения для пользователя.
+- **Affair** — личная или общая заметка с дедлайном, признаком выполнения и публикацией в ежедневной сводке.
+- **DailyNewsRead** — дата, когда пользователь скрыл ежедневную сводку.
 - **SidebarBlock / SidebarLink** — боковые панели с пользовательскими ссылками.
 
 ## Хранилище файлов
@@ -102,7 +106,7 @@ Project
 - **Локальный режим** — полный доступ: создание, редактирование, переименование, удаление файлов и папок.
 - **Режим Яндекс.Диска** — read-only просмотр Markdown-файлов и папок, расположенных в `YANDEX_DISK_ALEXANDRITE_PATH`. Для ограничения корневой папки используется `ALEXANDRITE_YANDEX_ROOT_PATH`.
 
-Состояние дерева (развёрнутые папки) сохраняется в `localStorage` браузера.
+Интерфейс восстанавливает раскрытие дерева после файловых операций в пределах текущей страницы.
 
 ## Подключаемые приложения
 
@@ -123,7 +127,7 @@ alexandrite_vault_path: str = "./data/alexandrite"
 yandex_disk_path: str = "ARMory/data"
 yandex_disk_backups_path: str = "ARMory/backups"
 yandex_disk_alexandrite_path: str = "ARMory/alexandrite"
-armory_public_url: str = "https://armory.team-73.ru"
+armory_public_url: str = "https://<your-domain>"
 collabora_enabled: bool = False
 ```
 

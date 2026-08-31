@@ -27,7 +27,7 @@
 По умолчанию используется папка `./data/alexandrite` (относительно рабочей директории ARMory). Её можно переопределить через переменную окружения:
 
 ```bash
-ALEXANDRITE_VAULT_PATH=/home/user/alexandrite
+ALEXANDRITE_VAULT_PATH=<alexandrite-vault-directory>
 ```
 
 В UI также можно выбрать другую локальную папку на лету.
@@ -48,9 +48,9 @@ ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
 
 ```env
 COLLABORA_ENABLED=true
-COLLABORA_DOMAIN=armory.team-73.ru
-COLLABORA_INTERNAL_URL=http://collabora:9980
-COLLABORA_PUBLIC_URL=https://armory.team-73.ru/collabora
+COLLABORA_DOMAIN=<your-domain>
+COLLABORA_INTERNAL_URL=http://<collabora-service>:<collabora-port>
+COLLABORA_PUBLIC_URL=https://<your-domain>/collabora
 COLLABORA_SERVICE_ROOT=/collabora
 COLLABORA_WOPI_SECRET=<сгенерируйте через openssl rand -hex 32>
 COLLABORA_ADMIN_USER=admin

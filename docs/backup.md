@@ -7,7 +7,7 @@
 ## Ручной бэкап
 
 ```bash
-cd ~/your-project
+cd <project-directory>
 tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/armory.db data/uploads/
 ```
 
@@ -16,7 +16,7 @@ tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/armory.db data/uploads/
 ## Восстановление из бэкапа
 
 ```bash
-cd ~/your-project
+cd <project-directory>
 tar -xzvf backup_<timestamp>.tar.gz
 ```
 
@@ -72,7 +72,7 @@ TIMEZONE=Europe/Moscow
 ```bash
 # Каждый день в 3:00 утра
 crontab -e
-0 3 * * * cd ~/your-project && tar -czf ~/backups/app_$(date +\%Y\%m\%d).tar.gz data/armory.db data/uploads/ >/dev/null 2>&1
+<cron-schedule> cd <project-directory> && tar -czf <backup-directory>/app_$(date +\%Y\%m\%d).tar.gz data/armory.db data/uploads/ >/dev/null 2>&1
 ```
 
 ## Бэкап при деплое на другой сервер
@@ -82,7 +82,7 @@ crontab -e
 tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/armory.db data/uploads/ .env
 
 # На новом сервере
-mkdir -p /opt/your-project && cd /opt/your-project
+mkdir -p <project-directory> && cd <project-directory>
 tar -xzvf backup_<timestamp>.tar.gz
 # Запуск
 docker compose up -d --build

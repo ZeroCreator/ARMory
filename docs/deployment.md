@@ -4,8 +4,8 @@
 
 ```bash
 # 1. Клонируй репозиторий
-git clone <repo-url> /opt/<your-project>
-cd /opt/<your-project>
+git clone <repo-url> <project-directory>
+cd <project-directory>
 
 # 2. Создай .env
 cp .env.example .env
@@ -17,7 +17,7 @@ nano .env
 DATABASE_URL="sqlite+aiosqlite:///./data/armory.db"
 LOCAL_STORAGE_PATH=./data/uploads
 STORAGE_TYPE=local
-ARMORY_PUBLIC_URL=https://armory.team-73.ru
+ARMORY_PUBLIC_URL=https://<your-domain>
 
 # Yandex Disk (опционально)
 YANDEX_DISK_TOKEN=your_oauth_token
@@ -31,10 +31,10 @@ ALEXANDRITE_VAULT_PATH=./data/alexandrite
 ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
 
 # Планировщик: проекты со скриптами и ssh-доступ к их серверам
-SCRIPTS_PROJECT_PATHS=/home/user/scripts/dcript,/home/user/flat-parser
-SCRIPTS_PROJECT_SSH=dcript=user@192.168.1.10,flat-parser=user@192.168.1.20
-SCHEDULER_SSH_KEY=/app/ssh/id_ed25519
-SCHEDULER_SSH_KEY_HOST=./deploy/id_ed25519
+SCRIPTS_PROJECT_PATHS=<project-a-directory>,<project-b-directory>
+SCRIPTS_PROJECT_SSH=project-a=<ssh-user>@<server-a>,project-b=<ssh-user>@<server-b>
+SCHEDULER_SSH_KEY=<container-ssh-key-path>
+SCHEDULER_SSH_KEY_HOST=<host-ssh-key-path>
 
 ```
 
@@ -51,11 +51,11 @@ mkdir -p data/uploads
 docker compose up -d --build
 ```
 
-Приложение доступно на `http://server-ip:<PORT>` (порт по умолчанию смотрите в `compose.yml`).
+Приложение доступно на `http://<server-host>:<port>`.
 
 ## Запуск с auth gateway (oauth2-proxy)
 
-Если нужно закрыть ARMory авторизацией через Stalwart (mail.team-73.ru):
+Если нужно закрыть ARMory авторизацией через внешний OIDC-провайдер:
 
 ```bash
 docker compose -f compose.yml -f compose.gateway.yml up -d
@@ -69,7 +69,7 @@ OAUTH2_PROXY_CLIENT_SECRET=<secret от админа Stalwart>
 OAUTH2_PROXY_COOKIE_SECRET=<openssl rand -base64 32>
 ```
 
-Callback URL для Stalwart: `https://armory.team-73.ru/oauth2/callback`.
+Callback URL для OIDC-провайдера: `https://<your-domain>/oauth2/callback`.
 
 ## Collabora Online
 
@@ -77,9 +77,9 @@ Callback URL для Stalwart: `https://armory.team-73.ru/oauth2/callback`.
 
 ```env
 COLLABORA_ENABLED=true
-COLLABORA_DOMAIN=armory.team-73.ru
-COLLABORA_INTERNAL_URL=http://collabora:9980
-COLLABORA_PUBLIC_URL=https://armory.team-73.ru/collabora
+COLLABORA_DOMAIN=<your-domain>
+COLLABORA_INTERNAL_URL=http://<collabora-service>:<collabora-port>
+COLLABORA_PUBLIC_URL=https://<your-domain>/collabora
 COLLABORA_SERVICE_ROOT=/collabora
 COLLABORA_WOPI_SECRET=<openssl rand -hex 32>
 COLLABORA_ADMIN_USER=admin
@@ -105,7 +105,7 @@ server {
     server_name <your-domain>;
 
     location / {
-        proxy_pass http://127.0.0.1:<PORT>;
+        proxy_pass http://<armory-host>:<armory-port>;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -124,7 +124,7 @@ sudo certbot --nginx -d <your-domain>
 ## Обновление кода
 
 ```bash
-cd /opt/<your-project>
+cd <project-directory>
 git pull
 
 # Бэкап перед обновлением
@@ -152,5 +152,5 @@ docker logs -f <container-name>
 
 ```bash
 docker compose ps
-curl -s http://localhost:<PORT>/api/projects
+curl -s http://<armory-host>:<armory-port>/api/projects
 ```

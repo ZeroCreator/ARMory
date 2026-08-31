@@ -22,7 +22,7 @@ ARMory не зависит от конкретного поставщика мо
 Перейди в папку `llama.cpp` и запусти сервер:
 
 ```bash
-cd ~/llama.cpp
+cd <llama-cpp-directory>
 
 ./build/bin/llama-server \
   -hf Qwen/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M \
@@ -44,13 +44,13 @@ ps -ef | grep llama-server
 ### Проверить API
 
 ```bash
-curl http://127.0.0.1:8082/v1/models
+curl http://<model-host>:<model-port>/v1/models
 ```
 
 ### Логи
 
 ```bash
-tail -100 ~/llama-server.log
+tail -100 <model-log-path>
 ```
 
 ### Остановить сервер
@@ -72,7 +72,7 @@ pkill -f llama-server
 
 Настройки модели:
 
-- Base URL: `http://localhost:8082/v1`
+- Base URL: `http://<model-host>:<model-port>/v1`
 - Model: `Qwen/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M`
 - API key: `local` (или любая строка, если сервер не проверяет ключ)
 
@@ -82,7 +82,7 @@ pkill -f llama-server
 {
   "mcpServers": {
     "armory": {
-      "url": "http://localhost:5005/mcp",
+      "url": "http://<armory-host>:<armory-port>/mcp",
       "headers": {
         "X-MCP-API-Key": "YOUR_MCP_API_KEY"
       }
@@ -100,7 +100,7 @@ Aider напрямую не поддерживает MCP, но может раб
 ```bash
 aider \
   --model openai/Qwen/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M \
-  --openai-api-base http://localhost:8082/v1 \
+  --openai-api-base http://<model-host>:<model-port>/v1 \
   --openai-api-key local \
   --chat-language Russian \
   --map-tokens 4096
@@ -110,8 +110,8 @@ aider \
 
 Существуют сторонние обёртки (`mcpm-aider`), которые добавляют Aider поддержку MCP. В таком случае Aider выступает MCP-клиентом, а ARMory — MCP-сервером. Конфигурация зависит от конкретной обёртки, но обычно сводится к указанию:
 
-- URL модели: `http://localhost:8082/v1`
-- MCP-сервера ARMory: `http://localhost:5005/mcp`
+- URL модели: `http://<model-host>:<model-port>/v1`
+- MCP-сервера ARMory: `http://<armory-host>:<armory-port>/mcp`
 - API-ключа `MCP_API_KEY`
 
 ## 3. Настройка .env в ARMory
@@ -120,11 +120,11 @@ aider \
 
 ```env
 # AI-ассистент, от имени которого MCP берёт/назначает задачи
-AI_ASSIGNEE_EMAIL=ai@armory.local
+AI_ASSIGNEE_EMAIL=<ai-assignee-email>
 AI_ASSIGNEE_NAME=AI Assistant
 
 # Локальная LLM (OpenAI-совместимый API)
-LOCAL_LLM_BASE_URL=http://localhost:8082/v1
+LOCAL_LLM_BASE_URL=http://<model-host>:<model-port>/v1
 LOCAL_LLM_MODEL=Qwen/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M
 LOCAL_LLM_API_KEY=local
 ```
@@ -146,8 +146,8 @@ LOCAL_LLM_API_KEY=local
 
 Вместо `llama.cpp` можно использовать любой OpenAI-совместимый сервер:
 
-- **Ollama** — `ollama run qwen2.5-coder:14b`, endpoint `http://localhost:11434/v1`.
-- **vLLM** — `vllm serve ...`, endpoint `http://localhost:8000/v1`.
+- **Ollama** — `ollama run <model-name>`, endpoint `http://<ollama-host>:<ollama-port>/v1`.
+- **vLLM** — `vllm serve <model-name>`, endpoint `http://<vllm-host>:<vllm-port>/v1`.
 - **llamafile** — портативный бинарник.
 
 Главное — чтобы сервер отвечал на `/v1/models` и `/v1/chat/completions` в формате OpenAI.

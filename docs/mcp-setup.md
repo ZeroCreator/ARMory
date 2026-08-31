@@ -2,7 +2,7 @@
 
 ARMory можно подключить к любому AI-ассистенту, поддерживающему протокол MCP (Model Context Protocol): Kimi Code CLI, Claude Code, Cline, Continue и другие. Это позволяет ассистенту работать с задачами kanban прямо из терминала или редактора: получать задачу по номеру или ссылке, создавать новые задачи и обновлять статус.
 
-Важно: задачи могут относиться к разным проектам. Например, тикет `https://armory.team-73.ru/projects/2/kanban?task=39` создан в ARMory, но доработка выполняется в коде другого проекта (Intraservice). MCP позволяет ассистенту прочитать задачу из ARMory и работать с файлами текущего проекта.
+Важно: задачи могут относиться к разным проектам. Например, тикет `https://<armory-domain>/projects/<project-id>/kanban?task=<task-id>` создан в ARMory, но доработка выполняется в другом репозитории. MCP позволяет ассистенту прочитать задачу из ARMory и работать с файлами текущего проекта.
 
 ## Что умеет интеграция
 
@@ -50,7 +50,7 @@ MCP_API_KEY=<сгенерированный-ключ>
 3. При желании измени имя/email AI-ассистента, от имени которого назначаются задачи:
 
 ```env
-AI_ASSIGNEE_EMAIL=ai@armory.local
+AI_ASSIGNEE_EMAIL=<ai-assignee-email>
 AI_ASSIGNEE_NAME=AI Assistant
 ```
 
@@ -74,7 +74,7 @@ docker compose -f compose.gateway.yml up -d
 {
   "mcpServers": {
     "armory": {
-      "url": "https://armory.team-73.ru/mcp",
+      "url": "https://<armory-domain>/mcp",
       "headers": {
         "X-MCP-API-Key": "YOUR_MCP_API_KEY"
       }
@@ -101,7 +101,7 @@ cp .kimi-code/mcp.json.example .kimi-code/mcp.json
 
 ```bash
 mkdir -p ~/.kimi-code/skills/kanban
-cp /home/zerocreator/ARMory/.kimi-code/skills/kanban/SKILL.md ~/.kimi-code/skills/kanban/SKILL.md
+cp <armory-project-directory>/.kimi-code/skills/kanban/SKILL.md <mcp-client-skills-directory>/kanban/SKILL.md
 ```
 
 Этот файл учит ассистента понимать ссылки и номера задач, не закрывать задачу без разрешения, начинать коммиты с `#N` и т.д.
@@ -110,7 +110,7 @@ cp /home/zerocreator/ARMory/.kimi-code/skills/kanban/SKILL.md ~/.kimi-code/skill
 
 ```
 Возьми в работу задачу #39
-https://armory.team-73.ru/projects/2/kanban?task=39
+https://<armory-domain>/projects/<project-id>/kanban?task=<task-id>
 Покажи задачу #39
 Переведи #39 в статус "Тестирование"
 Обнови #39 результат "Исправлено отображение дедлайна"
@@ -136,7 +136,7 @@ https://armory.team-73.ru/projects/2/kanban?task=39
 Проверь, что backend отвечает на JSON-RPC:
 
 ```bash
-curl -X POST https://armory.team-73.ru/mcp \
+curl -X POST https://<armory-domain>/mcp \
   -H "Content-Type: application/json" \
   -H "X-MCP-API-Key: YOUR_MCP_API_KEY" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}'

@@ -10,7 +10,7 @@
 Планировщик читает переменную `SCRIPTS_PROJECT_PATHS` из `.env` — список каталогов проектов со скриптами через запятую (`~` разворачивается в `$HOME`):
 
 ```env
-SCRIPTS_PROJECT_PATHS=~/scripts/ssk-scraper,~/scripts/ARMory
+SCRIPTS_PROJECT_PATHS=<project-a-directory>,<project-b-directory>
 ```
 
 В `.env` каждого такого проекта задаётся словарь `SCHEDULER_TASKS`:
@@ -28,17 +28,17 @@ SCHEDULER_TASKS='{"send-report": {"name": "Ежедневный отчёт", "sc
 Настройка:
 
 1. Установите `at` и `cron` на каждый сервер со скриптами (`apt install at cron`), убедитесь, что демоны `atd` и `cron` запущены.
-2. Сгенерируйте выделенный ключ: `ssh-keygen -t ed25519 -f deploy/id_ed25519 -N ""`. Публичную часть добавьте в `~/.ssh/authorized_keys` пользователя на каждом сервере.
+2. Сгенерируйте выделенный ключ в выбранном безопасном каталоге. Публичную часть добавьте в `<remote-user-home>/.ssh/authorized_keys` на каждом целевом сервере.
 3. Заполните `.env`:
 
 ```env
 # Пути к проектам — как они выглядят на целевых серверах
-SCRIPTS_PROJECT_PATHS=/home/user/scripts/dcript,/home/user/flat-parser
+SCRIPTS_PROJECT_PATHS=<project-a-directory>,<project-b-directory>
 # Привязка проектов к серверам (проект — имя каталога)
-SCRIPTS_PROJECT_SSH=dcript=user@192.168.1.10,flat-parser=user@192.168.1.20
+SCRIPTS_PROJECT_SSH=project-a=<ssh-user>@<server-a>,project-b=<ssh-user>@<server-b>
 # Ключ: путь внутри контейнера и путь на хосте (монтируется в compose.yml)
-SCHEDULER_SSH_KEY=/app/ssh/id_ed25519
-SCHEDULER_SSH_KEY_HOST=./deploy/id_ed25519
+SCHEDULER_SSH_KEY=<container-ssh-key-path>
+SCHEDULER_SSH_KEY_HOST=<host-ssh-key-path>
 ```
 
 Проекты без записи в `SCRIPTS_PROJECT_SSH` выполняются локально — режим разработки не меняется. Время выполнения трактуется в локальной таймзоне целевого сервера.
