@@ -3100,7 +3100,7 @@ function renderCalendarEventsList() {
         const projectStr = project ? `<div class="calendar-event-project">${escapeHtml(project.name)}</div>` : '';
         const reminderStr = e.reminder_minutes != null ? ` · <i class="bi bi-bell"></i> за ${e.reminder_minutes} мин` : '';
         return `
-        <div class="calendar-event-item ${isPast ? 'past' : ''} ${isOverdue ? 'overdue' : ''}" onclick="editCalendarEvent(${e.id})">
+        <div class="calendar-event-item ${isPast ? 'past' : ''} ${isOverdue ? 'overdue' : ''}" data-calendar-event-id="${e.id}" onclick="editCalendarEvent(${e.id})">
             <div class="calendar-event-bar" style="background:${escapeHtml(e.color || '#a78bfa')}"></div>
             <div class="calendar-event-info">
                 ${projectStr}
@@ -3109,6 +3109,24 @@ function renderCalendarEventsList() {
             </div>
         </div>`;
     }).join('');
+}
+
+function highlightCalendarEvent(eventId) {
+    const container = document.getElementById('calendar-events-container');
+    if (!container) return;
+
+    const item = container.querySelector(`[data-calendar-event-id="${eventId}"]`);
+    if (!item) return;
+
+    const shouldHighlight = !item.classList.contains('is-highlighted');
+    container.querySelectorAll('.calendar-event-item.is-highlighted').forEach(item => {
+        item.classList.remove('is-highlighted');
+    });
+
+    if (!shouldHighlight) return;
+
+    item.classList.add('is-highlighted');
+    item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function initCalendar() {
@@ -3124,7 +3142,38 @@ function initCalendar() {
             right: 'dayGridMonth,timeGridWeek,listWeek'
         },
         height: 'auto',
+        eventTimeFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        },
+        eventContent: function(info) {
+            if (info.view.type !== 'dayGridMonth') return;
+
+            const content = document.createElement('span');
+            content.className = 'calendar-day-event-content';
+
+            const dot = document.createElement('span');
+            dot.className = 'calendar-day-event-dot';
+            dot.style.background = info.event.backgroundColor || '#a78bfa';
+            content.appendChild(dot);
+
+            if (!info.event.allDay && info.timeText) {
+                const time = document.createElement('span');
+                time.className = 'calendar-day-event-time';
+                time.textContent = info.timeText;
+                content.appendChild(time);
+            }
+
+            return { domNodes: [content] };
+        },
         eventClick: function(info) {
+            if (info.view.type === 'dayGridMonth') {
+                info.jsEvent.preventDefault();
+                info.jsEvent.stopPropagation();
+                highlightCalendarEvent(parseInt(info.event.id));
+                return;
+            }
             editCalendarEvent(parseInt(info.event.id));
         },
         dateClick: function(info) {

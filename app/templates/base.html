@@ -26,7 +26,9 @@
                 <a href="/alexandrite" class="header-nav-link">Alexandrite</a>
                 <a href="/kanban" class="header-nav-link">Kanban</a>
                 <a href="/tasks" class="header-nav-link">ToDo</a>
+                {% if personal_notes_enabled %}
                 <a href="/affairs" class="header-nav-link">Дела</a>
+                {% endif %}
                 <div class="dropdown header-nav-dropdown">
                     <button class="header-nav-link header-nav-button dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                         Приложения

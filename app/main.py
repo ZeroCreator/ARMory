@@ -9,7 +9,7 @@ import logging
 import os
 import sqlite3
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -134,6 +134,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.mount("/uploads", StaticFiles(directory=settings.local_storage_path), name="uploads")
 templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["enabled_extensions"] = enabled_extensions
+templates.env.globals["personal_notes_enabled"] = settings.personal_notes_enabled
 app.state.templates = templates
 
 # Роутеры
@@ -213,6 +214,9 @@ async def global_kanban_page(request: Request):
 
 @app.get("/affairs", response_class=HTMLResponse)
 async def affairs_page(request: Request):
+    if not settings.personal_notes_enabled:
+        raise HTTPException(status_code=404, detail="Раздел «Дела» отключён")
+
     return templates.TemplateResponse(
         "affairs.html",
         {

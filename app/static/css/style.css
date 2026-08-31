@@ -1922,6 +1922,12 @@ footer {
 .calendar-event-item:hover {
     background: rgba(167,139,250,0.08);
 }
+.calendar-event-item.is-highlighted,
+.calendar-event-item.is-highlighted:hover {
+    background: linear-gradient(135deg, rgba(167,139,250,0.24), rgba(236,72,153,0.14));
+    box-shadow: inset 0 0 0 2px rgba(124,58,237,0.45);
+    opacity: 1;
+}
 .calendar-event-item.past {
     opacity: 0.55;
 }
@@ -2009,6 +2015,24 @@ footer {
     font-size: 0.8rem;
     font-weight: 600;
     padding: 1px 4px;
+}
+#calendar .fc-daygrid-event {
+    background: transparent !important;
+    border-color: transparent !important;
+}
+.calendar-day-event-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.calendar-day-event-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: 0 0 0.5rem;
+    border-radius: 50%;
+}
+.calendar-day-event-time {
+    color: var(--sand-text);
 }
 .fc .fc-toolbar-title {
     font-weight: 700;
