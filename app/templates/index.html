@@ -382,15 +382,16 @@
         loadAlexandriteBackupStats();
         loadAlexandriteArchives();
         {% else %}
-        loadProjects().then(() => {
-            initScheduler();
-            fillSchedulerTasks();
+        loadDailyNews().finally(() => {
+            loadProjects().then(() => {
+                initScheduler();
+                fillSchedulerTasks();
+            });
         });
         loadSidebars();
         initSchedulerTabs();
         if (!calendarInstance) initCalendar();
         loadCalendarEvents();
-        loadDailyNews();
         {% endif %}
     });
 </script>

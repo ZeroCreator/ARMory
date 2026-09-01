@@ -330,9 +330,14 @@ let unreadEventSource = null;
 function startUnreadStream() {
     if (unreadEventSource || !window.EventSource) return;
     if (!document.getElementById('projects-list')) return;
-    unreadEventSource = new EventSource(`${API_BASE}/events`);
+    const eventsUrl = new URL(`${API_BASE}/events`, window.location.origin);
+    if (dailyNewsDate) eventsUrl.searchParams.set('daily_date', dailyNewsDate);
+    unreadEventSource = new EventSource(eventsUrl);
     unreadEventSource.addEventListener('unread', (e) => {
         loadUnreadCountsAndUpdateBells();
+    });
+    unreadEventSource.addEventListener('daily', () => {
+        loadDailyNews();
     });
     unreadEventSource.onerror = (e) => {
         console.error('events stream error:', e);
@@ -4497,6 +4502,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ДНЕВНЫЕ НОВОСТИ НА ГЛАВНОЙ
 // ═══════════════════════════════════════════════════
 
+let dailyNewsDate = null;
 
 function positionDailyNews() {
     const panel = document.getElementById('daily-news-panel');
@@ -4530,7 +4536,12 @@ function formatDailyNewsDate(item) {
 function renderDailyNews(data) {
     const panel = document.getElementById('daily-news-panel');
     const container = document.getElementById('daily-news-content');
-    if (!panel || !container || !data.projects?.length) return;
+    if (!panel || !container) return;
+    if (!data.projects?.length) {
+        panel.hidden = true;
+        container.innerHTML = '';
+        return;
+    }
 
     const icons = {task: 'bi-check2-square', event: 'bi-calendar-event', note: 'bi-sticky', comment: 'bi-chat-dots'};
     const labels = {task: 'Задача', event: 'Событие', note: 'Заметка', comment: 'Обсуждение'};
@@ -4561,6 +4572,7 @@ async function loadDailyNews() {
     if (!panel) return;
     try {
         const data = await api(`${API_BASE}/affairs/daily`);
+        dailyNewsDate = data.date;
         renderDailyNews(data);
     } catch (error) {
         console.error('Daily news load error:', error);
