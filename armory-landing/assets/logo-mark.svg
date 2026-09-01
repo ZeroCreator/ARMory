@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Логотип ARMory</title>
+  <defs>
+    <linearGradient id="folder" x1="8" y1="12" x2="56" y2="55" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8b7ac2"/>
+      <stop offset="1" stop-color="#4a466e"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="26" y1="20" x2="45" y2="47" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fffaf4"/>
+      <stop offset="1" stop-color="#e8ddff"/>
+    </linearGradient>
+  </defs>
+  <path fill="#c4b5fd" d="M7 17a6 6 0 0 1 6-6h13l5 6h20a6 6 0 0 1 6 6v5H7V17Z"/>
+  <path fill="url(#folder)" d="M6 23a5 5 0 0 1 5-5h42a5 5 0 0 1 5 5v27a6 6 0 0 1-6 6H12a6 6 0 0 1-6-6V23Z"/>
+  <rect width="23" height="29" x="21" y="21" fill="url(#paper)" rx="4" transform="rotate(-5 21 21)"/>
+  <path fill="none" stroke="#7568b0" stroke-linecap="round" stroke-width="2.5" d="m26 29 12-1m-11 7 8-.7m-7 7 6-.5"/>
+  <path fill="none" stroke="#7dd3c0" stroke-linecap="round" stroke-width="3" d="m38.5 40 4.5-4.5m-7 7-1.2 1.2a4 4 0 0 0 5.7 5.6l2.8-2.8a4 4 0 0 0 0-5.6m2.7-2.7 1.2-1.2a4 4 0 0 1 5.7 5.6l-2.8 2.8a4 4 0 0 1-5.6 0"/>
+</svg>
