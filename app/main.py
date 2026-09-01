@@ -265,3 +265,9 @@ async def alexandrite_page(request: Request):
 site_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "site"))
 if os.path.isdir(site_dir):
     app.mount("/docs", StaticFiles(directory=site_dir, html=True), name="docs")
+    app.mount("/site", StaticFiles(directory=site_dir, html=True), name="landing-docs")
+
+# Лендинг ARMory
+landing_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "armory-landing"))
+if os.path.isdir(landing_dir):
+    app.mount("/landing", StaticFiles(directory=landing_dir, html=True), name="landing")

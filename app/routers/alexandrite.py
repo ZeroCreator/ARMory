@@ -55,6 +55,72 @@ def _is_hidden(name: str) -> bool:
     return name.startswith(".")
 
 
+def _get_gui_env() -> dict[str, str]:
+    """Вернуть окружение активной GUI-сессии для xdg-open."""
+    env = os.environ.copy()
+    uid = str(os.getuid())
+    runtime_dir = f"/run/user/{uid}"
+    env["XDG_RUNTIME_DIR"] = runtime_dir
+    env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={runtime_dir}/bus"
+
+    display = None
+    try:
+        result = subprocess.run(
+            ["pgrep", "-a", "-u", uid, "-f", "Xwayland|Xorg"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split()
+            for index, part in enumerate(parts):
+                if part in ("Xwayland", "Xorg") and index + 1 < len(parts):
+                    candidate = parts[index + 1]
+                    if candidate.startswith(":"):
+                        display = candidate
+                        break
+            if display:
+                break
+    except Exception:
+        pass
+
+    process_env = None
+    if not display or "XAUTHORITY" not in env:
+        try:
+            process_env = subprocess.run(
+                ["ps", "e", "-u", uid],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            ).stdout
+        except Exception:
+            process_env = ""
+
+    if not display:
+        for line in (process_env or "").split("\n"):
+            for part in line.split():
+                if part.startswith("DISPLAY=:"):
+                    display = part.split("=", 1)[1]
+                    break
+            if display:
+                break
+    if display:
+        env["DISPLAY"] = display
+
+    if "XAUTHORITY" not in env:
+        for line in (process_env or "").split("\n"):
+            for part in line.split():
+                if part.startswith("XAUTHORITY="):
+                    env["XAUTHORITY"] = part.split("=", 1)[1]
+                    break
+            if "XAUTHORITY" in env:
+                break
+
+    return env
+
+
 def _build_tree(path: Path, relative: str = "") -> List[dict]:
     """Рекурсивно построить дерево файлов и папок."""
     try:
@@ -288,6 +354,7 @@ async def open_file(
                 ["xdg-open", str(file_path)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=_get_gui_env(),
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")

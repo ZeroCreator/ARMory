@@ -36,6 +36,7 @@ RUN uv sync --no-dev
 # Copy application code
 COPY app/ ./app/
 COPY mcp/ ./mcp/
+COPY armory-landing/ ./armory-landing/
 
 # Copy built documentation site from the first stage
 COPY --from=docs-builder /app/site ./site/
