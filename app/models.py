@@ -269,3 +269,14 @@ class TaskAttachment(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     task = relationship("Task", back_populates="attachments")
+
+
+class AuthLoginToken(Base):
+    __tablename__ = "auth_login_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)

@@ -4,6 +4,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
+from app.auth import get_current_email
 from app.database import get_db
 from app.events import broadcast
 from app.models import Project, Document, DocumentItem, DocType, TaskStatus, ProjectComment, ProjectCommentRead
@@ -13,22 +14,7 @@ from app.storage import get_storage, StorageBackend, slugify
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
-_AUTH_HEADERS = [
-    "X-Forwarded-Email",
-    "X-Forwarded-User",
-    "X-Forwarded-Preferred-Username",
-    "X-Forwarded-Access-Token",
-    "Remote-User",
-    "Remote-Email",
-]
-
-
-def _get_current_email(request: Request) -> Optional[str]:
-    for h in _AUTH_HEADERS:
-        value = request.headers.get(h)
-        if value:
-            return value.strip()
-    return "local.user"
+_get_current_email = get_current_email
 
 
 async def _get_unread_counts(user_email: Optional[str], project_ids: List[int], db: AsyncSession) -> dict:

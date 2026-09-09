@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import Settings, get_settings
+from app.auth import get_current_email
 from app.database import get_db
 from app.events import broadcast
 from app.models import Assignee, Project, Task, TaskAssignee, TaskAttachment, TaskStatus, TaskStatusHistory
@@ -74,22 +75,8 @@ class CurrentUserOut(BaseModel):
 
 @global_router.get("/me", response_model=CurrentUserOut)
 async def get_current_user(request: Request):
-    """Возвращает email текущего пользователя из заголовков oauth2-proxy."""
-    headers = [
-        "X-Forwarded-Email",
-        "X-Forwarded-User",
-        "X-Forwarded-Preferred-Username",
-        "X-Forwarded-Access-Token",
-        "Remote-User",
-        "Remote-Email",
-    ]
-    email = None
-    for h in headers:
-        value = request.headers.get(h)
-        if value:
-            email = value
-            break
-    return {"email": email.strip() if email else "local.user"}
+    """Возвращает email текущего пользователя из сессии или auth-gateway."""
+    return {"email": get_current_email(request)}
 
 
 @global_router.get("/me/debug")

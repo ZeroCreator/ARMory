@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_current_email
 from app.database import get_db
 from app.events import broadcast
 from app.models import Assignee, Project, ProjectComment, ProjectCommentRead
@@ -13,23 +14,7 @@ from app.schemas import ProjectCommentCreate, ProjectCommentOut, ProjectCommentU
 router = APIRouter(prefix="/api/projects/{project_id}/comments", tags=["comments"])
 
 
-_AUTH_HEADERS = [
-    "X-Forwarded-Email",
-    "X-Forwarded-User",
-    "X-Forwarded-Preferred-Username",
-    "X-Forwarded-Access-Token",
-    "Remote-User",
-    "Remote-Email",
-]
-
-
-def _get_current_email(request: Request) -> Optional[str]:
-    for h in _AUTH_HEADERS:
-        value = request.headers.get(h)
-        if value:
-            return value.strip()
-    # Если OAuth-заголовков нет, использовать локального пользователя
-    return "local.user"
+_get_current_email = get_current_email
 
 
 async def _resolve_author_name(email: str, db: AsyncSession) -> str:

@@ -21,6 +21,11 @@ def _verify_mcp_key(request: Request):
     settings = get_settings()
     key = settings.mcp_api_key
     if not key:
+        if settings.auth_required:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="MCP API key is not configured",
+            )
         return
 
     header_key = request.headers.get("x-mcp-api-key")

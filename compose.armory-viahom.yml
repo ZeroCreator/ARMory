@@ -1,0 +1,24 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: armory-viahom:latest
+    container_name: armory-viahom
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ARMORY_HOST_PORT:-18088}:8088"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      PORT: 8088
+      AUTH_REQUIRED: "true"
+      AUTH_MODE: magic_link
+      COLLABORA_ENABLED: "false"
+      EXTENSION_MANAGER_URL: ""
+      SMTP_PORT: 2525
+      SMTP_USE_SSL: "false"
+      SMTP_USE_TLS: "true"
+    command: /app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8088

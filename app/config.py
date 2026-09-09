@@ -6,6 +6,27 @@ class Settings(BaseSettings):
     app_name: str = "ARMory"
     database_url: str = "sqlite+aiosqlite:///./armory.db"
     personal_notes_enabled: bool = False
+    # В публичном режиме все пользовательские запросы должны проходить через auth-gateway.
+    # Локальный запуск по умолчанию остаётся без обязательной авторизации.
+    auth_required: bool = False
+    # Авторизация: "magic_link" — вход по одноразовой ссылке, "proxy" — доверие OIDC-шлюзу.
+    auth_mode: str = "magic_link"
+    auth_allowed_emails: str = ""
+    auth_secret: str | None = None
+    auth_public_url: str | None = None
+    auth_link_ttl_minutes: int = 15
+    auth_session_days: int = 14
+    auth_cookie_secure: bool = True
+
+    # SMTP для писем со ссылками входа и уведомлений
+    smtp_host: str | None = None
+    smtp_port: int = 465
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = False
+    smtp_use_ssl: bool = True
+    smtp_from_email: str | None = None
+    smtp_from_name: str = "ARMory"
     
     # Хранилище: "local" или "s3"
     storage_type: str = "local"

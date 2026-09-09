@@ -12,19 +12,85 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from contextlib import asynccontextmanager
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import make_url
+from starlette.types import ASGIApp, Receive, Scope, Send
+from urllib.parse import urlencode
 
+from app.auth import get_email_from_scope
 from app.database import engine, Base, AsyncSessionLocal
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, wopi, collabora, tasks, assignees, extensions, mcp as mcp_router, events, comments, affairs
+from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, wopi, collabora, tasks, assignees, extensions, mcp as mcp_router, events, comments, affairs, auth as auth_router
 from app.config import get_settings
 from app.extensions import enabled_extensions
 from app.telegram import check_and_send_calendar_reminders
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+def _is_auth_bypass_path(path: str) -> bool:
+    """Маршруты с отдельной схемой авторизации, не зависящей от пользовательской сессии."""
+    return path == "/mcp" or path.startswith("/mcp/") or path == "/wopi" or path.startswith("/wopi/")
+
+
+def _is_auth_public_path(path: str) -> bool:
+    return (
+        path == "/auth"
+        or path.startswith("/auth/")
+        or path == "/static"
+        or path.startswith("/static/")
+    )
+
+
+class RequireAuthMiddleware:
+    """Не допускает анонимный доступ в публичном режиме ARMory."""
+
+    def __init__(self, app: ASGIApp, settings):
+        self.app = app
+        self.settings = settings
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        path = scope.get("path", "")
+        email = get_email_from_scope(scope, self.settings)
+        if email:
+            scope.setdefault("state", {})["user_email"] = email
+
+        if (
+            not self.settings.auth_required
+            or scope["type"] not in {"http", "websocket"}
+            or _is_auth_bypass_path(path)
+            or _is_auth_public_path(path)
+            or email
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        if scope["type"] == "websocket":
+            await send({
+                "type": "websocket.close",
+                "code": 1008,
+                "reason": "Authentication required",
+            })
+            return
+
+        if path == "/api" or path.startswith("/api/"):
+            response = JSONResponse(
+                status_code=401,
+                content={"detail": "Authentication required"},
+                headers={"Cache-Control": "no-store"},
+            )
+        else:
+            query_string = scope.get("query_string", b"").decode("latin-1")
+            target = path + (f"?{query_string}" if query_string else "")
+            location = "/auth/login?" + urlencode({"next": target})
+            response = RedirectResponse(
+                location,
+                status_code=303,
+                headers={"Cache-Control": "no-store"},
+            )
+        await response(scope, receive, send)
 
 
 def _backup_database_before_migration(label: str) -> Path:
@@ -128,6 +194,7 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
+app.add_middleware(RequireAuthMiddleware, settings=settings)
 
 # Статика и шаблоны
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -136,8 +203,10 @@ templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["enabled_extensions"] = enabled_extensions
 templates.env.globals["personal_notes_enabled"] = settings.personal_notes_enabled
 app.state.templates = templates
+app.state.settings = settings
 
 # Роутеры
+app.include_router(auth_router.router)
 app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(documents.section_router)

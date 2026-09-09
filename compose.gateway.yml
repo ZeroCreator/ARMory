@@ -1,4 +1,9 @@
 services:
+  app:
+    environment:
+      AUTH_REQUIRED: "true"
+      AUTH_MODE: "proxy"
+
   gateway:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.8.2
     container_name: oauth2-proxy
