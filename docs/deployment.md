@@ -28,7 +28,7 @@ TIMEZONE=Europe/Moscow
 
 # Alexandrite
 ALEXANDRITE_VAULT_PATH=./data/alexandrite
-ALEXANDRITE_YANDEX_ROOT_PATH=ARMory
+ALEXANDRITE_YANDEX_ROOT_PATH=
 
 # Планировщик: проекты со скриптами и ssh-доступ к их серверам
 SCRIPTS_PROJECT_PATHS=<project-a-directory>,<project-b-directory>
