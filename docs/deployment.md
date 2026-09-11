@@ -53,6 +53,45 @@ docker compose up -d --build
 
 Приложение доступно на `http://<server-host>:<port>`.
 
+## Несколько клиентов на одном сервере
+
+Клиентские Compose-файлы не храните в checkout ARMory. Разместите их во
+внешнем deployment-каталоге или в отдельном приватном репозитории:
+
+```text
+<project-directory>/
+<deployment-directory>/clients/
+  <client-slug>/
+    compose.yml
+    compose.env
+    runtime.env
+```
+
+В `compose.yml` используйте отдельные значения для исходников, данных и
+runtime-окружения клиента:
+
+```env
+ARMORY_SOURCE_DIR=<project-directory>
+ARMORY_CLIENT_DATA_DIR=<client-data-directory>
+ARMORY_RUNTIME_ENV_FILE=runtime.env
+ARMORY_BIND_ADDRESS=<bind-address>
+ARMORY_HOST_PORT=<armory-port>
+```
+
+Запускайте каждого клиента с уникальным именем Compose-проекта и отдельной
+директорией данных:
+
+```bash
+docker compose \
+  --env-file <client-config-directory>/compose.env \
+  -f <client-config-directory>/compose.yml \
+  -p armory-<client-slug> \
+  up -d --build
+```
+
+Не задавайте одинаковые `container_name` для разных клиентов. Файлы
+`compose.env` и `runtime.env` не должны попадать в основной репозиторий.
+
 ## Запуск с auth gateway (oauth2-proxy)
 
 Если нужно закрыть ARMory авторизацией через внешний OIDC-провайдер:

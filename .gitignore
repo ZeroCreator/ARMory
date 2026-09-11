@@ -41,16 +41,7 @@ ENV/
 *.db
 *.sqlite
 *.sqlite3
-data/armory.db
-data/uploads/*
-!data/uploads/.gitkeep
-data/alexandrite/
-data/extensions.json
-
-# PocketBase runtime data (databases, WAL-files, generated types)
-# Schema is imported manually via JSON; migrations are not used.
-data/pb_data/
-data/pb_schema.json
+data/
 
 # Backups
 backups/
@@ -74,3 +65,6 @@ continue/config.json
 # Директория `site` для GitHub Pages
 site/
 .aider*
+
+# Local client deployment configurations
+/ARMory-deploy/
