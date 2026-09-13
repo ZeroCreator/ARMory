@@ -387,13 +387,13 @@ function renderBoard(data) {
                     <span class="kanban-column-title">${escapeHtml(column.name)}</span>
                     <span class="badge bg-secondary rounded-pill kanban-column-count">${tasks.length}</span>
                 </div>
-                <div class="kanban-column-body" data-column-name="${escapeHtml(column.name)}">
-                    ${tasks.map(task => renderTaskCard(task)).join('')}
-                </div>
-                <div class="kanban-column-footer">
+                <div class="kanban-column-add">
                     <button class="btn btn-sm btn-outline-brown w-100" onclick="openTaskModal(null, null, '${escapeHtml(column.name)}')">
                         <i class="bi bi-plus-lg me-1"></i> Добавить задачу
                     </button>
+                </div>
+                <div class="kanban-column-body" data-column-name="${escapeHtml(column.name)}">
+                    ${tasks.map(task => renderTaskCard(task)).join('')}
                 </div>
             </div>
         `;

@@ -3259,9 +3259,9 @@ footer {
     transition: none !important;
 }
 
-.kanban-column-footer {
+.kanban-column-add {
     padding: 0.75rem;
-    border-top: 1px solid rgba(107, 70, 193, 0.1);
+    border-bottom: 1px solid rgba(107, 70, 193, 0.1);
 }
 
 .kanban-card {

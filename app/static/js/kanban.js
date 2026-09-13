@@ -360,13 +360,13 @@ function renderBoard(data) {
                         </button>
                     </div>
                 </div>
-                <div class="kanban-column-body" data-status-id="${status.id}">
-                    ${tasks.map(task => renderTaskCard(task)).join('')}
-                </div>
-                <div class="kanban-column-footer">
+                <div class="kanban-column-add">
                     <button class="btn btn-sm btn-outline-brown w-100" onclick="openTaskModal(null, ${status.id})">
                         <i class="bi bi-plus-lg me-1"></i> Добавить задачу
                     </button>
+                </div>
+                <div class="kanban-column-body" data-status-id="${status.id}">
+                    ${tasks.map(task => renderTaskCard(task)).join('')}
                 </div>
             </div>
         `;
