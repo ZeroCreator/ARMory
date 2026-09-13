@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     # В публичном режиме все пользовательские запросы должны проходить через auth-gateway.
     # Локальный запуск по умолчанию остаётся без обязательной авторизации.
     auth_required: bool = False
-    # Авторизация: "magic_link" — вход по одноразовой ссылке, "proxy" — доверие OIDC-шлюзу.
+    # Авторизация: "magic_link" — локальный вход по паролю с установкой через email,
+    # "proxy" — доверие OIDC-шлюзу.
     auth_mode: str = "magic_link"
     auth_allowed_emails: str = ""
     auth_secret: str | None = None

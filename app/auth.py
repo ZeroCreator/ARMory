@@ -1,8 +1,11 @@
-"""Authentication helpers for the optional local magic-link login."""
+"""Authentication helpers for local password and magic-link login."""
 
 from __future__ import annotations
 
 from http.cookies import CookieError, SimpleCookie
+import hashlib
+import hmac
+import secrets
 import time
 from typing import Any
 
@@ -15,6 +18,9 @@ from app.config import Settings
 
 AUTH_COOKIE_NAME = "armory_session"
 AUTH_SESSION_ISSUER = "armory"
+PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 600_000
+PASSWORD_SALT_BYTES = 16
 
 AUTH_PROXY_HEADERS = (
     "x-forwarded-email",
@@ -41,6 +47,55 @@ def allowed_emails(settings: Settings) -> set[str]:
 
 def is_allowed_email(email: str | None, settings: Settings) -> bool:
     return normalize_email(email) in allowed_emails(settings)
+
+
+def hash_password(password: str) -> str:
+    """Create a salted password hash without storing the password itself."""
+    salt = secrets.token_bytes(PASSWORD_SALT_BYTES)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        PASSWORD_HASH_ITERATIONS,
+    )
+    return "$".join(
+        (
+            PASSWORD_HASH_ALGORITHM,
+            str(PASSWORD_HASH_ITERATIONS),
+            salt.hex(),
+            digest.hex(),
+        )
+    )
+
+
+def verify_password(password: str, encoded_hash: str | None) -> bool:
+    """Verify a password hash while safely rejecting malformed stored values."""
+    if not encoded_hash:
+        return False
+
+    try:
+        algorithm, iterations_text, salt_text, digest_text = encoded_hash.split("$")
+        iterations = int(iterations_text)
+        salt = bytes.fromhex(salt_text)
+        expected_digest = bytes.fromhex(digest_text)
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+    if (
+        algorithm != PASSWORD_HASH_ALGORITHM
+        or not 100_000 <= iterations <= 2_000_000
+        or len(salt) != PASSWORD_SALT_BYTES
+        or len(expected_digest) != hashlib.sha256().digest_size
+    ):
+        return False
+
+    actual_digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        iterations,
+    )
+    return hmac.compare_digest(actual_digest, expected_digest)
 
 
 def create_session_token(email: str, settings: Settings) -> str:

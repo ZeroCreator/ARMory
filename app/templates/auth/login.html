@@ -42,24 +42,49 @@
             background: linear-gradient(135deg, #8b5cf6, #14b8a6);
         }
         .btn-primary:hover, .btn-primary:focus { background: linear-gradient(135deg, #7c3aed, #0d9488); }
+        .btn-outline-light:hover, .btn-outline-light:focus { color: #0f172a; }
+        .login-divider {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            margin: 1.5rem 0;
+            color: rgba(248, 250, 252, .6);
+            font-size: .875rem;
+        }
+        .login-divider::before, .login-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, .2);
+        }
     </style>
 </head>
 <body>
     <main class="login-card">
         <div class="login-mark" aria-hidden="true">A</div>
         <h1 class="h3 mb-2">Вход в ARMory</h1>
-        <p class="text-light-emphasis mb-4">Введите разрешённый email — мы отправим одноразовую ссылку для входа.</p>
+        <p class="text-light-emphasis mb-4">Войдите по email и паролю.</p>
         {% if message %}
         <div class="alert alert-success" role="status">{{ message }}</div>
         {% endif %}
         {% if error %}
         <div class="alert alert-danger" role="alert">{{ error }}</div>
         {% endif %}
-        <form method="post" action="/auth/request">
+        <form method="post" action="/auth/login">
             <input type="hidden" name="next" value="{{ next_path }}">
             <label for="email" class="form-label">Email</label>
-            <input id="email" name="email" type="email" class="form-control form-control-lg mb-3" autocomplete="email" required autofocus>
-            <button type="submit" class="btn btn-primary btn-lg w-100">Получить ссылку</button>
+            <input id="email" name="email" type="email" class="form-control form-control-lg mb-3" value="{{ email }}" autocomplete="email" required autofocus>
+            <label for="password" class="form-label">Пароль</label>
+            <input id="password" name="password" type="password" class="form-control form-control-lg mb-3" autocomplete="current-password" required>
+            <button type="submit" class="btn btn-primary btn-lg w-100">Войти</button>
+        </form>
+        <div class="login-divider">Первый вход или восстановление</div>
+        <p class="text-light-emphasis small">Получите письмо, чтобы установить пароль или войти по одноразовой ссылке.</p>
+        <form method="post" action="/auth/request">
+            <input type="hidden" name="next" value="{{ next_path }}">
+            <label for="magic-email" class="form-label">Email</label>
+            <input id="magic-email" name="email" type="email" class="form-control form-control-lg mb-3" value="{{ email }}" autocomplete="email" required>
+            <button type="submit" class="btn btn-outline-light btn-lg w-100">Отправить письмо</button>
         </form>
     </main>
 </body>
