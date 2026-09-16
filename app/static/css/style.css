@@ -3162,6 +3162,21 @@ footer {
     color: #fff;
 }
 
+@media (max-width: 576px) {
+    .active-reminders-container {
+        top: 0.5rem;
+        right: 0.5rem;
+        left: 0.5rem;
+        min-width: 0;
+        max-width: none;
+        width: auto;
+    }
+
+    .active-reminder-card {
+        white-space: normal;
+    }
+}
+
 /* ═══════════════════════════════════════════════════
    KANBAN
    ═══════════════════════════════════════════════════ */

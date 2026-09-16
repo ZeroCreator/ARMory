@@ -2980,6 +2980,9 @@ function initScheduler() {
 let calendarInstance = null;
 let calendarEventsCache = [];
 let activeReminderIds = new Set();
+let activeRemindersCache = [];
+let dailyEventReminders = [];
+let dismissedReminderIds = new Set();
 
 function initSchedulerTabs() {
     const tabEl = document.querySelectorAll('#schedulerTab button[data-bs-toggle="tab"]');
@@ -3923,12 +3926,17 @@ function formatReminderTime(reminder) {
     return `${dateStr} ${timeStr}`;
 }
 
-function renderActiveReminders(reminders) {
+function renderActiveReminders(reminders = activeRemindersCache) {
     const container = document.getElementById('active-reminders-container');
     if (!container) return;
 
     const now = new Date();
-    const visible = reminders || [];
+    const merged = new Map();
+    [...(reminders || []), ...dailyEventReminders].forEach(reminder => {
+        if (reminder?.id == null || dismissedReminderIds.has(reminder.id)) return;
+        merged.set(reminder.id, reminder);
+    });
+    const visible = [...merged.values()];
     activeReminderIds = new Set(visible.map(r => r.id));
 
     container.querySelectorAll('.active-reminder-card').forEach(card => {
@@ -3973,20 +3981,21 @@ async function loadActiveReminders() {
     }
     try {
         const reminders = await api(`${API_BASE}/calendar/active-reminders`);
-        console.log('[reminders] loaded:', reminders);
-        renderActiveReminders(reminders);
+        activeRemindersCache = reminders || [];
+        renderActiveReminders();
     } catch (e) {
         console.error('[reminders] load error:', e);
     }
 }
 
 async function dismissActiveReminder(id) {
-    const card = document.querySelector(`.active-reminder-card[data-id="${id}"]`);
-    if (card) card.remove();
-    activeReminderIds.delete(id);
-    renderCalendarEventsList();
+    const reminderId = Number(id);
+    dismissedReminderIds.add(reminderId);
+    activeRemindersCache = activeRemindersCache.filter(reminder => reminder.id !== reminderId);
+    dailyEventReminders = dailyEventReminders.filter(reminder => reminder.id !== reminderId);
+    renderActiveReminders();
     try {
-        await api(`${API_BASE}/calendar/events/${id}/dismiss`, { method: 'POST' });
+        await api(`${API_BASE}/calendar/events/${reminderId}/dismiss`, { method: 'POST' });
     } catch (e) {
         console.error('[reminders] dismiss error:', e);
     }
@@ -4572,8 +4581,23 @@ async function loadDailyNews() {
     if (!panel) return;
     try {
         const data = await api(`${API_BASE}/affairs/daily`);
+        if (dailyNewsDate && dailyNewsDate !== data.date) {
+            dismissedReminderIds.clear();
+        }
         dailyNewsDate = data.date;
+        dailyEventReminders = (data.projects || [])
+            .flatMap(project => project.items || [])
+            .filter(item => item.type === 'event' && item.id != null && !item.dismissed_at)
+            .map(item => ({
+                id: item.id,
+                title: item.title,
+                description: item.description,
+                start_date: item.date,
+                all_day: item.all_day,
+                reminder_minutes: item.reminder_minutes,
+            }));
         renderDailyNews(data);
+        renderActiveReminders();
     } catch (error) {
         console.error('Daily news load error:', error);
     }

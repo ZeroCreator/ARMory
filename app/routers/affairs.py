@@ -207,11 +207,15 @@ async def daily_news(request: Request, db: AsyncSession = Depends(get_db)):
         })
     for event in events_result.scalars().all():
         items_by_project.setdefault(event.project_id, []).append({
+            "id": event.id,
             "type": "event",
             "title": event.title,
             "description": event.description,
             "date": event.start_date.isoformat(),
             "is_overdue": False,
+            "all_day": event.all_day,
+            "reminder_minutes": event.reminder_minutes,
+            "dismissed_at": event.dismissed_at.isoformat() if event.dismissed_at else None,
             "url": f"/projects/{event.project_id}",
         })
     for note in notes_result.scalars().all():
