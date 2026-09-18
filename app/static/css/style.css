@@ -2165,6 +2165,33 @@ footer {
     }
 }
 
+/* Компактный маскот в правом нижнем углу блока календаря */
+#calendar-pane {
+    position: relative;
+}
+
+.calendar-mascot {
+    position: absolute;
+    right: -0.9rem;
+    bottom: -1.1rem;
+    z-index: 4;
+    display: block;
+    width: 155px;
+    height: auto;
+    margin: 0;
+    pointer-events: none;
+    transform: scaleX(-1);
+    filter: drop-shadow(0 10px 12px rgba(20, 17, 36, 0.28));
+}
+
+@media (max-width: 900px) {
+    .calendar-mascot {
+        right: -0.45rem;
+        bottom: -0.55rem;
+        width: 125px;
+    }
+}
+
 /* ── Бэкап / Архив ── */
 .backup-body {
     padding: 1.25rem;

@@ -44,3 +44,11 @@ body{font-size:17px}header nav a{font-size:16px}.small{font-size:14px}.label{fon
 /* Точечные угловые акценты и контраст иконок преимуществ */
 .hero-art{isolation:isolate}.hero-art:after{content:'';position:absolute;left:-22px;bottom:-42px;z-index:0;width:150px;height:120px;background-image:radial-gradient(var(--lav) 1.5px,transparent 1.5px);background-size:14px 14px}.hero-shot{z-index:1}.cards article:not(.dark) .icon{color:#76583e;border:1px solid #c9aa86}.cards .dark .icon{color:#fff8ed;border:1px solid rgba(255,248,237,.58)}.final-shell{position:relative;width:min(1220px,calc(100% - 48px));margin:0 auto 110px}.final-shell:before,.final-shell:after{content:'';position:absolute;z-index:0;width:145px;height:110px;background-image:radial-gradient(var(--lav) 1.5px,transparent 1.5px);background-size:14px 14px;pointer-events:none}.final-shell:before{left:-42px;top:-46px}.final-shell:after{right:-42px;bottom:-46px}.final-shell .final{position:relative;z-index:1;width:100%;margin-bottom:0;overflow:visible}.final>div{position:relative;z-index:1}
 @media(max-width:650px){.brand-tagline{width:auto;margin-top:20px;padding:10px 14px;border-radius:16px;font-size:15px}.final-shell{width:calc(100% - 28px);margin-bottom:65px}.final-shell:before{left:-20px;top:-38px}.final-shell:after{right:-20px;bottom:-38px}}
+
+/* Второй маскот: осьминожек на стеке рабочих инструментов */
+.final{position:relative;align-items:center;overflow:visible!important}
+.final-copy{position:relative;z-index:3;max-width:700px}
+.final-copy .button{display:inline-flex;margin-top:24px}
+.final-octopus{position:absolute;right:20px;top:50%;z-index:2;width:min(360px,30vw);height:auto;pointer-events:none;transform:translateY(-50%) scaleX(-1);filter:drop-shadow(0 20px 20px rgba(45,42,69,.24))}
+@media(max-width:900px){.final{align-items:flex-start;padding-right:24px;padding-bottom:190px}.final-copy{max-width:100%}.final-octopus{right:12px;width:260px}}
+@media(max-width:650px){.final{padding-bottom:175px}.final-copy .button{margin-top:20px}.final-octopus{right:50%;top:auto;bottom:20px;width:190px;transform:translateX(50%) scaleX(-1)}}
