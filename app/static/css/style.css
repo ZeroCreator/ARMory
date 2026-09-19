@@ -2177,11 +2177,237 @@ footer {
     z-index: 4;
     display: block;
     width: 155px;
-    height: auto;
     margin: 0;
     pointer-events: none;
     transform: scaleX(-1);
+    transform-origin: center bottom;
     filter: drop-shadow(0 10px 12px rgba(20, 17, 36, 0.28));
+}
+
+.calendar-mascot-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+}
+
+.calendar-mascot-art,
+.calendar-mascot-tentacle {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+}
+
+/* В исходном PNG пузырьки статичны. Оставляем только тело, а поток рисуем ниже отдельными слоями. */
+.calendar-mascot-art {
+    clip-path: polygon(
+        0 0,
+        62% 0,
+        62% 20%,
+        64% 23%,
+        66% 29%,
+        68% 35%,
+        71% 42%,
+        73% 47%,
+        79% 52%,
+        100% 56%,
+        100% 100%,
+        0 100%
+    );
+    transform-origin: 53% 73%;
+    animation: calendar-mascot-breathe 5.4s ease-in-out infinite;
+}
+
+/* Лёгкое движение внешних щупалец создаётся отдельными маскированными копиями исходного рисунка. */
+.calendar-mascot-tentacle {
+    clip-path: polygon(0 59%, 47% 59%, 52% 100%, 0 100%);
+    transform-origin: 35% 70%;
+    animation: calendar-tentacle-wave-left 4.6s ease-in-out infinite;
+}
+
+.calendar-mascot-tentacle-right {
+    clip-path: polygon(53% 57%, 100% 54%, 100% 100%, 53% 100%);
+    transform-origin: 67% 69%;
+    animation-name: calendar-tentacle-wave-right;
+    animation-delay: -1.15s;
+}
+
+.calendar-mascot-bubble-stream {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+}
+
+.calendar-mascot-bubble {
+    --bubble-size: 18px;
+    --bubble-rise: 30px;
+    --bubble-rise-mid: -19px;
+    --bubble-rise-end: -30px;
+    --bubble-drift: 3px;
+    --bubble-delay: 0s;
+    position: absolute;
+    left: 72%;
+    top: 42%;
+    display: grid;
+    place-items: center;
+    width: var(--bubble-size);
+    height: var(--bubble-size);
+    border: 1px solid rgba(225, 221, 255, 0.95);
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.95) 0 7%, transparent 21%),
+        radial-gradient(circle at 65% 72%, rgba(157, 140, 255, 0.46), transparent 68%),
+        linear-gradient(145deg, rgba(224, 218, 255, 0.88), rgba(153, 133, 238, 0.72));
+    box-shadow:
+        inset -2px -3px 4px rgba(73, 51, 157, 0.22),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.78),
+        0 2px 5px rgba(85, 59, 162, 0.25);
+    color: #fff;
+    font: 700 0.5rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    opacity: 0;
+    transform-origin: center;
+    animation: calendar-bubble-rise 5.8s ease-in-out var(--bubble-delay) infinite;
+}
+
+.calendar-mascot-bubble::after {
+    position: absolute;
+    inset: -4px;
+    border: 1px solid rgba(220, 214, 255, 0.82);
+    border-radius: inherit;
+    content: "";
+    opacity: 0;
+    transform: scale(0.45);
+    animation: calendar-bubble-pop 5.8s ease-out var(--bubble-delay) infinite;
+}
+
+/* Маскот развёрнут зеркально, поэтому цифру внутри пузырька разворачиваем обратно. */
+.calendar-mascot-bubble > span {
+    transform: scaleX(-1);
+}
+
+.calendar-mascot-bubble-1 {
+    --bubble-size: 13px;
+    --bubble-rise: 27px;
+    --bubble-rise-mid: -17px;
+    --bubble-rise-end: -27px;
+    --bubble-drift: -2px;
+    --bubble-delay: -1.8s;
+    left: 70%;
+    top: 46%;
+}
+
+.calendar-mascot-bubble-2 {
+    --bubble-size: 22px;
+    --bubble-rise: 38px;
+    --bubble-rise-mid: -24px;
+    --bubble-rise-end: -38px;
+    --bubble-drift: 4px;
+    --bubble-delay: -3.25s;
+    left: 78%;
+    top: 31%;
+}
+
+.calendar-mascot-bubble-3 {
+    --bubble-size: 31px;
+    --bubble-rise: 46px;
+    --bubble-rise-mid: -29px;
+    --bubble-rise-end: -46px;
+    --bubble-drift: -3px;
+    --bubble-delay: -0.8s;
+    left: 87%;
+    top: 14%;
+}
+
+.calendar-mascot-bubble-4 {
+    --bubble-size: 9px;
+    --bubble-rise: 20px;
+    --bubble-rise-mid: -12px;
+    --bubble-rise-end: -20px;
+    --bubble-drift: 5px;
+    --bubble-delay: -4.1s;
+    left: 75%;
+    top: 39%;
+}
+
+@keyframes calendar-mascot-breathe {
+    0%, 100% {
+        transform: translate3d(0, 1px, 0) rotate(-0.8deg) scale(1);
+    }
+    50% {
+        transform: translate3d(1px, -1px, 0) rotate(0.9deg) scale(1.012);
+    }
+}
+
+@keyframes calendar-tentacle-wave-left {
+    0%, 100% {
+        transform: translate3d(0, 0, 0) rotate(-1deg) scaleX(1);
+    }
+    50% {
+        transform: translate3d(1px, -1px, 0) rotate(1.7deg) scaleX(1.012);
+    }
+}
+
+@keyframes calendar-tentacle-wave-right {
+    0%, 100% {
+        transform: translate3d(0, 0, 0) rotate(1deg) scaleX(1);
+    }
+    50% {
+        transform: translate3d(-1px, -1px, 0) rotate(-1.8deg) scaleX(1.012);
+    }
+}
+
+@keyframes calendar-bubble-rise {
+    0%, 4% {
+        opacity: 0;
+        transform: translate3d(-50%, 7px, 0) scale(0.22);
+    }
+    12% {
+        opacity: 0.92;
+        transform: translate3d(-50%, 0, 0) scale(0.82);
+    }
+    58% {
+        opacity: 0.88;
+        transform: translate3d(calc(-50% + var(--bubble-drift)), var(--bubble-rise-mid), 0) scale(1);
+    }
+    76% {
+        opacity: 0.82;
+        transform: translate3d(calc(-50% + var(--bubble-drift)), var(--bubble-rise-end), 0) scale(1.04);
+    }
+    84%, 100% {
+        opacity: 0;
+        transform: translate3d(calc(-50% + var(--bubble-drift)), var(--bubble-rise-end), 0) scale(1.42);
+    }
+}
+
+@keyframes calendar-bubble-pop {
+    0%, 76% {
+        opacity: 0;
+        transform: scale(0.45);
+    }
+    82% {
+        opacity: 0.8;
+        transform: scale(0.9);
+    }
+    94%, 100% {
+        opacity: 0;
+        transform: scale(1.8);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .calendar-mascot-art,
+    .calendar-mascot-tentacle,
+    .calendar-mascot-bubble,
+    .calendar-mascot-bubble::after {
+        animation: none;
+    }
+
+    .calendar-mascot-bubble {
+        opacity: 0.82;
+        transform: translateX(-50%);
+    }
 }
 
 @media (max-width: 900px) {
