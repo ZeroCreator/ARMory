@@ -143,11 +143,22 @@ async def reorder_documents(
     data: ReorderRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    section_id_is_set = "section_id" in data.model_fields_set
+    if section_id_is_set and data.section_id is not None:
+        section_result = await db.execute(
+            select(Section.id).where(Section.id == data.section_id, Section.project_id == project_id)
+        )
+        if section_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Section not found")
+
     for idx, doc_id in enumerate(data.document_ids):
+        values = {"sort_order": idx}
+        if section_id_is_set:
+            values["section_id"] = data.section_id
         await db.execute(
             update(Document)
             .where(Document.id == doc_id, Document.project_id == project_id)
-            .values(sort_order=idx)
+            .values(**values)
         )
     await db.commit()
     broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
@@ -335,13 +346,43 @@ async def reorder_items(
     doc_id: int,
     data: DocumentItemReorderRequest,
     db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
 ):
-    for idx, item_id in enumerate(data.item_ids):
-        await db.execute(
-            update(DocumentItem)
-            .where(DocumentItem.id == item_id, DocumentItem.document_id == doc_id)
-            .values(sort_order=idx)
+    document_result = await db.execute(
+        select(Document).where(Document.id == doc_id, Document.project_id == project_id)
+    )
+    target_document = document_result.scalar_one_or_none()
+    if target_document is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    project_result = await db.execute(select(Project).where(Project.id == project_id))
+    project = project_result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    items_result = await db.execute(
+        select(DocumentItem)
+        .join(Document)
+        .where(
+            DocumentItem.id.in_(data.item_ids),
+            Document.project_id == project_id,
         )
+    )
+    items_by_id = {item.id: item for item in items_result.scalars().all()}
+    if len(items_by_id) != len(set(data.item_ids)):
+        raise HTTPException(status_code=400, detail="One or more items not found")
+
+    target_subfolder = f"{project.id}_{slugify(project.name)}/{target_document.id}_{slugify(target_document.title)}"
+    for idx, item_id in enumerate(data.item_ids):
+        item = items_by_id[item_id]
+        if item.document_id != doc_id and item.item_type == DocType.file and item.file_path:
+            moved_file = await storage.move_file(item.file_path, target_subfolder)
+            if moved_file:
+                item.file_path = moved_file["file_path"]
+                if moved_file.get("url"):
+                    item.url = moved_file["url"]
+        item.document_id = doc_id
+        item.sort_order = idx
     await db.commit()
     broadcast({"event": "project", "type": "documents_changed", "project_id": project_id})
     return None

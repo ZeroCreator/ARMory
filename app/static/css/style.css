@@ -803,6 +803,47 @@ hr { border-color: rgba(139,124,246,0.15); }
 .doc-item:hover { background: rgba(0,0,0,0.04); }
 .doc-item .border-top { border-color: var(--sand-darker) !important; }
 
+.doc-item.doc-item-sortable-ghost {
+    min-height: 3.25rem;
+    border: 2px dashed var(--purple-accent) !important;
+    background: linear-gradient(90deg, rgba(167,139,250,0.24), rgba(196,181,253,0.12)) !important;
+    opacity: 1;
+}
+.doc-item.doc-item-sortable-ghost > * { visibility: hidden; }
+
+.doc-item.doc-item-sortable-drag {
+    opacity: 0.96;
+    background: linear-gradient(135deg, #fdf8f0 0%, #e9ddff 100%);
+    box-shadow: 0 12px 28px rgba(45,42,69,0.28), 0 0 0 2px var(--purple-accent);
+    transform: scale(1.01);
+    cursor: grabbing;
+}
+
+.doc-group.doc-group-drag-source {
+    opacity: 0.62;
+}
+
+.doc-group.doc-group-drop-target {
+    border-color: var(--purple-accent) !important;
+    box-shadow: 0 0 0 3px rgba(167,139,250,0.48), 0 12px 36px rgba(74,70,110,0.28);
+}
+.doc-group.doc-group-drop-target .doc-group-body {
+    background: linear-gradient(180deg, rgba(167,139,250,0.18), rgba(196,181,253,0.06));
+}
+.doc-group.doc-group-drop-target .doc-group-body::before {
+    content: "Отпустите файл здесь";
+    display: block;
+    margin: 0 0 0.55rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px dashed var(--purple-accent);
+    border-radius: 0.5rem;
+    color: var(--btn-purple-dark);
+    background: linear-gradient(90deg, rgba(167,139,250,0.2), rgba(196,181,253,0.1));
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-align: center;
+}
+
 .doc-drag-handle {
     color: #b8a9a0;
     cursor: grab;

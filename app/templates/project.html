@@ -365,7 +365,11 @@
                     </div>
                     <div class="mb-3 d-none" id="edit-item-file-wrap">
                         <label class="form-label">Заменить файл</label>
-                        <input type="file" class="form-control" name="file" id="edit-item-file">
+                        <div class="d-flex align-items-center gap-2">
+                            <label for="edit-item-file" class="btn btn-sm btn-outline-primary mb-0">Выбрать новый файл</label>
+                            <span class="small text-muted" id="edit-item-selected-file"></span>
+                        </div>
+                        <input type="file" class="visually-hidden" name="file" id="edit-item-file" onchange="updateEditItemFileName(this)" aria-label="Выбрать новый файл">
                     </div>
                 </form>
             </div>

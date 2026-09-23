@@ -933,7 +933,7 @@ function renderSection(section, idx) {
         <div class="section-card mb-3 fade-in" data-id="${section.id}">
             <div class="section-header" onclick="toggleSection(${section.id})" oncontextmenu="handleShareContextMenu(event, '/projects/${PROJECT_ID}?open_section=${section.id}')">
                 <div class="d-flex align-items-center gap-2 flex-fill">
-                    <div class="doc-drag-handle" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
+                    <div class="doc-drag-handle section-drag-handle" onclick="event.stopPropagation()"><i class="bi bi-grip-vertical"></i></div>
                     <i class="bi ${collapsed ? 'bi-chevron-right' : 'bi-chevron-down'} section-toggle-icon"></i>
                     <div>
                         <div class="d-flex align-items-center gap-2">
@@ -949,7 +949,7 @@ function renderSection(section, idx) {
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteSection(${section.id})"><i class="bi bi-trash"></i></button>
                 </div>
             </div>
-            <div class="section-body ${collapsed ? 'd-none' : ''}">
+            <div class="section-body ${collapsed ? 'd-none' : ''}" data-section-id="${section.id}">
                 ${docsHtml || '<div class="text-muted small py-2">Нет групп — добавьте группу в этот раздел</div>'}
             </div>
         </div>`;
@@ -958,7 +958,7 @@ function renderSection(section, idx) {
 function renderUngrouped(docs) {
     const docsHtml = docs.map((d, idx) => renderGroup(d, idx)).join('');
     return `
-        <div class="ungrouped-block mb-4">
+        <div class="ungrouped-block mb-4" data-section-id="">
             ${docsHtml}
         </div>`;
 }
@@ -1261,7 +1261,7 @@ function initSectionSortable(projectId) {
 
     sectionSortable = Sortable.create(el, {
         animation: 150,
-        handle: '.doc-drag-handle',
+        handle: '.section-drag-handle',
         draggable: '.section-card',
         forceFallback: true,
         fallbackClass: 'sortable-drag',
@@ -1285,18 +1285,26 @@ function initGroupSortable(projectId, el) {
 
     el._sortable = Sortable.create(el, {
         animation: 150,
+        group: {
+            name: 'project-document-groups',
+            pull: true,
+            put: true,
+        },
         handle: '.doc-drag-handle',
         draggable: '.doc-group',
         forceFallback: true,
         fallbackClass: 'sortable-drag',
         ghostClass: 'sortable-ghost',
         dragClass: 'sortable-drag',
-        onEnd: function () {
-            const ids = Array.from(el.children)
+        onEnd: function (evt) {
+            const target = evt.to || el;
+            const ids = Array.from(target.children)
                 .filter(child => child.classList.contains('doc-group'))
                 .map(child => parseInt(child.dataset.id));
-            if (ids.length > 1) {
-                reorderDocuments(projectId, ids);
+            if (ids.length) {
+                const rawSectionId = target.dataset.sectionId;
+                const sectionId = rawSectionId ? parseInt(rawSectionId, 10) : null;
+                reorderDocuments(projectId, ids, sectionId);
             }
         }
     });
@@ -1312,29 +1320,58 @@ function initItemSortable(projectId, el) {
 
     el._itemSortable = Sortable.create(el, {
         animation: 150,
+        group: {
+            name: 'project-document-items',
+            pull: true,
+            put: true,
+        },
         handle: '.doc-item-drag-handle',
         draggable: '.doc-item',
         forceFallback: true,
         fallbackClass: 'sortable-drag',
-        ghostClass: 'sortable-ghost',
-        dragClass: 'sortable-drag',
-        onEnd: function () {
-            const ids = Array.from(el.children)
+        ghostClass: 'doc-item-sortable-ghost',
+        dragClass: 'doc-item-sortable-drag',
+        chosenClass: 'doc-item-sortable-chosen',
+        onStart: function (evt) {
+            const sourceGroup = evt.from?.closest('.doc-group');
+            if (sourceGroup) sourceGroup.classList.add('doc-group-drag-source');
+        },
+        onMove: function (evt) {
+            document.querySelectorAll('.doc-group-drop-target').forEach(group => {
+                group.classList.remove('doc-group-drop-target');
+            });
+            const sourceGroup = evt.from?.closest('.doc-group');
+            const targetGroup = evt.to?.closest('.doc-group') || evt.related?.closest('.doc-group');
+            if (targetGroup && targetGroup !== sourceGroup) {
+                targetGroup.classList.add('doc-group-drop-target');
+            }
+            return true;
+        },
+        onEnd: function (evt) {
+            const target = evt.to || el;
+            const targetGroup = target.closest('.doc-group');
+            const targetDocId = targetGroup ? parseInt(targetGroup.dataset.id, 10) : null;
+            document.querySelectorAll('.doc-group-drop-target, .doc-group-drag-source').forEach(group => {
+                group.classList.remove('doc-group-drop-target', 'doc-group-drag-source');
+            });
+            const ids = Array.from(target.children)
                 .filter(child => child.classList.contains('doc-item'))
                 .map(child => parseInt(child.dataset.id));
-            if (ids.length > 1) {
-                reorderItems(projectId, docId, ids);
+            if (targetDocId && ids.length) {
+                reorderItems(projectId, targetDocId, ids);
             }
         }
     });
 }
 
-async function reorderDocuments(projectId, documentIds) {
+async function reorderDocuments(projectId, documentIds, sectionId = undefined) {
     try {
+        const body = {document_ids: documentIds};
+        if (sectionId !== undefined) body.section_id = sectionId;
         await api(`${API_BASE}/projects/${projectId}/documents/reorder`, {
             method: 'PATCH',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({document_ids: documentIds})
+            body: JSON.stringify(body)
         });
     } catch (e) {
         console.error('Reorder documents failed:', e);
@@ -1518,9 +1555,16 @@ async function createItem() {
     }
 }
 
+function updateEditItemFileName(input, fallbackName = '') {
+    const selectedFile = document.getElementById('edit-item-selected-file');
+    if (!selectedFile) return;
+    selectedFile.textContent = input?.files?.[0]?.name || fallbackName;
+}
+
 function showEditItemModal(docId, item) {
     const f = document.getElementById('edit-item-form');
     f.reset();
+    updateEditItemFileName(f.file, item.item_type === 'file' ? item.file_name : '');
     f.doc_id.value = docId;
     f.item_id.value = item.id;
     f.title.value = item.title || '';

@@ -39,6 +39,10 @@ class StorageBackend:
         """Rename/move a subfolder on the filesystem."""
         raise NotImplementedError
 
+    async def move_file(self, identifier: str, subfolder: str) -> dict | None:
+        """Move a file to a different subfolder and return its new metadata."""
+        raise NotImplementedError
+
     async def get_local_path(self, identifier: str) -> str | None:
         """Get local filesystem path for reading, or None if not local"""
         raise NotImplementedError
@@ -139,6 +143,28 @@ class LocalStorage(StorageBackend):
         shutil.move(str(old_path), str(new_path))
         return True
 
+    async def move_file(self, identifier: str, subfolder: str) -> dict | None:
+        source = self._resolve_path(identifier)
+        if not source.exists() or not source.is_file():
+            return None
+
+        destination_dir = self.base_path / subfolder
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        destination = destination_dir / source.name
+        if source.resolve() != destination.resolve():
+            stem = destination.stem
+            suffix = destination.suffix
+            counter = 1
+            while destination.exists():
+                destination = destination_dir / f"{stem}_{counter:02d}{suffix}"
+                counter += 1
+            shutil.move(str(source), str(destination))
+
+        return {
+            "file_path": str(Path(subfolder) / destination.name),
+            "url": None,
+        }
+
     async def get_local_path(self, identifier: str) -> str | None:
         path = self._resolve_path(identifier)
         return str(path) if path.exists() else None
@@ -220,6 +246,27 @@ class S3Storage(StorageBackend):
         # У S3 нет настоящих папок; переименование ключей потребует copy+delete.
         # Пока не реализовано.
         return False
+
+    async def move_file(self, identifier: str, subfolder: str) -> dict | None:
+        if not identifier:
+            return None
+
+        destination = f"uploads/{subfolder}/{Path(identifier).name}"
+        if identifier != destination:
+            try:
+                self.s3.copy_object(
+                    Bucket=self.bucket,
+                    CopySource={"Bucket": self.bucket, "Key": identifier},
+                    Key=destination,
+                )
+                self.s3.delete_object(Bucket=self.bucket, Key=identifier)
+            except Exception:
+                return None
+
+        return {
+            "file_path": destination,
+            "url": self.get_public_url(destination),
+        }
 
     async def get_local_path(self, identifier: str) -> str | None:
         return None

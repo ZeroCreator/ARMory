@@ -99,6 +99,7 @@ class DocumentItemUpdate(BaseModel):
 
 class ReorderRequest(BaseModel):
     document_ids: List[int]
+    section_id: Optional[int] = None
 
 
 class DocumentItemReorderRequest(BaseModel):
