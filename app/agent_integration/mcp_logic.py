@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from functools import wraps
 from typing import Any, Literal
 
 import httpx
@@ -143,8 +145,21 @@ def _with_task_link(task: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _register_blocking_tool(server: FastMCP):
+    """Регистрирует синхронный обработчик без блокировки цикла событий MCP."""
+    def register(function):
+        @wraps(function)
+        async def run_in_thread(*args, **kwargs):
+            return await asyncio.to_thread(function, *args, **kwargs)
+
+        server.tool()(run_in_thread)
+        return function
+
+    return register
+
+
 def register_tools(server: FastMCP) -> None:
-    @server.tool()
+    @_register_blocking_tool(server)
     def list_projects(query: str | None = None) -> dict[str, Any]:
         """Возвращает проекты ARMory с фильтром по части названия, если он задан."""
         projects = _list_projects(query)
@@ -152,7 +167,7 @@ def register_tools(server: FastMCP) -> None:
             return projects
         return {"projects": projects, "count": len(projects)}
 
-    @server.tool()
+    @_register_blocking_tool(server)
     def list_task_statuses(
         project_id: int | None = None,
         project_name: str | None = None,
@@ -169,7 +184,7 @@ def register_tools(server: FastMCP) -> None:
             "statuses": statuses,
         }
 
-    @server.tool()
+    @_register_blocking_tool(server)
     def list_tasks(
         project_id: int | None = None,
         project_name: str | None = None,
@@ -187,7 +202,7 @@ def register_tools(server: FastMCP) -> None:
             "count": len(tasks),
         }
 
-    @server.tool()
+    @_register_blocking_tool(server)
     def create_task(
         title: str,
         project_name: str | None = None,
@@ -240,13 +255,13 @@ def register_tools(server: FastMCP) -> None:
         result["status_name"] = status["name"]
         return result
 
-    @server.tool()
+    @_register_blocking_tool(server)
     def get_task(task_id: int) -> dict[str, Any]:
         """Возвращает задачу по её глобальному номеру в ARMory."""
         task = _api_request("GET", f"/api/tasks/{task_id}")
         return _with_task_link(task) if not _error(task) else task
 
-    @server.tool()
+    @_register_blocking_tool(server)
     def update_task(
         task_id: int,
         project_id: int | None = None,
@@ -312,7 +327,7 @@ def register_tools(server: FastMCP) -> None:
         )
         return _with_task_link(updated) if not _error(updated) else updated
 
-    @server.tool()
+    @_register_blocking_tool(server)
     def take_task_into_work(task_id: int) -> dict[str, Any]:
         """Перемещает задачу в колонку проекта «В работе» и назначает исполнителем AI-ассистента."""
         task = _api_request("GET", f"/api/tasks/{task_id}")
@@ -380,7 +395,7 @@ def register_tools(server: FastMCP) -> None:
         result["assignee_name"] = assignee["name"]
         return result
 
-    @server.tool()
+    @_register_blocking_tool(server)
     def complete_task(task_id: int, result: str | None = None) -> dict[str, Any]:
         """Перемещает задачу в финальную колонку канбана и при необходимости записывает результат."""
         task = _api_request("GET", f"/api/tasks/{task_id}")
