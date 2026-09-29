@@ -1,67 +1,54 @@
-"""HTTP MCP endpoint для MCP-клиентов.
+"""Проверяет запросы клиентов MCP перед передачей в потоковый HTTP-сервер."""
 
-Принимает JSON-RPC запросы по HTTP и делегирует обработку mcp_logic.
-Защищён статичным API-ключом (MCP_API_KEY), потому что endpoint
-пропускается мимо oauth2-proxy через OAUTH2_PROXY_SKIP_AUTH_ROUTES.
-"""
+import hmac
 
-import asyncio
-import os
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import JSONResponse
-
+from app.agent_integration.server import mcp_server
 from app.config import get_settings
-from mcp.mcp_logic import handle_message
-
-router = APIRouter(prefix="/mcp", tags=["mcp"])
 
 
-def _verify_mcp_key(request: Request):
-    settings = get_settings()
-    key = settings.mcp_api_key
-    if not key:
-        if settings.auth_required:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP API key is not configured",
+class MCPAPIKeyMiddleware:
+    """Проверяет отдельный ключ MCP перед обработкой HTTP-запроса."""
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        settings = get_settings()
+        if not settings.mcp_api_key:
+            response = JSONResponse(
+                status_code=503,
+                content={"detail": "MCP API key is not configured"},
             )
-        return
+            await response(scope, receive, send)
+            return
 
-    header_key = request.headers.get("x-mcp-api-key")
-    auth_header = request.headers.get("authorization", "")
-    bearer_key = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+        headers = {
+            name.decode("latin-1").lower(): value.decode("latin-1")
+            for name, value in scope.get("headers", [])
+        }
+        supplied_key = headers.get("x-mcp-api-key", "")
+        authorization = headers.get("authorization", "")
+        scheme, _, bearer_key = authorization.partition(" ")
+        if scheme.casefold() == "bearer" and bearer_key.strip():
+            supplied_key = bearer_key.strip()
 
-    if header_key != key and bearer_key != key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing MCP API key",
-        )
+        if not hmac.compare_digest(supplied_key, settings.mcp_api_key):
+            response = JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid or missing MCP API key"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            await response(scope, receive, send)
+            return
 
-
-@router.post("", dependencies=[Depends(_verify_mcp_key)])
-async def mcp_endpoint(request: Request):
-    """JSON-RPC endpoint для MCP over HTTP."""
-    msg = await request.json()
-    base_url = os.environ.get("ARMORY_BASE_URL") or str(request.base_url).rstrip("/")
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, handle_message, msg, base_url)
-    id_ = msg.get("id")
-
-    if result is None:
-        # Notification — no response required.
-        return Response(status_code=204)
-
-    response = {"jsonrpc": "2.0", "id": id_}
-    if isinstance(result, dict) and "error" in result:
-        response["error"] = result["error"]
-    else:
-        response["result"] = result
-
-    return JSONResponse(content=response)
+        await self.app(scope, receive, send)
 
 
-@router.get("", dependencies=[Depends(_verify_mcp_key)])
-async def mcp_get():
-    """Заглушка для GET-запросов (некоторые MCP клиенты делают probe)."""
-    return JSONResponse(content={"ok": True})
+mcp_asgi_app: ASGIApp = MCPAPIKeyMiddleware(mcp_server.streamable_http_app())

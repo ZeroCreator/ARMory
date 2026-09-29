@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     # Публичный URL ARMory (используется для WOPI / Collabora)
     armory_public_url: str = "https://armory.team-73.ru"
 
+    # Внутренний адрес FastAPI, который MCP использует для вызовов API этого же приложения.
+    armory_base_url: str = "http://localhost:8088"
+
     # MCP API key для аутентификации MCP-клиентов на endpoint /mcp
     mcp_api_key: str | None = None
 

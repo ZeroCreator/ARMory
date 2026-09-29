@@ -17,6 +17,7 @@ services:
       - .env
     environment:
       EXTENSION_MANAGER_URL: http://extension-manager:8092
+      ARMORY_BASE_URL: http://localhost:${PORT:-8088}
     networks:
       - armory-net
 

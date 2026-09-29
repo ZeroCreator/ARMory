@@ -176,7 +176,8 @@ async def lifespan(app: FastAPI):
     if settings.telegram_reminder_enabled:
         reminder_task = asyncio.create_task(_reminder_loop())
 
-    yield
+    async with mcp_router.mcp_server.session_manager.run():
+        yield
 
     if reminder_task:
         reminder_task.cancel()
@@ -220,7 +221,7 @@ app.include_router(collabora.router)
 app.include_router(tasks.router)
 app.include_router(tasks.global_router)
 app.include_router(assignees.router)
-app.include_router(mcp_router.router)
+app.mount("/mcp", mcp_router.mcp_asgi_app, name="mcp")
 app.include_router(events.router)
 app.include_router(comments.router)
 app.include_router(affairs.router)

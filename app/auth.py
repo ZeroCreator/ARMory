@@ -5,6 +5,7 @@ from __future__ import annotations
 from http.cookies import CookieError, SimpleCookie
 import hashlib
 import hmac
+import re
 import secrets
 import time
 from typing import Any
@@ -142,9 +143,39 @@ def _scope_headers(scope: dict) -> dict[str, str]:
     }
 
 
+def _mcp_service_email(scope: dict, headers: dict[str, str], settings: Settings) -> str | None:
+    """Проверяет сервисный ключ MCP только для разрешённых запросов управления задачами."""
+    if not settings.mcp_api_key:
+        return None
+
+    authorization = headers.get("authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.casefold() != "bearer" or not hmac.compare_digest(token.strip(), settings.mcp_api_key):
+        return None
+
+    method = scope.get("method", "").upper()
+    path = scope.get("path", "")
+    allowed = (
+        (method == "GET" and path == "/api/projects")
+        or (method == "GET" and re.fullmatch(r"/api/projects/\d+/task-statuses", path))
+        or (method in {"GET", "POST"} and re.fullmatch(r"/api/projects/\d+/tasks", path))
+        or (method == "PATCH" and re.fullmatch(r"/api/projects/\d+/tasks/\d+", path))
+        or (method == "GET" and re.fullmatch(r"/api/tasks/\d+", path))
+        or (method == "POST" and path == "/api/assignees/mcp-agent")
+    )
+    if not allowed:
+        return None
+
+    return normalize_email(settings.ai_assignee_email) or "ai-assistant"
+
+
 def get_email_from_scope(scope: dict, settings: Settings) -> str | None:
     """Resolve the authenticated identity without trusting user headers in magic-link mode."""
     headers = _scope_headers(scope)
+
+    service_email = _mcp_service_email(scope, headers, settings)
+    if service_email:
+        return service_email
 
     if settings.auth_mode.casefold() == "proxy":
         for header in AUTH_PROXY_HEADERS:

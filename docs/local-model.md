@@ -1,6 +1,6 @@
 # Локальная модель для работы с ARMory
 
-ARMory не зависит от конкретного поставщика модели. Любую локальную модель, запущенную через OpenAI-совместимый сервер, можно использовать с MCP-клиентом (Claude Code, Cline, Continue, mcpm-aider и др.), который подключается к endpoint `/mcp` ARMory.
+ARMory не зависит от конкретного поставщика модели. Любую локальную модель, запущенную через OpenAI-совместимый сервер, можно использовать с MCP-клиентом (Claude Code, Cline, Continue, mcpm-aider и др.), который подключается к endpoint `/mcp/` ARMory.
 
 Ниже — пример запуска локальной модели Qwen через `llama.cpp` и варианты подключения MCP-клиентов.
 
@@ -26,8 +26,8 @@ cd <llama-cpp-directory>
 
 ./build/bin/llama-server \
   -hf Qwen/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M \
-  --host 127.0.0.1 \
-  --port 8082 \
+  --host <service-host> \
+  --port <port> \
   -ngl 25 \
   -c 8192 \
   --flash-attn on
@@ -64,7 +64,7 @@ pkill -f llama-server
 Локальная модель сама по себе не является MCP-клиентом. Нужен клиент, который:
 
 1. Умеет общаться с локальной моделью по OpenAI-совместимому API.
-2. Поддерживает MCP и умеет подключаться к `/mcp` ARMory.
+2. Поддерживает MCP и умеет подключаться к `/mcp/` ARMory.
 
 ### Вариант A: Claude Code / Cline / Continue
 
@@ -82,9 +82,9 @@ pkill -f llama-server
 {
   "mcpServers": {
     "armory": {
-      "url": "http://<armory-host>:<armory-port>/mcp",
+      "url": "http://<armory-host>:<armory-port>/mcp/",
       "headers": {
-        "X-MCP-API-Key": "YOUR_MCP_API_KEY"
+        "X-MCP-API-Key": "<MCP_API_KEY>"
       }
     }
   }
@@ -111,7 +111,7 @@ aider \
 Существуют сторонние обёртки (`mcpm-aider`), которые добавляют Aider поддержку MCP. В таком случае Aider выступает MCP-клиентом, а ARMory — MCP-сервером. Конфигурация зависит от конкретной обёртки, но обычно сводится к указанию:
 
 - URL модели: `http://<model-host>:<model-port>/v1`
-- MCP-сервера ARMory: `http://<armory-host>:<armory-port>/mcp`
+- MCP-сервера ARMory: `http://<armory-host>:<armory-port>/mcp/`
 - API-ключа `MCP_API_KEY`
 
 ## 3. Настройка .env в ARMory

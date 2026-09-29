@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import Assignee
 from app.schemas import AssigneeCreate, AssigneeOut
@@ -29,6 +30,27 @@ async def create_assignee(data: AssigneeCreate, db: AsyncSession = Depends(get_d
         )
 
     assignee = Assignee(**data.model_dump())
+    db.add(assignee)
+    await db.commit()
+    await db.refresh(assignee)
+    return assignee
+
+
+@router.post("/mcp-agent", response_model=AssigneeOut)
+async def get_or_create_mcp_agent_assignee(db: AsyncSession = Depends(get_db)):
+    """Ensure the configured MCP agent is available in task assignee pickers."""
+    settings = get_settings()
+    result = await db.execute(
+        select(Assignee).where(Assignee.email == settings.ai_assignee_email)
+    )
+    assignee = result.scalar_one_or_none()
+    if assignee:
+        return assignee
+
+    assignee = Assignee(
+        name=settings.ai_assignee_name,
+        email=settings.ai_assignee_email,
+    )
     db.add(assignee)
     await db.commit()
     await db.refresh(assignee)
