@@ -2,6 +2,104 @@
 // ОБЩАЯ ЛОГИКА DRAG-AND-DROP KANBANА
 // ═══════════════════════════════════════════════════
 
+function setKanbanFilterSidebarOpen(isOpen) {
+    const sidebar = document.getElementById('kanban-filter-sidebar');
+    const openButton = document.getElementById('kanban-filter-open');
+    const backdrop = document.getElementById('kanban-filter-backdrop');
+    if (!sidebar) return;
+
+    const appLayout = sidebar.closest('.kanban-app-layout');
+    const desktopLayout = window.matchMedia('(min-width: 1920px)').matches;
+    const wasVisible = sidebar.classList.contains('is-open') ||
+        (desktopLayout && !appLayout?.classList.contains('kanban-filters-hidden'));
+    sidebar.classList.toggle('is-open', isOpen);
+    appLayout?.classList.toggle('kanban-filters-hidden', !isOpen);
+    if (backdrop) backdrop.hidden = !isOpen;
+    if (openButton) openButton.hidden = isOpen && !desktopLayout;
+    document.querySelectorAll('.kanban-filter-toggle-button').forEach(button => {
+        button.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    if (isOpen) {
+        sidebar.querySelector('.kanban-filter-close')?.focus({ preventScroll: true });
+    } else if (wasVisible && openButton?.getClientRects().length) {
+        openButton?.focus({ preventScroll: true });
+    }
+}
+
+function toggleKanbanFilterSidebar() {
+    const sidebar = document.getElementById('kanban-filter-sidebar');
+    if (!sidebar) return;
+    const desktopLayout = window.matchMedia('(min-width: 1920px)').matches;
+    const appLayout = sidebar.closest('.kanban-app-layout');
+    const isOpen = desktopLayout
+        ? !appLayout?.classList.contains('kanban-filters-hidden')
+        : sidebar.classList.contains('is-open');
+    setKanbanFilterSidebarOpen(!isOpen);
+}
+
+function kanbanTaskMatchesTextSearch(task, extraValues = []) {
+    const query = document.getElementById('filter-text-search')?.value.trim().toLocaleLowerCase('ru-RU') || '';
+    if (!query) return true;
+
+    const searchableValues = [];
+    const collectValues = (value) => {
+        if (value === null || value === undefined) return;
+        if (Array.isArray(value)) {
+            value.forEach(collectValues);
+        } else if (typeof value === 'object') {
+            Object.values(value).forEach(collectValues);
+        } else {
+            searchableValues.push(String(value));
+        }
+    };
+
+    collectValues(task);
+    collectValues(extraValues);
+    return searchableValues.join(' ').toLocaleLowerCase('ru-RU').includes(query);
+}
+
+function applyKanbanTextSearch() {
+    if (typeof kanbanData === 'undefined' || typeof renderBoard !== 'function') return;
+    renderBoard(kanbanData);
+    if (typeof initKanbanSortable === 'function') initKanbanSortable();
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && document.getElementById('kanban-filter-sidebar')?.classList.contains('is-open')) {
+        setKanbanFilterSidebarOpen(false);
+    }
+});
+
+if (window.matchMedia('(min-width: 1920px)').matches) {
+    document.querySelectorAll('.kanban-filter-toggle-button').forEach(button => {
+        button.setAttribute('aria-expanded', 'true');
+    });
+}
+
+window.addEventListener('resize', () => {
+    const sidebar = document.getElementById('kanban-filter-sidebar');
+    const openButton = document.getElementById('kanban-filter-open');
+    if (!sidebar || !openButton) return;
+
+    const desktopLayout = window.matchMedia('(min-width: 1920px)').matches;
+    const appLayout = sidebar.closest('.kanban-app-layout');
+    if (desktopLayout) {
+        sidebar.classList.remove('is-open');
+        document.getElementById('kanban-filter-backdrop').hidden = true;
+        openButton.hidden = false;
+        document.querySelectorAll('.kanban-filter-toggle-button').forEach(button => {
+            button.setAttribute('aria-expanded', String(!appLayout?.classList.contains('kanban-filters-hidden')));
+        });
+    } else {
+        const isOpen = sidebar.classList.contains('is-open');
+        openButton.hidden = isOpen;
+        document.querySelectorAll('.kanban-filter-toggle-button').forEach(button => {
+            button.setAttribute('aria-expanded', String(isOpen));
+        });
+    }
+});
+
 function isKanbanTouchDevice() {
     return window.matchMedia('(pointer: coarse)').matches ||
         ('ontouchstart' in window) ||

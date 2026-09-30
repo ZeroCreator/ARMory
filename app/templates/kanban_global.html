@@ -2,38 +2,63 @@
 
 {% from "macros/datetime_picker.html" import datetime_picker %}
 
-{% block content %}
-<div class="mb-3">
-    <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
-</div>
+{% block app_layout_class %}kanban-app-layout{% endblock %}
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="mb-0"><i class="bi bi-kanban"></i> Общий kanban</h2>
-        <p class="text-muted mb-0">Все задачи по всем проектам</p>
+{% block left_sidebar %}
+<aside class="kanban-filter-sidebar" id="kanban-filter-sidebar" aria-label="Фильтры kanban">
+    <div class="kanban-filter-sidebar-topbar">
+        <button class="kanban-filter-close" type="button" onclick="setKanbanFilterSidebarOpen(false)" aria-label="Скрыть фильтры">
+            <i class="bi bi-x-lg"></i>
+        </button>
     </div>
-    <div class="d-flex gap-2">
-        <a class="btn btn-outline-primary" href="/tasks" title="Список задач">
-            <i class="bi bi-list-task me-1"></i> ToDo-список
-        </a>
-        <button class="btn btn-outline-brown" onclick="openStatusModal()">
+    <div class="kanban-search-block">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" class="form-control" id="filter-text-search" aria-label="Полнотекстовый поиск" autocomplete="off" oninput="applyKanbanTextSearch()">
+    </div>
+    <div class="kanban-filter-sidebar-header">
+        <span class="fw-semibold"><i class="bi bi-funnel me-1"></i> Фильтры</span>
+    </div>
+    {% include 'partials/kanban_filters.html' %}
+    <section class="kanban-sidebar-actions" aria-labelledby="kanban-sidebar-actions-title">
+        <h6 id="kanban-sidebar-actions-title"><i class="bi bi-lightning-charge me-1"></i> Действия</h6>
+        <button class="btn btn-outline-brown" type="button" onclick="openStatusModal()">
             <i class="bi bi-plus-lg me-1"></i> Колонка
         </button>
-        <button class="btn btn-success" onclick="openTaskModal()">
+        <button class="btn btn-success" type="button" onclick="openTaskModal()">
             <i class="bi bi-plus-lg me-1"></i> Задача
         </button>
-        <button class="btn btn-outline-secondary" onclick="exportKanban()" title="Экспортировать kanban">
-            <i class="bi bi-upload"></i>
+        <button class="btn btn-outline-secondary" type="button" onclick="exportKanban()" title="Экспортировать kanban">
+            <i class="bi bi-upload me-1"></i> Экспорт
         </button>
-        <button class="btn btn-outline-secondary" onclick="document.getElementById('kanban-import-input').click()" title="Импортировать kanban">
-            <i class="bi bi-download"></i>
+        <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('kanban-import-input').click()" title="Импортировать kanban">
+            <i class="bi bi-download me-1"></i> Импорт
         </button>
-        <input type="file" id="kanban-import-input" accept=".json" style="display:none" onchange="importKanban(this)">
+        <input type="file" id="kanban-import-input" accept=".json" hidden onchange="importKanban(this)">
+    </section>
+</aside>
+{% endblock %}
+
+{% block content %}
+<button class="kanban-filter-open kanban-filter-toggle-button" id="kanban-filter-open" type="button" onclick="setKanbanFilterSidebarOpen(true)" aria-controls="kanban-filter-sidebar" aria-expanded="false">
+    <i class="bi bi-funnel"></i><span>Фильтры</span>
+</button>
+<button class="kanban-filter-backdrop" id="kanban-filter-backdrop" type="button" onclick="setKanbanFilterSidebarOpen(false)" aria-label="Закрыть фильтры" hidden></button>
+
+<div class="kanban-page-heading d-flex justify-content-between align-items-start mb-3">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        <a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Все проекты</a>
+        <a class="btn btn-sm btn-outline-primary" href="/tasks" title="Список задач">
+            <i class="bi bi-list-task me-1"></i> ToDo-список
+        </a>
+    </div>
+    <div class="kanban-title-group d-flex align-items-center gap-2">
+        <button class="btn btn-sm btn-outline-primary kanban-filter-heading-toggle kanban-filter-toggle-button" type="button" onclick="toggleKanbanFilterSidebar()" aria-controls="kanban-filter-sidebar" aria-expanded="false">
+            <i class="bi bi-funnel me-1"></i> Фильтры
+        </button>
+        <h2 class="kanban-title mb-0"><i class="bi bi-kanban"></i> Kanban</h2>
     </div>
 </div>
-
-<!-- Фильтры -->
-{% include 'partials/kanban_filters.html' %}
+<p class="text-muted mb-4">Все задачи по всем проектам</p>
 
 <div id="kanban-board" class="kanban-board">
     <div class="text-center text-muted py-5"><div class="spinner-border"></div></div>
@@ -443,6 +468,6 @@
 <script>
     const LOCAL_STORAGE_PATH = {{ local_storage_path | tojson }};
 </script>
-<script src="/static/js/kanban_common.js?v=1"></script>
-<script src="/static/js/kanban_global.js?v=73"></script>
+<script src="/static/js/kanban_common.js?v=3"></script>
+<script src="/static/js/kanban_global.js?v=74"></script>
 {% endblock %}

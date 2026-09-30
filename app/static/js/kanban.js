@@ -348,7 +348,18 @@ function renderBoard(data) {
     }
 
     board.innerHTML = data.statuses.map(status => {
-        const tasks = (data.tasks || []).filter(t => t.status_id === status.id);
+        const tasks = (data.tasks || []).filter(t =>
+            t.status_id === status.id && kanbanTaskMatchesTextSearch(t, [
+                formatAssignees(t, false),
+                priorityLabel(t.priority),
+                t.is_closed ? 'Закрыто' : '',
+                projectName,
+                formatDateTime(t.start_date),
+                formatDateTime(t.due_date),
+                formatDateTime(t.created_at),
+                formatDateTime(t.updated_at),
+            ])
+        );
         return `
             <div class="kanban-column" data-id="${status.id}">
                 <div class="kanban-column-header" style="border-top-color: ${escapeHtml(status.color)}" oncontextmenu="showColumnContextMenu(event, ${status.id})">
@@ -1485,6 +1496,7 @@ function applyFilters() {
 }
 
 function resetFilters() {
+    document.getElementById('filter-text-search').value = '';
     document.getElementById('filter-priority').value = '';
     document.getElementById('filter-assignee').value = '';
     document.getElementById('filter-tag').value = '';
