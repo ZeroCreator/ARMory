@@ -260,7 +260,7 @@ function getCategoryLabel(cat) {
 }
 
 function getItemLabel(item) {
-    const known = getCategoryLabel(item.category || detectCategoryFromItem(item));
+    const known = getCategoryLabel(getItemCategory(item));
     if (known) return known;
     if (item.file_name) {
         const parts = item.file_name.split('.');
@@ -294,10 +294,16 @@ function detectCategoryFromItem(item) {
         xls:'spreadsheet', xlsx:'spreadsheet', ods:'spreadsheet', csv:'spreadsheet',
         ppt:'presentation', pptx:'presentation', odp:'presentation',
         zip:'archive', rar:'archive', '7z':'archive', tar:'archive', gz:'archive',
-        py:'code', js:'code', ts:'code', html:'code', css:'code', json:'code', yaml:'code', yml:'code', sql:'code',
+        py:'code', js:'code', ts:'code', html:'code', css:'code', json:'code', yaml:'code', yml:'code', toml:'code', sql:'code',
         txt:'text', md:'text', log:'text',
     };
     return map[ext] || 'file';
+}
+
+function getItemCategory(item) {
+    return item.category && item.category !== 'file'
+        ? item.category
+        : detectCategoryFromItem(item);
 }
 
 // ═══════════════════════════════════════════════════
@@ -1004,7 +1010,7 @@ function renderGroup(doc, idx) {
 }
 
 function renderItem(doc, item, idx) {
-    const cat = item.category || detectCategoryFromItem(item);
+    const cat = getItemCategory(item);
     const iconClass = getCategoryIcon(cat);
     const label = getItemLabel(item);
     const isLink = item.item_type === 'link';
@@ -1693,7 +1699,7 @@ function getItemOpenUrl(item) {
 }
 
 async function openItemPreview(item) {
-    const cat = item.category || detectCategoryFromItem(item);
+    const cat = getItemCategory(item);
     const isOffice = item.item_type === 'file' && ['word', 'spreadsheet', 'presentation'].includes(cat);
 
     if (isOffice) {

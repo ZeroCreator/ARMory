@@ -38,7 +38,7 @@ FILE_CATEGORIES = {
     "spreadsheet":  [".xls", ".xlsx", ".ods", ".csv"],
     "presentation": [".ppt", ".pptx", ".odp"],
     "archive":      [".zip", ".rar", ".7z", ".tar", ".gz", ".bz2"],
-    "code":         [".py", ".js", ".ts", ".html", ".css", ".json", ".yaml", ".yml", ".sql", ".java", ".go", ".rs", ".cpp", ".c", ".h"],
+    "code":         [".py", ".js", ".ts", ".html", ".css", ".json", ".yaml", ".yml", ".toml", ".sql", ".java", ".go", ".rs", ".cpp", ".c", ".h"],
     "text":         [".txt", ".md", ".log", ".ini", ".cfg"],
 }
 
