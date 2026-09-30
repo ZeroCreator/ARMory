@@ -3673,6 +3673,23 @@ footer {
     text-align: left;
 }
 
+.kanban-sidebar-mascot {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: center;
+    margin-top: auto;
+    padding-top: 0.9rem;
+    border-top: 1px solid rgba(107, 70, 193, 0.18);
+}
+
+.kanban-sidebar-mascot img {
+    display: block;
+    width: 100%;
+    max-height: 180px;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 7px rgba(35, 28, 55, 0.12));
+}
+
 .kanban-page-heading {
     gap: 1rem;
 }
