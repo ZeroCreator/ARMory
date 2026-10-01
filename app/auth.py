@@ -157,6 +157,7 @@ def _mcp_service_email(scope: dict, headers: dict[str, str], settings: Settings)
     path = scope.get("path", "")
     allowed = (
         (method == "GET" and path == "/api/projects")
+        or (method == "GET" and path == "/api/assignees")
         or (method == "GET" and re.fullmatch(r"/api/projects/\d+/task-statuses", path))
         or (method in {"GET", "POST"} and re.fullmatch(r"/api/projects/\d+/tasks", path))
         or (method == "PATCH" and re.fullmatch(r"/api/projects/\d+/tasks/\d+", path))
@@ -171,12 +172,19 @@ def _mcp_service_email(scope: dict, headers: dict[str, str], settings: Settings)
 
 
 def get_email_from_scope(scope: dict, settings: Settings) -> str | None:
-    """Resolve the authenticated identity without trusting user headers in magic-link mode."""
+    """Определяет текущую личность, включая сервисную личность MCP."""
     headers = _scope_headers(scope)
 
     service_email = _mcp_service_email(scope, headers, settings)
     if service_email:
         return service_email
+
+    return get_authenticated_email_from_scope(scope, settings)
+
+
+def get_authenticated_email_from_scope(scope: dict, settings: Settings) -> str | None:
+    """Определяет пользователя по сессии или доверенному заголовку авторизации."""
+    headers = _scope_headers(scope)
 
     if settings.auth_mode.casefold() == "proxy":
         for header in AUTH_PROXY_HEADERS:

@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     # AI-ассистент, от имени которого MCP-сервер назначает/берёт задачи
     ai_assignee_email: str = "ai@armory.local"
     ai_assignee_name: str = "AI Assistant"
+    # Постоянный исполнитель локального MCP-сервера
+    mcp_local_assignee_name: str | None = None
 
     # Локальная LLM через OpenAI-совместимый API (используется MCP-клиентами)
     local_llm_base_url: str | None = None

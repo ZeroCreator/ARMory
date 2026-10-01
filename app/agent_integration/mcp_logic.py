@@ -10,6 +10,7 @@ from uuid import uuid4
 import httpx
 from mcp.server.fastmcp import Context, FastMCP
 
+from app.auth import get_authenticated_email_from_scope, normalize_email
 from app.config import get_settings
 
 _WORKER_INSTANCE_ID = uuid4().hex
@@ -254,6 +255,39 @@ def _register_blocking_tool(server: FastMCP):
     return register
 
 
+def _default_task_assignee_name(ctx: Context) -> str | dict[str, Any]:
+    settings = get_settings()
+    if settings.auth_required:
+        try:
+            request = ctx.request_context.request
+        except (AttributeError, ValueError):
+            request = None
+        scope = getattr(request, "scope", None)
+        email = get_authenticated_email_from_scope(scope, settings) if isinstance(scope, dict) else None
+        if not email:
+            return {"error": "Could not identify the authenticated user for this MCP request"}
+
+        assignees = _api_request("GET", "/api/assignees")
+        if _error(assignees):
+            return assignees
+        match = next(
+            (
+                assignee for assignee in assignees
+                if normalize_email(assignee.get("email")) == email
+                and " ".join(assignee.get("name", "").split())
+            ),
+            None,
+        )
+        if match is None:
+            return {"error": "The authenticated user has no display name in the ARMory assignee directory"}
+        return " ".join(match["name"].split())
+
+    local_assignee_name = " ".join((settings.mcp_local_assignee_name or "").split())
+    if not local_assignee_name:
+        return {"error": "MCP_LOCAL_ASSIGNEE_NAME is not configured for the local MCP server"}
+    return local_assignee_name
+
+
 def register_tools(server: FastMCP) -> None:
     @_register_blocking_tool(server)
     def list_projects(query: str | None = None) -> dict[str, Any]:
@@ -305,6 +339,8 @@ def register_tools(server: FastMCP) -> None:
     @_register_blocking_tool(server)
     def create_task(
         title: str,
+        estimated_minutes: int,
+        ctx: Context,
         project_name: str | None = None,
         project_id: int | None = None,
         description: str | None = None,
@@ -314,10 +350,28 @@ def register_tools(server: FastMCP) -> None:
         tags: str | None = None,
         list_name: str | None = None,
         due_date: str | None = None,
-        estimated_minutes: int | None = None,
         assignee_names: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Создаёт задачу ARMory; полный список исполнителей задают именами через assignee_names."""
+        """Создаёт задачу ARMory с плановой оценкой, инициатором и AI Assistant."""
+        if estimated_minutes < 1:
+            return {"error": "estimated_minutes must be greater than zero"}
+
+        default_assignee_name = _default_task_assignee_name(ctx)
+        if isinstance(default_assignee_name, dict):
+            return default_assignee_name
+        agent_assignee = _api_request("POST", "/api/assignees/mcp-agent")
+        if _error(agent_assignee):
+            return agent_assignee
+        requested_assignees = [default_assignee_name, *(assignee_names or [])]
+        normalized_assignees = []
+        seen_assignees = set()
+        for name in requested_assignees:
+            normalized = " ".join(name.split())
+            key = normalized.casefold()
+            if normalized and key not in seen_assignees:
+                seen_assignees.add(key)
+                normalized_assignees.append(normalized)
+
         project = _resolve_project(project_id, project_name)
         if _error(project):
             return project
@@ -348,11 +402,10 @@ def register_tools(server: FastMCP) -> None:
             if value is not None:
                 payload[key] = value
 
-        if assignee_names is not None:
-            resolved_assignees = _resolve_assignee_names(assignee_names)
-            if _error(resolved_assignees):
-                return resolved_assignees
-            payload["assignee_emails"] = resolved_assignees
+        resolved_assignees = _resolve_assignee_names(normalized_assignees)
+        if _error(resolved_assignees):
+            return resolved_assignees
+        payload["assignee_emails"] = list(dict.fromkeys([*resolved_assignees, agent_assignee["email"]]))
 
         task = _api_request("POST", f"/api/projects/{project['id']}/tasks", payload)
         if _error(task):
