@@ -39,7 +39,6 @@ def _status_time_phase(status_name: str | None) -> Literal["work", "testing"] | 
     return None
 
 
-
 def _base_url(override: str | None = None) -> str:
     settings = get_settings()
     url = override or settings.armory_base_url
@@ -144,6 +143,52 @@ def _project_statuses(project_id: int) -> list[dict[str, Any]] | dict[str, Any]:
     return sorted(statuses, key=lambda status: (status.get("sort_order", 0), status.get("id", 0)))
 
 
+def _resolve_assignee_names(names: list[str]) -> list[str] | dict[str, Any]:
+    assignees = _api_request("GET", "/api/assignees")
+    if _error(assignees):
+        return assignees
+
+    assignees_by_name: dict[str, list[dict[str, str]]] = {}
+    for assignee in assignees:
+        name = " ".join(assignee.get("name", "").split())
+        email = assignee.get("email")
+        if name and email:
+            assignees_by_name.setdefault(name.casefold(), []).append(assignee)
+
+    resolved_emails = []
+    for requested_name in names:
+        normalized_name = " ".join(requested_name.split()).casefold()
+        matches = assignees_by_name.get(normalized_name, [])
+        if not matches:
+            return {
+                "error": f"Assignee '{requested_name}' was not found",
+                "available_assignees": sorted(
+                    assignee["name"] for assignee in assignees if assignee.get("name")
+                ),
+            }
+        if len(matches) > 1:
+            return {
+                "error": (
+                    f"Assignee name '{requested_name}' is ambiguous; "
+                    "make display names unique in ARMory"
+                ),
+            }
+        resolved_emails.append(matches[0]["email"])
+
+    return list(dict.fromkeys(resolved_emails))
+
+
+def _assignee_names_by_email() -> dict[str, str] | None:
+    assignees = _api_request("GET", "/api/assignees")
+    if _error(assignees):
+        return None
+    return {
+        assignee["email"].casefold(): assignee["name"]
+        for assignee in assignees
+        if assignee.get("email") and assignee.get("name")
+    }
+
+
 def _resolve_status(
     statuses: list[dict[str, Any]],
     status_id: int | None = None,
@@ -162,7 +207,10 @@ def _task_link(project_id: int, task_id: int) -> str:
     return f"{public_url}/projects/{project_id}/kanban?task={task_id}"
 
 
-def _with_task_link(task: dict[str, Any]) -> dict[str, Any]:
+def _with_task_link(
+    task: dict[str, Any],
+    assignee_names_by_email: dict[str, str] | None = None,
+) -> dict[str, Any]:
     result = dict(task)
     task_id = result.get("id")
     project_id = result.get("project_id")
@@ -170,6 +218,26 @@ def _with_task_link(task: dict[str, Any]) -> dict[str, Any]:
         result["task_id"] = task_id
     if task_id is not None and project_id is not None:
         result["url"] = _task_link(project_id, task_id)
+    assignee_emails = result.get("assignee_emails") or []
+    if not assignee_emails and result.get("assignee_email"):
+        assignee_emails = [result["assignee_email"]]
+    if assignee_names_by_email is None and assignee_emails:
+        assignee_names_by_email = _assignee_names_by_email()
+    result["assignee_names"] = [
+        assignee_names_by_email[email.casefold()]
+        for email in assignee_emails
+        if assignee_names_by_email and email.casefold() in assignee_names_by_email
+    ]
+    if assignee_emails and (
+        assignee_names_by_email is None
+        or any(email.casefold() not in assignee_names_by_email for email in assignee_emails)
+    ):
+        result["assignee_names_error"] = (
+            "Не удалось сопоставить всех текущих исполнителей с отображаемыми именами; "
+            "не меняйте список исполнителей, пока сопоставление не будет исправлено."
+        )
+    result.pop("assignee_email", None)
+    result.pop("assignee_emails", None)
     return result
 
 
@@ -217,16 +285,20 @@ def register_tools(server: FastMCP) -> None:
         project_id: int | None = None,
         project_name: str | None = None,
     ) -> dict[str, Any]:
-        """Возвращает задачи проекта ARMory. Если проект неясен, сначала вызовите list_projects."""
+        """Возвращает задачи проекта ARMory с исполнителями по отображаемым именам."""
         project = _resolve_project(project_id, project_name)
         if _error(project):
             return project
         tasks = _api_request("GET", f"/api/projects/{project['id']}/tasks")
         if _error(tasks):
             return tasks
+        assignee_names_by_email = _assignee_names_by_email() or {}
         return {
             "project": {"id": project["id"], "name": project["name"]},
-            "tasks": [_with_task_link(task) for task in tasks],
+            "tasks": [
+                _with_task_link(task, assignee_names_by_email)
+                for task in tasks
+            ],
             "count": len(tasks),
         }
 
@@ -243,9 +315,9 @@ def register_tools(server: FastMCP) -> None:
         list_name: str | None = None,
         due_date: str | None = None,
         estimated_minutes: int | None = None,
-        assignee_email: str | None = None,
+        assignee_names: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Создаёт задачу ARMory и возвращает её глобальный номер и ссылку на канбан."""
+        """Создаёт задачу ARMory; полный список исполнителей задают именами через assignee_names."""
         project = _resolve_project(project_id, project_name)
         if _error(project):
             return project
@@ -272,10 +344,15 @@ def register_tools(server: FastMCP) -> None:
             "list_name": list_name,
             "due_date": due_date,
             "estimated_minutes": estimated_minutes,
-            "assignee_email": assignee_email,
         }.items():
             if value is not None:
                 payload[key] = value
+
+        if assignee_names is not None:
+            resolved_assignees = _resolve_assignee_names(assignee_names)
+            if _error(resolved_assignees):
+                return resolved_assignees
+            payload["assignee_emails"] = resolved_assignees
 
         task = _api_request("POST", f"/api/projects/{project['id']}/tasks", payload)
         if _error(task):
@@ -287,7 +364,7 @@ def register_tools(server: FastMCP) -> None:
 
     @_register_blocking_tool(server)
     def get_task(task_id: int) -> dict[str, Any]:
-        """Возвращает задачу по её глобальному номеру в ARMory."""
+        """Возвращает задачу по глобальному номеру, включая отображаемые имена исполнителей."""
         task = _api_request("GET", f"/api/tasks/{task_id}")
         return _with_task_link(task) if not _error(task) else task
 
@@ -306,10 +383,10 @@ def register_tools(server: FastMCP) -> None:
         list_name: str | None = None,
         due_date: str | None = None,
         estimated_minutes: int | None = None,
-        assignee_email: str | None = None,
+        assignee_names: list[str] | None = None,
         result: str | None = None,
     ) -> dict[str, Any]:
-        """Изменяет указанные поля задачи. Пропущенные поля остаются без изменений."""
+        """Изменяет поля задачи; assignee_names заменяет полный список исполнителей отображаемыми именами."""
         task: dict[str, Any] | None = None
         if project_id is None or status_name is not None:
             task = _api_request("GET", f"/api/tasks/{task_id}")
@@ -330,11 +407,16 @@ def register_tools(server: FastMCP) -> None:
             "list_name": list_name,
             "due_date": due_date,
             "estimated_minutes": estimated_minutes,
-            "assignee_email": assignee_email,
             "result": result,
         }.items():
             if value is not None:
                 payload[key] = value
+
+        if assignee_names is not None:
+            resolved_assignees = _resolve_assignee_names(assignee_names)
+            if _error(resolved_assignees):
+                return resolved_assignees
+            payload["assignee_emails"] = resolved_assignees
 
         if status_name is not None and status_id is None:
             statuses = _project_statuses(project_id)
@@ -371,7 +453,7 @@ def register_tools(server: FastMCP) -> None:
 
     @_register_blocking_tool(server)
     def take_task_into_work(task_id: int, ctx: Context) -> dict[str, Any]:
-        """Перемещает задачу в колонку проекта «В работе» и назначает исполнителем AI-ассистента."""
+        """Перемещает задачу в «В работе», добавляет AI Assistant и сохраняет текущих исполнителей."""
         task = _api_request("GET", f"/api/tasks/{task_id}")
         if _error(task):
             return task
@@ -421,12 +503,16 @@ def register_tools(server: FastMCP) -> None:
         assignee = _api_request("POST", "/api/assignees/mcp-agent")
         if _error(assignee):
             return assignee
+        assignee_emails = task.get("assignee_emails") or []
+        if not assignee_emails and task.get("assignee_email"):
+            assignee_emails = [task["assignee_email"]]
+        assignee_emails = list(dict.fromkeys([*assignee_emails, assignee["email"]]))
         updated = _api_request(
             "PATCH",
             f"/api/projects/{project_id}/tasks/{task_id}",
             {
                 "status_id": in_progress["id"],
-                "assignee_email": assignee["email"],
+                "assignee_emails": assignee_emails,
             },
         )
         if _error(updated):
@@ -434,12 +520,9 @@ def register_tools(server: FastMCP) -> None:
         time_state = _start_task_time(task_id, "work", ctx)
         result = _with_task_link(updated)
         result["status_name"] = in_progress["name"]
-        result["assignee_email"] = assignee["email"]
-        result["assignee_name"] = assignee["name"]
         if _error(time_state):
             result["time_tracking_error"] = time_state
         return result
-
 
     @_register_blocking_tool(server)
     def start_task_time(task_id: int, phase: Literal["work", "testing"], ctx: Context) -> dict[str, Any]:

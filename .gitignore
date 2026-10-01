@@ -57,7 +57,7 @@ Thumbs.db
 AGENTS.md
 
 # MCP client local configuration
-backups/.kimi-code/mcp.json
+../.kimi-code/mcp.json
 .claude-code/settings.json
 cline_mcp_settings.json
 continue/config.json
