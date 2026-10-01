@@ -3694,8 +3694,32 @@ footer {
     gap: 1rem;
 }
 
+.kanban-global-page-heading {
+    display: grid;
+    grid-template-columns: max-content minmax(max-content, 1fr) max-content;
+    grid-template-rows: auto;
+    align-items: center;
+    overflow-x: auto;
+}
+
+.kanban-global-controls {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+}
+
 .kanban-title-group {
     flex: 0 0 auto;
+}
+
+.kanban-global-title-group {
+    justify-self: end;
+    align-self: center;
+    white-space: nowrap;
+}
+
+.kanban-global-subtitle {
+    text-align: center;
+    white-space: nowrap;
 }
 
 .kanban-title {
@@ -3825,6 +3849,14 @@ footer {
 
     .kanban-title-group {
         align-self: flex-end;
+    }
+
+    .kanban-global-page-heading {
+        column-gap: 0.75rem;
+    }
+
+    .kanban-global-page-heading .kanban-global-title-group {
+        align-self: center;
     }
 }
 
