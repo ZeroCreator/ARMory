@@ -224,6 +224,12 @@ class Task(Base):
     list_name = Column(String(255), nullable=True, index=True)
     result = Column(Text, nullable=True)
     estimated_minutes = Column(Integer, nullable=True)
+    manual_work_seconds = Column(Integer, nullable=True)
+    manual_work_session_baseline = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    manual_testing_seconds = Column(Integer, nullable=True)
+    manual_testing_session_baseline = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    manual_actual_seconds = Column(Integer, nullable=True)
+    manual_actual_session_baseline = Column(Integer, nullable=False, default=0, server_default=text("0"))
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -246,7 +252,7 @@ class Task(Base):
     def first_assignee_email(self):
         return self.assignee_emails[0] if self.assignee_emails else None
 
-    def _time_for_phase(self, phase: str) -> int:
+    def _tracked_time_for_phase(self, phase: str) -> int:
         total = 0
         now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         for session in self.time_sessions:
@@ -261,6 +267,14 @@ class Task(Base):
             total += max(0, int((ended_at - started_at).total_seconds()))
         return total
 
+    def _time_for_phase(self, phase: str) -> int:
+        tracked = self._tracked_time_for_phase(phase)
+        if phase == "work" and self.manual_work_seconds is not None:
+            return self.manual_work_seconds + max(0, tracked - self.manual_work_session_baseline)
+        if phase == "testing" and self.manual_testing_seconds is not None:
+            return self.manual_testing_seconds + max(0, tracked - self.manual_testing_session_baseline)
+        return tracked
+
     @property
     def work_seconds(self) -> int:
         return self._time_for_phase("work")
@@ -271,6 +285,9 @@ class Task(Base):
 
     @property
     def actual_seconds(self) -> int:
+        if self.manual_actual_seconds is not None:
+            tracked = self._tracked_time_for_phase("work") + self._tracked_time_for_phase("testing")
+            return self.manual_actual_seconds + max(0, tracked - self.manual_actual_session_baseline)
         return self.work_seconds + self.testing_seconds
 
 

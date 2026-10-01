@@ -62,6 +62,7 @@ from app.schemas import (
     TaskTimePause,
     TaskTimeStart,
     TaskTimeStateOut,
+    TaskTimeExportRequest,
     TaskStatusOut,
     TaskStatusReorderRequest,
     TaskStatusUpdate,
@@ -78,9 +79,22 @@ class CurrentUserOut(BaseModel):
 
 
 @global_router.get("/me", response_model=CurrentUserOut)
-async def get_current_user(request: Request):
-    """Возвращает email текущего пользователя из сессии или auth-gateway."""
-    return {"email": get_current_email(request)}
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
+    """Возвращает email авторизованного или настроенного локального исполнителя."""
+    settings: Settings = request.app.state.settings
+    if settings.auth_required:
+        return {"email": get_current_email(request)}
+
+    local_name = " ".join((settings.mcp_local_assignee_name or "").split()).casefold()
+    if not local_name:
+        return {"email": None}
+
+    result = await db.execute(select(Assignee))
+    matches = [
+        assignee for assignee in result.scalars().all()
+        if " ".join(assignee.name.split()).casefold() == local_name
+    ]
+    return {"email": matches[0].email if len(matches) == 1 else None}
 
 
 @global_router.get("/me/debug")
@@ -928,6 +942,22 @@ async def _apply_task_update(
         task.result = update_data["result"]
     if "estimated_minutes" in update_data:
         task.estimated_minutes = update_data["estimated_minutes"]
+    if "work_seconds" in update_data:
+        task.manual_work_seconds = update_data["work_seconds"]
+        task.manual_work_session_baseline = task._tracked_time_for_phase("work")
+    if "testing_seconds" in update_data:
+        task.manual_testing_seconds = update_data["testing_seconds"]
+        task.manual_testing_session_baseline = task._tracked_time_for_phase("testing")
+    if ("work_seconds" in update_data or "testing_seconds" in update_data) and "actual_seconds" not in update_data:
+        task.manual_actual_seconds = None
+        task.manual_actual_session_baseline = (
+            task._tracked_time_for_phase("work") + task._tracked_time_for_phase("testing")
+        )
+    if "actual_seconds" in update_data:
+        task.manual_actual_seconds = update_data["actual_seconds"]
+        task.manual_actual_session_baseline = (
+            task._tracked_time_for_phase("work") + task._tracked_time_for_phase("testing")
+        )
 
     if "is_closed" in update_data:
         was_closed = task.is_closed
@@ -2243,6 +2273,147 @@ def _format_signed_task_effort(seconds: int) -> str:
         return "0 мин"
     sign = "+" if seconds > 0 else "−"
     return f"{sign}{_format_task_effort(abs(seconds))}"
+
+
+@global_router.post("/tasks/time/export/xlsx")
+async def export_task_time_xlsx(
+    data: TaskTimeExportRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Экспортирует текущий набор задач учёта времени в XLSX."""
+    query = select(Task).options(
+        selectinload(Task.status),
+        selectinload(Task.project),
+        selectinload(Task.time_sessions),
+    ).where(Task.id.in_(set(data.task_ids)), Task.is_closed.is_(False))
+    if data.project_id is not None:
+        await _get_project(data.project_id, db)
+        query = query.where(Task.project_id == data.project_id)
+
+    result = await db.execute(query)
+    tasks_by_id = {task.id: task for task in result.scalars().all()}
+    tasks = [
+        tasks_by_id[task_id]
+        for task_id in dict.fromkeys(data.task_ids)
+        if task_id in tasks_by_id
+    ]
+    tasks = [
+        task for task in tasks
+        if task.estimated_minutes is not None
+        or task.work_seconds > 0
+        or task.testing_seconds > 0
+        or task.actual_seconds > 0
+    ]
+    if not tasks:
+        raise HTTPException(status_code=404, detail="Нет задач для экспорта")
+
+    include_project = data.project_id is None
+    headers = ["#"]
+    if include_project:
+        headers.append("Проект")
+    headers.extend(["Задача", "Статус", "План", "В работе", "Тестирование", "Факт", "Отклонение"])
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Учет времени"
+    header_fill = PatternFill(start_color="E9ECEF", end_color="E9ECEF", fill_type="solid")
+    actual_fill = PatternFill(start_color="E6F4F1", end_color="E6F4F1", fill_type="solid")
+    total_fill = PatternFill(start_color="EDE7F6", end_color="EDE7F6", fill_type="solid")
+    actual_column = headers.index("Факт") + 1
+    thin_side = Side(style="thin", color="DEE2E6")
+    border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+    worksheet.append(headers)
+    for cell in worksheet[1]:
+        cell.fill = actual_fill if cell.column == actual_column else header_fill
+        cell.font = Font(bold=True, color="212529")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = border
+
+    planned_total = 0
+    planned_count = 0
+    work_total = 0
+    testing_total = 0
+    actual_total = 0
+    for task in tasks:
+        estimate = task.estimated_minutes * 60 if task.estimated_minutes is not None else None
+        work_seconds = task.work_seconds
+        testing_seconds = task.testing_seconds
+        actual_seconds = task.actual_seconds
+        deviation = actual_seconds - estimate if estimate is not None else None
+        row = [task.id]
+        if include_project:
+            row.append(task.project.name if task.project else "")
+        row.extend([
+            (task.title or task.description or "—").strip() or "—",
+            task.status.name if task.status else "—",
+            _format_task_effort(estimate) if estimate is not None else "—",
+            _format_task_effort(work_seconds),
+            _format_task_effort(testing_seconds),
+            _format_task_effort(actual_seconds),
+            _format_signed_task_effort(deviation) if deviation is not None else "—",
+        ])
+        worksheet.append(row)
+        for cell in worksheet[worksheet.max_row]:
+            if isinstance(cell.value, str):
+                cell.data_type = "s"
+            if cell.column == actual_column:
+                cell.fill = actual_fill
+            cell.border = border
+            cell.alignment = Alignment(vertical="center", wrap_text=cell.column in (2, 3))
+        deviation_cell = worksheet.cell(worksheet.max_row, len(headers))
+        if deviation is not None and deviation != 0:
+            deviation_cell.font = Font(color="C92A2A" if deviation > 0 else "2B8A3E")
+
+        if estimate is not None:
+            planned_total += estimate
+            planned_count += 1
+        work_total += work_seconds
+        testing_total += testing_seconds
+        actual_total += actual_seconds
+
+    total_row = worksheet.max_row + 1
+    label_end = 3 + int(include_project)
+    worksheet.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=label_end)
+    total_label = worksheet.cell(total_row, 1, "Итого")
+    total_label.font = Font(bold=True)
+    total_label.alignment = Alignment(horizontal="right")
+    for column, value in {
+        headers.index("План") + 1: _format_task_effort(planned_total) if planned_count else "—",
+        headers.index("В работе") + 1: _format_task_effort(work_total),
+        headers.index("Тестирование") + 1: _format_task_effort(testing_total),
+        headers.index("Факт") + 1: _format_task_effort(actual_total),
+        headers.index("Отклонение") + 1: _format_signed_task_effort(actual_total - planned_total) if planned_count == len(tasks) else "—",
+    }.items():
+        cell = worksheet.cell(total_row, column, value)
+        if isinstance(value, str):
+            cell.data_type = "s"
+        cell.font = Font(bold=True)
+    if planned_count == len(tasks):
+        deviation_total = actual_total - planned_total
+        if deviation_total != 0:
+            worksheet.cell(total_row, headers.index("Отклонение") + 1).font = Font(
+                bold=True,
+                color="C92A2A" if deviation_total > 0 else "2B8A3E",
+            )
+    for column in range(1, len(headers) + 1):
+        worksheet.cell(total_row, column).fill = total_fill
+
+    widths = {"#": 8, "Проект": 28, "Задача": 45, "Статус": 22, "План": 18, "В работе": 18, "Тестирование": 18, "Факт": 18, "Отклонение": 18}
+    for index, header in enumerate(headers, start=1):
+        worksheet.column_dimensions[worksheet.cell(1, index).column_letter].width = widths[header]
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = f"A1:{worksheet.cell(1, len(headers)).column_letter}{len(tasks) + 1}"
+
+    output = io.BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    filename = f"task_time_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
 
 @global_router.get("/gantt/export/xlsx")
 async def export_gantt_xlsx(

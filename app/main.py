@@ -161,6 +161,28 @@ async def _ensure_task_estimated_minutes_column(conn) -> None:
     await conn.execute(text("ALTER TABLE tasks ADD COLUMN estimated_minutes INTEGER"))
 
 
+async def _ensure_task_manual_time_columns(conn) -> None:
+    columns = await conn.run_sync(
+        lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("tasks")}
+    )
+    definitions = {
+        "manual_work_seconds": "INTEGER",
+        "manual_work_session_baseline": "INTEGER NOT NULL DEFAULT 0",
+        "manual_testing_seconds": "INTEGER",
+        "manual_testing_session_baseline": "INTEGER NOT NULL DEFAULT 0",
+        "manual_actual_seconds": "INTEGER",
+        "manual_actual_session_baseline": "INTEGER NOT NULL DEFAULT 0",
+    }
+    missing = {name: definition for name, definition in definitions.items() if name not in columns}
+    if not missing:
+        return
+
+    backup_path = _backup_database_before_migration("task_manual_time")
+    logger.info("Создан бэкап перед добавлением ручного учёта времени задач: %s", backup_path)
+    for name, definition in missing.items():
+        await conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {name} {definition}"))
+
+
 async def _close_stale_task_time_sessions(conn) -> None:
     await conn.execute(
         text("UPDATE task_time_sessions SET ended_at = :ended_at WHERE ended_at IS NULL"),
@@ -186,6 +208,7 @@ async def lifespan(app: FastAPI):
         await _ensure_affair_shared_column(conn)
         await _ensure_affair_news_column(conn)
         await _ensure_task_estimated_minutes_column(conn)
+        await _ensure_task_manual_time_columns(conn)
         await _close_stale_task_time_sessions(conn)
 
         # Создаём data-директории, если их нет

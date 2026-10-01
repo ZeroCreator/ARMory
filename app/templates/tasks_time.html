@@ -3,7 +3,7 @@
 {% block main_class %}container-fluid py-4{% endblock %}
 
 {% block content %}
-<div class="mb-3 d-flex align-items-center gap-2">
+<div class="mt-4 mb-4 d-flex align-items-center gap-2 position-relative task-time-page-nav">
     <a href="{% if project_id %}/projects/{{ project_id }}/tasks{% else %}/tasks{% endif %}" class="btn btn-sm btn-outline-primary">
         <i class="bi bi-list-task"></i> ToDo-список
     </a>
@@ -12,32 +12,83 @@
     {% else %}
     <a href="/kanban" class="btn btn-sm btn-outline-brown"><i class="bi bi-kanban"></i> Kanban</a>
     {% endif %}
+    <h2 class="mb-0 position-absolute top-50 start-50 translate-middle task-time-page-title"><i class="bi bi-stopwatch"></i> Учет времени задач</h2>
 </div>
 
-<h2 class="mb-4"><i class="bi bi-stopwatch"></i> Учет времени задач</h2>
-
 <style>
-    .task-time-filter-card .form-label { color: var(--purple-surface2); }
-    #task-time-table .task-time-title { color: var(--purple-surface2); }
+    .task-time-page-title { white-space: nowrap; pointer-events: none; }
+    #task-time-table .task-time-title { color: var(--purple-surface2); background: none; border: 0; padding: 0; text-align: left; }
     #task-time-table .task-time-title:hover { color: var(--purple-darker); }
 </style>
 
-<div class="card mb-4 border-0 shadow-sm kanban-filters task-time-filter-card">
-    <div class="card-body">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-5">
-                <label class="form-label" for="time-filter-search">Поиск</label>
-                <input type="search" class="form-control" id="time-filter-search" oninput="applyTimeFilters()">
+<div id="task-time-filters" class="card mb-4 border-0 shadow-sm kanban-filters">
+    <div class="card-header border-0 d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold"><i class="bi bi-funnel me-1"></i> Фильтры</span>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-success" id="task-time-export-xlsx" onclick="exportTaskTimeXlsx()" disabled>
+                <i class="bi bi-file-earmark-excel me-1"></i> XLSX
+            </button>
+            <button class="btn btn-sm btn-link text-decoration-none kanban-filter-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#task-time-filters-collapse" aria-expanded="false" aria-controls="task-time-filters-collapse">
+                <i class="bi bi-caret-up-fill"></i>
+            </button>
+        </div>
+    </div>
+    <div id="task-time-filters-collapse" class="collapse">
+        <div class="card-body pt-0">
+            <div class="row g-3 align-items-end">
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-search">Поиск</label>
+                    <input type="search" class="form-control" id="time-filter-search" placeholder="Название, описание..." oninput="applyTimeFilters()">
+                </div>
+                {% if not project_id %}
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-project">Проект</label>
+                    <select class="form-select" id="time-filter-project" onchange="applyTimeFilters()"></select>
+                </div>
+                {% endif %}
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-status">Статус</label>
+                    <select class="form-select" id="time-filter-status" onchange="applyTimeFilters()"></select>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-priority">Приоритет</label>
+                    <select class="form-select" id="time-filter-priority" onchange="applyTimeFilters()"></select>
+                </div>
             </div>
-            {% if not project_id %}
-            <div class="col-md-4">
-                <label class="form-label" for="time-filter-project">Проект</label>
-                <select class="form-select" id="time-filter-project" onchange="applyTimeFilters()"></select>
+            <div class="row g-3 mt-1 align-items-end">
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-assignee">Ответственный</label>
+                    <select class="form-select" id="time-filter-assignee" onchange="applyTimeFilters()"></select>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-list">Список</label>
+                    <select class="form-select" id="time-filter-list" onchange="applyTimeFilters()"></select>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-tags">Теги</label>
+                    <input type="text" class="form-control" id="time-filter-tags" list="time-filter-tag-options" placeholder="через запятую" oninput="applyTimeFilters()">
+                    <datalist id="time-filter-tag-options"></datalist>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-due-before">Дедлайн до</label>
+                    <input type="date" class="form-control" id="time-filter-due-before" onchange="applyTimeFilters()">
+                </div>
             </div>
-            {% endif %}
-            <div class="col-md-3">
-                <label class="form-label" for="time-filter-status">Статус</label>
-                <select class="form-select" id="time-filter-status" onchange="applyTimeFilters()"></select>
+            <div class="row g-3 mt-1 align-items-end">
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-created-after">Создано с</label>
+                    <input type="date" class="form-control" id="time-filter-created-after" onchange="applyTimeFilters()">
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label" for="time-filter-created-before">Создано до</label>
+                    <input type="date" class="form-control" id="time-filter-created-before" onchange="applyTimeFilters()">
+                </div>
+                <div class="col-auto ms-auto">
+                    <button class="btn btn-outline-gray kanban-reset-btn" type="button" onclick="resetTimeFilters()">
+                        <i class="bi bi-x-lg"></i>
+                        <span class="d-none d-md-inline ms-1">Сбросить</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -65,9 +116,44 @@
     </table>
 </div>
 
+<div class="modal fade" id="task-time-edit-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="task-time-edit-title"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <form id="task-time-edit-form">
+                <div class="modal-body">
+                    {% for field, label in [('plan', 'План'), ('work', 'В работе'), ('testing', 'Тестирование'), ('actual', 'Факт')] %}
+                    <div class="mb-3">
+                        <label class="form-label" for="task-time-edit-{{ field }}-days">{{ label }}</label>
+                        <div class="row g-2">
+                            {% for unit, suffix, max_value in [('days', 'д', ''), ('hours', 'ч', '23'), ('minutes', 'мин', '59')] %}
+                            <div class="col-4">
+                                <div class="input-group">
+                                    <input class="form-control task-time-edit-value" id="task-time-edit-{{ field }}-{{ unit }}" type="number" min="0"{% if max_value %} max="{{ max_value }}"{% endif %} step="1">
+                                    <span class="input-group-text">{{ suffix }}</span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_time.js?v=7"></script>
+<script src="/static/js/tag_filter.js?v=2"></script>
+<script src="/static/js/tasks_time.js?v=13"></script>
 {% endblock %}

@@ -344,6 +344,9 @@ class TaskUpdate(BaseModel):
     list_name: Optional[str] = None
     result: Optional[str] = None
     estimated_minutes: Optional[int] = Field(default=None, ge=0)
+    work_seconds: Optional[int] = Field(default=None, ge=0)
+    testing_seconds: Optional[int] = Field(default=None, ge=0)
+    actual_seconds: Optional[int] = Field(default=None, ge=0)
 
 
 class TaskReorderRequest(BaseModel):
@@ -495,6 +498,11 @@ class TaskTimeStateOut(BaseModel):
     phase: Optional[Literal["work", "testing"]] = None
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
+
+
+class TaskTimeExportRequest(BaseModel):
+    task_ids: List[int] = Field(min_length=1)
+    project_id: Optional[int] = Field(default=None, ge=1)
 
 
 class KanbanStatusExport(BaseModel):
