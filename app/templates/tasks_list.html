@@ -94,7 +94,8 @@
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Теги</label>
-                    <input type="text" class="form-control" id="filter-tags" placeholder="через запятую" oninput="applyFilters()">
+                    <input type="text" class="form-control" id="filter-tags" list="filter-tags-options" placeholder="через запятую" oninput="applyFilters()">
+                    <datalist id="filter-tags-options"></datalist>
                 </div>
                 <div class="col-auto ms-auto">
                     <label class="form-label">&nbsp;</label>
@@ -910,5 +911,6 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=50"></script>
+<script src="/static/js/tag_filter.js?v=2"></script>
+<script src="/static/js/tasks_list.js?v=52"></script>
 {% endblock %}

@@ -171,6 +171,7 @@ async function loadFilters() {
         populateSelect('filter-priority', (filterOptions.priorities || []).map(p => ({ value: p, label: priorityLabel(p) })));
         populateSelect('filter-assignee', (filterOptions.assignees || []).map(a => ({ value: a.email, label: a.name })));
         populateSelect('filter-list', (filterOptions.list_names || []).map(l => ({ value: l, label: l })));
+        populateTagFilterOptions('filter-tags', filterOptions.tags);
 
         if (IS_GLOBAL) {
             populateSelect('filter-project', (filterOptions.projects || []).map(p => ({ value: p.id, label: p.name })));
@@ -279,7 +280,7 @@ function applyFilters() {
     const assignee = document.getElementById('filter-assignee')?.value || '';
     const listName = document.getElementById('filter-list')?.value || '';
     const closed = document.getElementById('filter-closed')?.value;
-    const tags = document.getElementById('filter-tags')?.value.toLowerCase().trim() || '';
+    const tags = document.getElementById('filter-tags')?.value.trim() || '';
 
     filteredTasks = allTasks.filter(t => {
         if (search) {
@@ -292,11 +293,7 @@ function applyFilters() {
         if (assignee && !(t.assignee_emails || [t.assignee_email]).includes(assignee)) return false;
         if (listName && t.list_name !== listName) return false;
         if (closed !== '' && closed !== null && String(Number(t.is_closed)) !== closed) return false;
-        if (tags) {
-            const taskTags = (t.tags || '').toLowerCase();
-            const need = tags.split(',').map(s => s.trim()).filter(Boolean);
-            if (need.some(tag => !taskTags.includes(tag))) return false;
-        }
+        if (!taskMatchesTagFilter(t.tags, tags)) return false;
         return true;
     });
 

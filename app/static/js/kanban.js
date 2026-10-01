@@ -193,7 +193,7 @@ async function loadFilters() {
             api(`${API_BASE}/assignees`),
         ]);
         populateSelect('filter-priority', filterOptions.priorities.map(p => ({ value: p, label: priorityLabel(p) })), 'value', 'label');
-        populateSelect('filter-tag', filterOptions.tags.map(t => ({ value: t, label: t })), 'value', 'label');
+        populateTagFilterOptions('filter-tag', filterOptions.tags);
         populateAssigneeSelects(kanbanAssignees);
     } catch (e) {
         console.error('Failed to load filters:', e);

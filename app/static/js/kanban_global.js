@@ -71,7 +71,7 @@ async function loadFilters() {
         (filterOptions.projects || []).forEach(p => { projectsMap[p.id] = p.name; });
         populateSelect('filter-project', filterOptions.projects, 'id', 'name');
         populateSelect('filter-priority', filterOptions.priorities.map(p => ({ value: p, label: priorityLabel(p) })), 'value', 'label');
-        populateSelect('filter-tag', filterOptions.tags.map(t => ({ value: t, label: t })), 'value', 'label');
+        populateTagFilterOptions('filter-tag', filterOptions.tags);
 
         populateSelect('task-project-id', filterOptions.projects, 'id', 'name');
         populateSelect('status-project-id', filterOptions.projects, 'id', 'name');
