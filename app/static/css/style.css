@@ -514,6 +514,27 @@ hr { border-color: rgba(139,124,246,0.15); }
     box-shadow: 0 1px 0 #7dd3c0, 0 2px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
+.btn-time-tracking {
+    background: linear-gradient(180deg, #0f7180 0%, #0b5b68 100%);
+    color: #fff;
+    border: none !important;
+    box-shadow: 0 3px 0 #7dd3c0, 0 4px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.btn-time-tracking:hover {
+    background: linear-gradient(180deg, #178596 0%, #0f7180 100%);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 0 #9ee2d0, 0 6px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.btn-time-tracking:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #7dd3c0, 0 2px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
 /* ── Карточки проектов ── */
 .project-card {
     background: linear-gradient(180deg, #e8d5c4 0%, #fdf8f0 25%, #fdf8f0 75%, #f5e6d3 100%);

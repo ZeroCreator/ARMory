@@ -1,0 +1,82 @@
+{% extends "base_project.html" %}
+
+{% block main_class %}container-fluid py-4{% endblock %}
+
+{% block content %}
+<div class="mb-3 d-flex align-items-center gap-2">
+    <a href="{% if project_id %}/projects/{{ project_id }}/tasks{% else %}/tasks{% endif %}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-list-task"></i> ToDo-список
+    </a>
+    {% if project_id %}
+    <a href="/projects/{{ project_id }}/kanban" class="btn btn-sm btn-outline-brown"><i class="bi bi-kanban"></i> Kanban</a>
+    {% else %}
+    <a href="/kanban" class="btn btn-sm btn-outline-brown"><i class="bi bi-kanban"></i> Kanban</a>
+    {% endif %}
+</div>
+
+<h2 class="mb-4"><i class="bi bi-stopwatch"></i> Учет времени задач</h2>
+
+<style>
+    .task-time-filter-card .form-label { color: var(--purple-surface2); }
+    .task-time-filter-card .form-check-label { color: var(--purple-surface2); }
+    #task-time-table .task-time-title { color: var(--purple-surface2); }
+    #task-time-table .task-time-title:hover { color: var(--purple-darker); }
+</style>
+
+<div class="card mb-4 border-0 shadow-sm kanban-filters task-time-filter-card">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label" for="time-filter-search">Поиск</label>
+                <input type="search" class="form-control" id="time-filter-search" oninput="applyTimeFilters()">
+            </div>
+            {% if not project_id %}
+            <div class="col-md-4">
+                <label class="form-label" for="time-filter-project">Проект</label>
+                <select class="form-select" id="time-filter-project" onchange="applyTimeFilters()"></select>
+            </div>
+            {% endif %}
+            <div class="col-md-3">
+                <label class="form-label" for="time-filter-status">Статус</label>
+                <select class="form-select" id="time-filter-status" onchange="applyTimeFilters()"></select>
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-12">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="time-filter-hide-empty" onchange="applyTimeFilters()">
+                    <label class="form-check-label" for="time-filter-hide-empty">Скрыть задачи без учета времени</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-sm table-hover table-bordered align-middle" id="task-time-table">
+        <thead class="table-light">
+            <tr>
+                <th role="button" onclick="sortTaskTime('id')">#</th>
+                {% if not project_id %}<th role="button" onclick="sortTaskTime('project')">Проект</th>{% endif %}
+                <th role="button" onclick="sortTaskTime('title')">Задача</th>
+                <th role="button" onclick="sortTaskTime('status')">Статус</th>
+                <th role="button" onclick="sortTaskTime('estimated_minutes')">План</th>
+                <th role="button" onclick="sortTaskTime('work_seconds')">В работе</th>
+                <th role="button" onclick="sortTaskTime('testing_seconds')">Тестирование</th>
+                <th role="button" onclick="sortTaskTime('actual_seconds')">Факт</th>
+                <th>Отклонение</th>
+            </tr>
+        </thead>
+        <tbody id="task-time-table-body">
+            <tr><td colspan="{% if project_id %}8{% else %}9{% endif %}" class="text-center text-muted py-4">Загрузка...</td></tr>
+        </tbody>
+        <tfoot class="table-light fw-semibold" id="task-time-table-foot"></tfoot>
+    </table>
+</div>
+
+<script>
+    const PROJECT_ID = {{ project_id | tojson }};
+    const IS_GLOBAL = PROJECT_ID === null;
+</script>
+<script src="/static/js/tasks_time.js?v=6"></script>
+{% endblock %}

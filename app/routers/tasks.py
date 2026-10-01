@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 import io
+import hmac
 import os
 import platform
 import subprocess
@@ -27,7 +28,7 @@ from app.config import Settings, get_settings
 from app.auth import get_current_email
 from app.database import get_db
 from app.events import broadcast
-from app.models import Assignee, Project, Task, TaskAssignee, TaskAttachment, TaskStatus, TaskStatusHistory
+from app.models import Assignee, Project, Task, TaskAssignee, TaskAttachment, TaskStatus, TaskStatusHistory, TaskTimeSession
 from app.routers.collabora import build_collabora_iframe_url
 from app.routers.wopi import OFFICE_EXTENSIONS, encode_file_id
 from app.storage import StorageBackend, get_storage
@@ -58,6 +59,9 @@ from app.schemas import (
     TaskReorderRequest,
     TaskStatusCreate,
     TaskStatusHistoryOut,
+    TaskTimePause,
+    TaskTimeStart,
+    TaskTimeStateOut,
     TaskStatusOut,
     TaskStatusReorderRequest,
     TaskStatusUpdate,
@@ -113,7 +117,12 @@ async def _get_status(project_id: int, status_id: int, db: AsyncSession) -> Task
 async def _get_task(project_id: int, task_id: int, db: AsyncSession) -> Task:
     result = await db.execute(
         select(Task)
-        .options(selectinload(Task.status), selectinload(Task.attachments), selectinload(Task.assignees))
+        .options(
+            selectinload(Task.status),
+            selectinload(Task.attachments),
+            selectinload(Task.assignees),
+            selectinload(Task.time_sessions),
+        )
         .where(Task.id == task_id, Task.project_id == project_id)
     )
     task = result.scalar_one_or_none()
@@ -156,11 +165,52 @@ async def _record_status_history(
     db: AsyncSession, task_id: int, status_id: int, entered_at: Optional[datetime] = None
 ) -> None:
     """Создать запись о переходе задачи в указанную колонку."""
+    await _close_task_time_sessions(db, task_id=task_id)
     db.add(TaskStatusHistory(
         task_id=task_id,
         status_id=status_id,
         entered_at=entered_at or datetime.utcnow(),
     ))
+
+
+async def _close_task_time_sessions(
+    db: AsyncSession,
+    *,
+    task_id: int | None = None,
+    worker_id: str | None = None,
+    ended_at: datetime | None = None,
+) -> int:
+    """Закрывает активные интервалы по задаче и/или исполнителю MCP."""
+    query = update(TaskTimeSession).where(TaskTimeSession.ended_at.is_(None))
+    if task_id is not None:
+        query = query.where(TaskTimeSession.task_id == task_id)
+    if worker_id is not None:
+        query = query.where(TaskTimeSession.worker_id == worker_id)
+    result = await db.execute(query.values(ended_at=ended_at or datetime.utcnow()))
+    return result.rowcount or 0
+
+
+def _status_time_phase(status_name: str | None) -> str | None:
+    """Определяет этап учёта времени по названию статуса задачи."""
+    normalized = (status_name or "").strip().casefold()
+    if any(term in normalized for term in ("тест", "testing", "test")):
+        return "testing"
+    if any(term in normalized for term in ("в работе", "в процессе", "выполняется", "progress", "doing", "active")):
+        return "work"
+    return None
+
+
+def _require_mcp_time_request(request: Request) -> None:
+    """Разрешает управление временем только сервисному MCP-клиенту."""
+    settings = get_settings()
+    authorization = request.headers.get("authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if (
+        not settings.mcp_api_key
+        or scheme.casefold() != "bearer"
+        or not hmac.compare_digest(token.strip(), settings.mcp_api_key)
+    ):
+        raise HTTPException(status_code=403, detail="MCP service authorization required")
 
 
 def _task_has_assignee(task: Task, email: str) -> bool:
@@ -284,7 +334,7 @@ async def list_tasks(project_id: int, db: AsyncSession = Depends(get_db)):
     await _get_project(project_id, db)
     result = await db.execute(
         select(Task)
-        .options(selectinload(Task.status), selectinload(Task.attachments))
+        .options(selectinload(Task.status), selectinload(Task.attachments), selectinload(Task.time_sessions))
         .where(Task.project_id == project_id)
         .order_by(Task.is_closed.asc(), Task.sort_order.asc(), Task.created_at.asc())
     )
@@ -313,7 +363,7 @@ async def get_kanban_board(
 
     tasks_query = (
         select(Task)
-        .options(selectinload(Task.status), selectinload(Task.attachments))
+        .options(selectinload(Task.status), selectinload(Task.attachments), selectinload(Task.time_sessions))
         .where(Task.project_id == project_id)
     )
     if priority is not None:
@@ -416,7 +466,9 @@ async def create_task(
         tags=data.tags,
         list_name=data.list_name,
         result=data.result,
+        estimated_minutes=data.estimated_minutes,
         sort_order=max_val + 1,
+        time_sessions=[],
     )
     db.add(task)
     await db.flush()
@@ -428,7 +480,7 @@ async def create_task(
     await _apply_task_assignees(task, assignee_emails, db)
 
     await db.commit()
-    await db.refresh(task)
+    await db.refresh(task, attribute_names=["status", "attachments", "assignees", "time_sessions"])
     broadcast({"type": "task_changed", "project_id": project_id, "task_id": task.id, "status_id": task.status_id})
     return task
 
@@ -507,8 +559,10 @@ async def _bulk_create_tasks(
             assignee_email=None,
             tags=task_data.tags,
             list_name=task_data.list_name,
+            estimated_minutes=task_data.estimated_minutes,
             sort_order=max_orders[status_id],
             assignees=[],
+            time_sessions=[],
         )
         db.add(task)
         created_tasks.append(task)
@@ -534,7 +588,7 @@ async def _bulk_create_tasks(
     await db.commit()
 
     for task in created_tasks:
-        await db.refresh(task, attribute_names=["status", "attachments"])
+        await db.refresh(task, attribute_names=["status", "attachments", "assignees", "time_sessions"])
 
     return created_tasks
 
@@ -655,7 +709,7 @@ async def list_tasks_global(
     db: AsyncSession = Depends(get_db),
 ):
     """Список всех задач (с возможностью фильтрации по проекту)."""
-    query = select(Task).options(selectinload(Task.status), selectinload(Task.attachments))
+    query = select(Task).options(selectinload(Task.status), selectinload(Task.attachments), selectinload(Task.time_sessions))
     if project_id is not None:
         await _get_project(project_id, db)
         query = query.where(Task.project_id == project_id)
@@ -668,13 +722,103 @@ async def get_task_global(task_id: int, db: AsyncSession = Depends(get_db)):
     """Получить задачу по глобальному ID (без указания проекта)."""
     result = await db.execute(
         select(Task)
-        .options(selectinload(Task.status), selectinload(Task.attachments))
+        .options(selectinload(Task.status), selectinload(Task.attachments), selectinload(Task.time_sessions))
         .where(Task.id == task_id)
     )
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
+
+
+@global_router.post("/tasks/{task_id}/time/start", response_model=TaskTimeStateOut)
+async def start_task_time(
+    task_id: int,
+    data: TaskTimeStart,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Начинает активный интервал агента и закрывает его предыдущую активную задачу."""
+    _require_mcp_time_request(request)
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.status))
+        .where(Task.id == task_id)
+    )
+    task = result.scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.is_closed:
+        raise HTTPException(status_code=409, detail="Closed tasks cannot track time")
+    if _status_time_phase(task.status.name if task.status else None) != data.phase:
+        raise HTTPException(status_code=409, detail="The requested phase does not match the task status")
+
+    active_result = await db.execute(
+        select(TaskTimeSession).where(
+            TaskTimeSession.worker_id == data.worker_id,
+            TaskTimeSession.ended_at.is_(None),
+        )
+    )
+    active_session = active_result.scalar_one_or_none()
+    if active_session and active_session.task_id == task_id and active_session.phase == data.phase:
+        return TaskTimeStateOut(
+            active=True,
+            task_id=active_session.task_id,
+            phase=active_session.phase,
+            started_at=active_session.started_at,
+        )
+
+    now = datetime.utcnow()
+    await _close_task_time_sessions(db, worker_id=data.worker_id, ended_at=now)
+    time_session = TaskTimeSession(
+        task_id=task_id,
+        worker_id=data.worker_id,
+        phase=data.phase,
+        started_at=now,
+    )
+    db.add(time_session)
+    await db.commit()
+    await db.refresh(time_session)
+    broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
+    return TaskTimeStateOut(
+        active=True,
+        task_id=task_id,
+        phase=data.phase,
+        started_at=time_session.started_at,
+    )
+
+
+@global_router.post("/tasks/{task_id}/time/pause", response_model=TaskTimeStateOut)
+async def pause_task_time(
+    task_id: int,
+    data: TaskTimePause,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Останавливает активный интервал агента для указанной задачи."""
+    _require_mcp_time_request(request)
+    active_result = await db.execute(
+        select(TaskTimeSession)
+        .where(
+            TaskTimeSession.task_id == task_id,
+            TaskTimeSession.worker_id == data.worker_id,
+            TaskTimeSession.ended_at.is_(None),
+        )
+    )
+    time_session = active_result.scalar_one_or_none()
+    if time_session is None:
+        return TaskTimeStateOut(active=False)
+
+    now = datetime.utcnow()
+    time_session.ended_at = now
+    await db.commit()
+    return TaskTimeStateOut(
+        active=False,
+        task_id=task_id,
+        phase=time_session.phase,
+        started_at=time_session.started_at,
+        ended_at=now,
+    )
 
 
 @router.patch("/tasks/reorder", status_code=204)
@@ -782,11 +926,14 @@ async def _apply_task_update(
         task.list_name = update_data["list_name"]
     if "result" in update_data:
         task.result = update_data["result"]
+    if "estimated_minutes" in update_data:
+        task.estimated_minutes = update_data["estimated_minutes"]
 
     if "is_closed" in update_data:
         was_closed = task.is_closed
         task.is_closed = update_data["is_closed"]
         if update_data["is_closed"] and not was_closed:
+            await _close_task_time_sessions(db, task_id=task.id)
             task.due_date = None
             max_order = await db.execute(
                 select(func.max(Task.sort_order))
@@ -837,7 +984,7 @@ async def update_task(
     status_changed = await _apply_task_update(task, data, project_id, db)
 
     await db.commit()
-    await db.refresh(task)
+    await db.refresh(task, attribute_names=["status", "attachments", "assignees", "time_sessions"])
     broadcast({"type": "task_changed", "project_id": project_id, "task_id": task.id, "status_id": task.status_id})
     new_result = None
     update_data = data.model_dump(exclude_unset=True)
@@ -949,6 +1096,7 @@ async def export_single_task(
         "tags": task.tags,
         "list_name": task.list_name,
         "result": task.result,
+        "estimated_minutes": task.estimated_minutes,
         "sort_order": task.sort_order,
         "status_name": status.name,
         "attachments": [
@@ -1015,7 +1163,9 @@ async def import_single_task(
         "tags": data.tags,
         "list_name": data.list_name,
         "result": data.result,
+        "estimated_minutes": data.estimated_minutes,
         "sort_order": data.sort_order,
+        "time_sessions": [],
     }
     if task_id_to_use:
         task_kwargs["id"] = task_id_to_use
@@ -1039,7 +1189,7 @@ async def import_single_task(
         db.add(attachment)
 
     await db.commit()
-    await db.refresh(task, attribute_names=["status", "attachments"])
+    await db.refresh(task, attribute_names=["status", "attachments", "assignees", "time_sessions"])
     return task
 
 
@@ -1475,6 +1625,7 @@ async def _build_project_export(project_id: int, db: AsyncSession) -> dict:
                 "assignee_emails": t.assignee_emails,
                 "tags": t.tags,
                 "list_name": t.list_name,
+                "estimated_minutes": t.estimated_minutes,
                 "sort_order": t.sort_order,
                 "status_name": status_map.get(t.status_id, ""),
                 "attachments": [
@@ -1561,6 +1712,7 @@ async def _import_project_data(
                 assignee_email=None,
                 tags=task_data.tags,
                 list_name=task_data.list_name,
+                estimated_minutes=task_data.estimated_minutes,
                 sort_order=task_data.sort_order,
             )
             db.add(task)
@@ -1574,6 +1726,7 @@ async def _import_project_data(
             task.assignee_email = None
             task.tags = task_data.tags
             task.list_name = task_data.list_name
+            task.estimated_minutes = task_data.estimated_minutes
             task.sort_order = task_data.sort_order
 
         await db.flush()
@@ -1663,7 +1816,11 @@ async def global_kanban(
     db: AsyncSession = Depends(get_db),
 ):
     """Все задачи всех проектов с фильтрами для общего kanban."""
-    query = select(Task).options(selectinload(Task.status), selectinload(Task.attachments))
+    query = select(Task).options(
+        selectinload(Task.status),
+        selectinload(Task.attachments),
+        selectinload(Task.time_sessions),
+    )
 
     if project_id is not None:
         query = query.where(Task.project_id == project_id)
@@ -1894,7 +2051,7 @@ async def update_task_status_by_column_name(
     """Обновить статус задачи, найдя статус проекта по названию колонки."""
     result = await db.execute(
         select(Task)
-        .options(selectinload(Task.status), selectinload(Task.attachments))
+        .options(selectinload(Task.status), selectinload(Task.attachments), selectinload(Task.time_sessions))
         .where(Task.id == task_id)
     )
     task = result.scalar_one_or_none()
@@ -1962,7 +2119,7 @@ async def update_task_status_by_column_name(
     if status_changed:
         await _record_status_history(db, task.id, status.id)
     await db.commit()
-    await db.refresh(task)
+    await db.refresh(task, attribute_names=["status", "attachments", "time_sessions"])
     broadcast({"type": "board_changed", "project_id": task.project_id, "global": True})
     return task
 
@@ -2065,6 +2222,28 @@ async def import_global_kanban(
 # Экспорт диаграммы Ганта в Excel
 # ═══════════════════════════════════════════════════
 
+def _format_task_effort(seconds: int) -> str:
+    """Форматирует активное время в днях, часах и минутах."""
+    total_minutes = max(0, int(seconds or 0)) // 60
+    days, remainder = divmod(total_minutes, 1440)
+    hours, minutes = divmod(remainder, 60)
+    parts = []
+    if days:
+        parts.append(f"{days} д")
+    if hours or days:
+        parts.append(f"{hours} ч")
+    if minutes or not (days or hours):
+        parts.append(f"{minutes} мин")
+    return " ".join(parts)
+
+
+def _format_signed_task_effort(seconds: int) -> str:
+    """Форматирует отклонение фактического времени от планового."""
+    if seconds == 0:
+        return "0 мин"
+    sign = "+" if seconds > 0 else "−"
+    return f"{sign}{_format_task_effort(abs(seconds))}"
+
 @global_router.get("/gantt/export/xlsx")
 async def export_gantt_xlsx(
     project_id: Optional[int] = None,
@@ -2087,6 +2266,7 @@ async def export_gantt_xlsx(
             selectinload(Task.status),
             selectinload(Task.project),
             selectinload(Task.assignees),
+            selectinload(Task.time_sessions),
         )
 
         if project_id is not None:
@@ -2235,7 +2415,7 @@ async def export_gantt_xlsx(
         )
 
         # Заголовки
-        headers = ["#", "Название", "Исполнитель", "Начало", "Конец", "Длит."]
+        headers = ["#", "Название", "Исполнитель", "Начало", "Конец", "Длит.", "План", "Факт"]
         day_headers = []
         day_dates = []
         for i in range(total_days):
@@ -2251,7 +2431,7 @@ async def export_gantt_xlsx(
             cell.fill = header_fill
             cell.font = Font(bold=True, color="212529")
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            if col_idx > 6:
+            if col_idx > 8:
                 cell.number_format = "DD.MM"
                 ws.column_dimensions[cell.column_letter].width = 4.5
 
@@ -2261,6 +2441,8 @@ async def export_gantt_xlsx(
         ws.column_dimensions["D"].width = 12
         ws.column_dimensions["E"].width = 12
         ws.column_dimensions["F"].width = 10
+        ws.column_dimensions["G"].width = 14
+        ws.column_dimensions["H"].width = 14
 
         for t in tasks:
             start = date_part(t.start_date) or date_part(t.created_at)
@@ -2275,6 +2457,8 @@ async def export_gantt_xlsx(
             start_str = start.strftime("%d.%m.%Y") if start else ""
             end_str = end.strftime("%d.%m.%Y") if end else ""
             duration = (end - start).days + 1 if end else ""
+            planned_effort = _format_task_effort(t.estimated_minutes * 60) if t.estimated_minutes is not None else ""
+            actual_effort = _format_task_effort(t.actual_seconds)
 
             testing_date = None
             deploy_date = None
@@ -2283,14 +2467,14 @@ async def export_gantt_xlsx(
                 testing_date = get_first_status_date(t.id, mapping.get("testing"))
                 deploy_date = get_first_status_date(t.id, mapping.get("deploy"))
 
-            row_cells = [t.id, title, assignee_str, start_str, end_str, duration]
+            row_cells = [t.id, title, assignee_str, start_str, end_str, duration, planned_effort, actual_effort]
             ws.append(row_cells)
             row_num = ws.max_row
 
             fill = fills["closed"] if t.is_closed else fills.get(t.priority, fills["medium"])
 
             for i, d in enumerate(day_dates):
-                col_num = 7 + i
+                col_num = 9 + i
                 cell = ws.cell(row=row_num, column=col_num)
                 cell.border = thin_border
                 is_active = False
@@ -2330,19 +2514,20 @@ async def export_gantt_xlsx(
                         cell.alignment = Alignment(horizontal="center", vertical="center")
 
         # Форматирование строк
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=6):
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=8):
             for cell in row:
                 cell.alignment = Alignment(vertical="center")
                 if cell.column == 2:
                     cell.alignment = Alignment(vertical="center", wrap_text=True)
 
-        ws.freeze_panes = "G2"
+        ws.freeze_panes = "I2"
 
         # ── Лист Задачи ──
         ws_tasks = wb.create_sheet("Задачи")
         ws_tasks.append([
             "#", "Проект", "Название", "Описание", "Статус", "Приоритет",
-            "Ответственный", "Начало", "Дедлайн", "Тестирование", "Деплой", "Теги", "Список", "Создано", "Закрыто"
+            "Ответственный", "План", "В работе", "Тестирование", "Факт", "Отклонение",
+            "Начало", "Дедлайн", "Дата тестирования", "Деплой", "Теги", "Список", "Создано", "Закрыто"
         ])
         for row in ws_tasks[1]:
             row.fill = header_fill
@@ -2369,6 +2554,11 @@ async def export_gantt_xlsx(
                 t.status.name if t.status else "",
                 t.priority or "",
                 _format_task_assignees(t, assignees),
+                _format_task_effort(t.estimated_minutes * 60) if t.estimated_minutes is not None else "",
+                _format_task_effort(t.work_seconds),
+                _format_task_effort(t.testing_seconds),
+                _format_task_effort(t.actual_seconds),
+                _format_signed_task_effort(t.actual_seconds - t.estimated_minutes * 60) if t.estimated_minutes is not None else "",
                 t.start_date.strftime("%d.%m.%Y %H:%M") if t.start_date else "",
                 t.due_date.strftime("%d.%m.%Y %H:%M") if t.due_date else "",
                 testing_date_str,

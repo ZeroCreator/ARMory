@@ -356,6 +356,8 @@ function getSortValue(task, column) {
         case 'list_name': return task.list_name || '';
         case 'created_at': return task.created_at || '';
         case 'is_closed': return task.is_closed ? 1 : 0;
+        case 'estimated_minutes': return task.estimated_minutes ?? -1;
+        case 'actual_seconds': return task.actual_seconds ?? 0;
         default: return '';
     }
 }
@@ -436,6 +438,7 @@ async function openTaskViewModal(taskId) {
         document.getElementById('task-title').value = task.title || '';
         document.getElementById('task-description').value = task.description || '';
         document.getElementById('task-priority').value = task.priority || 'medium';
+        document.getElementById('task-estimated-minutes').value = task.estimated_minutes ?? '';
         document.getElementById('task-is-closed').checked = !!task.is_closed;
         const startDateInput = document.getElementById('task-start-date');
         startDateInput.value = isoToDatetimeLocal(task.start_date);
@@ -583,6 +586,9 @@ async function saveTaskFromModal() {
         tags: document.getElementById('task-tags').value.trim() || null,
         list_name: document.getElementById('task-list-name').value.trim() || null,
         result: document.getElementById('task-result').value.trim() || null,
+        estimated_minutes: document.getElementById('task-estimated-minutes').value === ''
+            ? null
+            : parseInt(document.getElementById('task-estimated-minutes').value, 10),
     };
 
     try {
@@ -1727,6 +1733,18 @@ function formatDateTime(isoString) {
     return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function formatEffortTime(seconds, compact = false) {
+    const totalMinutes = Math.floor(Math.max(0, Number(seconds) || 0) / 60);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    const parts = [];
+    if (days) parts.push(compact ? `${days}д` : `${days} д`);
+    if (hours || days) parts.push(compact ? `${hours}ч` : `${hours} ч`);
+    if (minutes || (!days && !hours)) parts.push(compact ? `${minutes}м` : `${minutes} мин`);
+    return parts.join(' ');
+}
+
 // ═══════════════════════════════════════════════════
 // ИМПОРТ ЗАДАЧ
 // ═══════════════════════════════════════════════════
@@ -2062,7 +2080,7 @@ async function renderGantt() {
     await ensureGanttStatusHistoryLoaded();
 
     if (tasksToRender.length === 0) {
-        tbodyLeft.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Нет задач</td></tr>`;
+        tbodyLeft.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">Нет задач</td></tr>`;
         tbodyRight.innerHTML = '';
         if (theadRight) theadRight.innerHTML = '';
         if (rangeLabel) rangeLabel.textContent = '';
@@ -2078,7 +2096,7 @@ async function renderGantt() {
     });
 
     if (allDates.length === 0) {
-        tbodyLeft.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">У отфильтрованных задач отсутствуют даты</td></tr>`;
+        tbodyLeft.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">У отфильтрованных задач отсутствуют даты</td></tr>`;
         tbodyRight.innerHTML = '';
         if (theadRight) theadRight.innerHTML = '';
         if (rangeLabel) rangeLabel.textContent = '';
@@ -2128,6 +2146,7 @@ async function renderGantt() {
             <th class="gantt-col-start"><div class="gantt-cell-content">Начало</div></th>
             <th class="gantt-col-end"><div class="gantt-cell-content">Конец</div></th>
             <th class="gantt-col-duration"><div class="gantt-cell-content">Длит.</div></th>
+            <th class="gantt-col-effort"><div class="gantt-cell-content">План / факт</div></th>
         </tr>`;
 
     let rightHeaderHtml = `<tr><th class="gantt-col-timeline"><div class="d-flex" style="width:${timelineWidth}px;">`;
@@ -2154,6 +2173,9 @@ async function renderGantt() {
         const startStr = start.toLocaleDateString('ru-RU');
         const endStr = end ? end.toLocaleDateString('ru-RU') : '—';
         const duration = end ? (daysDiff(start, end) + 1) : '—';
+        const plannedEffort = t.estimated_minutes == null ? '—' : formatEffortTime(t.estimated_minutes * 60, true);
+        const actualEffort = formatEffortTime(t.actual_seconds || 0, true);
+        const effortTitle = `План: ${plannedEffort}; В работе: ${formatEffortTime(t.work_seconds || 0)}; Тестирование: ${formatEffortTime(t.testing_seconds || 0)}; Факт: ${actualEffort}`;
         const assignee = formatAssignees(t);
         const titleDisplay = escapeHtml((t.title && t.title.trim()) || (t.description && t.description.trim()) || '—');
 
@@ -2224,6 +2246,7 @@ async function renderGantt() {
                 <td class="gantt-col-start"><div class="gantt-cell-content">${startStr}</div></td>
                 <td class="gantt-col-end"><div class="gantt-cell-content">${endStr}</div></td>
                 <td class="gantt-col-duration"><div class="gantt-cell-content">${duration}</div></td>
+                <td class="gantt-col-effort"><div class="gantt-cell-content" title="${escapeHtml(effortTitle)}">${plannedEffort} / ${actualEffort}</div></td>
             </tr>`;
 
         rightRowsHtml += `
@@ -2235,7 +2258,7 @@ async function renderGantt() {
     });
 
     if (!leftRowsHtml.trim()) {
-        tbodyLeft.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">У отфильтрованных задач отсутствуют даты</td></tr>`;
+        tbodyLeft.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">У отфильтрованных задач отсутствуют даты</td></tr>`;
         tbodyRight.innerHTML = '';
         if (theadRight) theadRight.innerHTML = '';
         return;

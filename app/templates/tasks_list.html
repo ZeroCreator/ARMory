@@ -22,6 +22,12 @@
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h2 class="mb-0" id="tasks-list-title"><i class="bi bi-list-task"></i> Задачи</h2>
     <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-time-tracking" href="{% if project_id %}/projects/{{ project_id }}/tasks/time{% else %}/tasks/time{% endif %}">
+            <i class="bi bi-stopwatch me-1"></i> Учет времени
+        </a>
+        <button class="btn btn-outline-success" id="gantt-toggle-btn" onclick="toggleGanttView()" style="border-width:2px; font-weight:600;">
+            <i class="bi bi-bar-chart-steps me-1" id="gantt-toggle-icon"></i> <span id="gantt-toggle-label">Гант</span>
+        </button>
         <button class="btn btn-outline-primary" onclick="openTaskImportModal()">
             <i class="bi bi-list-task me-1"></i> Импорт задач
         </button>
@@ -30,9 +36,6 @@
         </button>
         <button class="btn btn-outline-secondary" onclick="exportTasks('csv')">
             <i class="bi bi-filetype-csv me-1"></i> CSV
-        </button>
-        <button class="btn btn-outline-success" id="gantt-toggle-btn" onclick="toggleGanttView()" style="border-width:2px; font-weight:600;">
-            <i class="bi bi-bar-chart-steps me-1" id="gantt-toggle-icon"></i> <span id="gantt-toggle-label">Гант</span>
         </button>
     </div>
 </div>
@@ -286,6 +289,7 @@
         max-width: 65px;
         border-right: 2px solid #495057;
     }
+    .gantt-col-effort { width: 125px; max-width: 125px; }
 
     @media (min-width: 1400px) {
         .gantt-col-title { max-width: 380px; }
@@ -299,6 +303,7 @@
         .gantt-col-start { width: 90px; max-width: 90px; }
         .gantt-col-end { width: 90px; max-width: 90px; }
         .gantt-col-duration { width: 60px; max-width: 60px; }
+        .gantt-col-effort { width: 110px; max-width: 110px; }
     }
 
     @media (max-width: 992px) {
@@ -308,6 +313,7 @@
         .gantt-col-start { width: 85px; max-width: 85px; }
         .gantt-col-end { width: 85px; max-width: 85px; }
         .gantt-col-duration { width: 55px; max-width: 55px; }
+        .gantt-col-effort { width: 100px; max-width: 100px; }
     }
 
     @media (max-width: 768px) {
@@ -317,6 +323,7 @@
         .gantt-col-start { width: 80px; max-width: 80px; }
         .gantt-col-end { width: 80px; max-width: 80px; }
         .gantt-col-duration { width: 50px; max-width: 50px; }
+        .gantt-col-effort { width: 90px; max-width: 90px; }
     }
     .gantt-col-timeline {
         min-width: 0;
@@ -725,7 +732,7 @@
                         <textarea class="form-control expandable-textarea" id="task-description" rows="3" placeholder="Описание..."></textarea>
                     </div>
                     <div class="row">
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             <label class="form-label" for="task-priority">Приоритет</label>
                             <select class="form-select" id="task-priority">
                                 <option value="low">Низкий</option>
@@ -733,11 +740,15 @@
                                 <option value="high">Высокий</option>
                             </select>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             {{ datetime_picker('task-start-date', name='start_date', label='Начало') }}
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             {{ datetime_picker('task-due-date', name='due_date', label='Дедлайн') }}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label" for="task-estimated-minutes">План, мин</label>
+                            <input type="number" min="0" step="1" class="form-control" id="task-estimated-minutes">
                         </div>
                     </div>
                     <div class="mb-3 form-check">
@@ -899,5 +910,5 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_list.js?v=49"></script>
+<script src="/static/js/tasks_list.js?v=50"></script>
 {% endblock %}

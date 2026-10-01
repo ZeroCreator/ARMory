@@ -149,6 +149,25 @@ async def _ensure_affair_news_column(conn) -> None:
     await conn.execute(text("ALTER TABLE affairs ADD COLUMN show_in_news BOOLEAN NOT NULL DEFAULT 0"))
 
 
+async def _ensure_task_estimated_minutes_column(conn) -> None:
+    columns = await conn.run_sync(
+        lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("tasks")}
+    )
+    if "estimated_minutes" in columns:
+        return
+
+    backup_path = _backup_database_before_migration("task_estimated_minutes")
+    logger.info("Создан бэкап перед добавлением плановой оценки задач: %s", backup_path)
+    await conn.execute(text("ALTER TABLE tasks ADD COLUMN estimated_minutes INTEGER"))
+
+
+async def _close_stale_task_time_sessions(conn) -> None:
+    await conn.execute(
+        text("UPDATE task_time_sessions SET ended_at = :ended_at WHERE ended_at IS NULL"),
+        {"ended_at": datetime.datetime.utcnow()},
+    )
+
+
 async def _reminder_loop():
     while True:
         try:
@@ -166,6 +185,8 @@ async def lifespan(app: FastAPI):
         await _ensure_collapsed_columns(conn)
         await _ensure_affair_shared_column(conn)
         await _ensure_affair_news_column(conn)
+        await _ensure_task_estimated_minutes_column(conn)
+        await _close_stale_task_time_sessions(conn)
 
         # Создаём data-директории, если их нет
         Path(settings.local_storage_path).expanduser().mkdir(parents=True, exist_ok=True)
@@ -310,6 +331,18 @@ async def project_tasks_list_page(request: Request, project_id: int):
     )
 
 
+@app.get("/projects/{project_id}/tasks/time", response_class=HTMLResponse)
+async def project_task_time_page(request: Request, project_id: int):
+    return templates.TemplateResponse(
+        "tasks_time.html",
+        {
+            "request": request,
+            "project_id": project_id,
+            "title": settings.app_name,
+        },
+    )
+
+
 @app.get("/tasks", response_class=HTMLResponse)
 async def global_tasks_list_page(request: Request):
     return templates.TemplateResponse(
@@ -319,6 +352,18 @@ async def global_tasks_list_page(request: Request):
             "project_id": None,
             "title": settings.app_name,
             "local_storage_path": settings.local_storage_path,
+        },
+    )
+
+
+@app.get("/tasks/time", response_class=HTMLResponse)
+async def global_task_time_page(request: Request):
+    return templates.TemplateResponse(
+        "tasks_time.html",
+        {
+            "request": request,
+            "project_id": None,
+            "title": settings.app_name,
         },
     )
 

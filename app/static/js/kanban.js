@@ -648,6 +648,7 @@ function openTaskModal(taskId, defaultStatusId) {
         form.title.value = task.title;
         form.description.value = task.description || '';
         form.priority.value = task.priority || 'medium';
+        form.estimated_minutes.value = task.estimated_minutes ?? '';
         document.getElementById('task-is-closed').checked = !!task.is_closed;
         form.start_date.value = task.start_date ? formatDateTimeLocal(task.start_date) : '';
         form.start_date.dispatchEvent(new Event('change'));
@@ -687,6 +688,7 @@ async function saveTask(stayOpen = false) {
         tags: form.tags.value.trim() || null,
         list_name: form.list_name.value.trim() || null,
         result: form.result.value.trim() || null,
+        estimated_minutes: form.estimated_minutes.value === '' ? null : parseInt(form.estimated_minutes.value, 10),
     };
 
     try {

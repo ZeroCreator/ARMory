@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, Enum, Boolean, text
+from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, Enum, Boolean, Index, text
 from sqlalchemy.orm import relationship
 import enum
 from app.database import Base
@@ -223,6 +223,7 @@ class Task(Base):
     tags = Column(String(500), nullable=True)
     list_name = Column(String(255), nullable=True, index=True)
     result = Column(Text, nullable=True)
+    estimated_minutes = Column(Integer, nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -232,6 +233,7 @@ class Task(Base):
     assignees = relationship("TaskAssignee", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskAssignee.assignee_email")
     attachments = relationship("TaskAttachment", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskAttachment.created_at.asc()")
     status_history = relationship("TaskStatusHistory", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskStatusHistory.entered_at.asc()")
+    time_sessions = relationship("TaskTimeSession", back_populates="task", cascade="all, delete-orphan", lazy="selectin", order_by="TaskTimeSession.started_at.asc()")
 
     @property
     def assignee_emails(self):
@@ -244,6 +246,33 @@ class Task(Base):
     def first_assignee_email(self):
         return self.assignee_emails[0] if self.assignee_emails else None
 
+    def _time_for_phase(self, phase: str) -> int:
+        total = 0
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        for session in self.time_sessions:
+            if session.phase != phase:
+                continue
+            started_at = session.started_at
+            ended_at = session.ended_at or now
+            if started_at.tzinfo is not None:
+                started_at = started_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+            if ended_at.tzinfo is not None:
+                ended_at = ended_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+            total += max(0, int((ended_at - started_at).total_seconds()))
+        return total
+
+    @property
+    def work_seconds(self) -> int:
+        return self._time_for_phase("work")
+
+    @property
+    def testing_seconds(self) -> int:
+        return self._time_for_phase("testing")
+
+    @property
+    def actual_seconds(self) -> int:
+        return self.work_seconds + self.testing_seconds
+
 
 class TaskStatusHistory(Base):
     __tablename__ = "task_status_history"
@@ -255,6 +284,27 @@ class TaskStatusHistory(Base):
 
     task = relationship("Task", back_populates="status_history")
     status = relationship("TaskStatus", lazy="selectin")
+
+
+class TaskTimeSession(Base):
+    __tablename__ = "task_time_sessions"
+    __table_args__ = (
+        Index(
+            "uq_task_time_sessions_worker_active",
+            "worker_id",
+            unique=True,
+            sqlite_where=text("ended_at IS NULL"),
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    worker_id = Column(String(128), nullable=False, index=True)
+    phase = Column(String(20), nullable=False)
+    started_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    ended_at = Column(DateTime, nullable=True)
+
+    task = relationship("Task", back_populates="time_sessions")
 
 
 class TaskAttachment(Base):

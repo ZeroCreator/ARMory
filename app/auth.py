@@ -161,6 +161,7 @@ def _mcp_service_email(scope: dict, headers: dict[str, str], settings: Settings)
         or (method in {"GET", "POST"} and re.fullmatch(r"/api/projects/\d+/tasks", path))
         or (method == "PATCH" and re.fullmatch(r"/api/projects/\d+/tasks/\d+", path))
         or (method == "GET" and re.fullmatch(r"/api/tasks/\d+", path))
+        or (method == "POST" and re.fullmatch(r"/api/tasks/\d+/time/(start|pause)", path))
         or (method == "POST" and path == "/api/assignees/mcp-agent")
     )
     if not allowed:

@@ -1,6 +1,6 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from app.models import DocType
 
 
@@ -303,11 +303,15 @@ class TaskOut(BaseModel):
     tags: Optional[str] = None
     list_name: Optional[str] = None
     result: Optional[str] = None
+    estimated_minutes: Optional[int] = None
     sort_order: int = 0
     created_at: datetime
     updated_at: datetime
     status: Optional[TaskStatusOut] = None
     attachments: List[TaskAttachmentOut] = []
+    work_seconds: int = 0
+    testing_seconds: int = 0
+    actual_seconds: int = 0
 
 
 class TaskCreate(BaseModel):
@@ -323,6 +327,7 @@ class TaskCreate(BaseModel):
     tags: Optional[str] = None
     list_name: Optional[str] = None
     result: Optional[str] = None
+    estimated_minutes: Optional[int] = Field(default=None, ge=0)
 
 
 class TaskUpdate(BaseModel):
@@ -338,6 +343,7 @@ class TaskUpdate(BaseModel):
     tags: Optional[str] = None
     list_name: Optional[str] = None
     result: Optional[str] = None
+    estimated_minutes: Optional[int] = Field(default=None, ge=0)
 
 
 class TaskReorderRequest(BaseModel):
@@ -357,6 +363,7 @@ class TaskBulkCreate(BaseModel):
     tags: Optional[str] = None
     list_name: Optional[str] = None
     project_id: Optional[int] = None
+    estimated_minutes: Optional[int] = Field(default=None, ge=0)
 
 
 class TaskBulkAttachment(BaseModel):
@@ -467,9 +474,27 @@ class KanbanTaskExport(BaseModel):
     tags: Optional[str] = None
     list_name: Optional[str] = None
     result: Optional[str] = None
+    estimated_minutes: Optional[int] = None
     sort_order: int = 0
     status_name: str
     attachments: List[KanbanAttachmentExport] = []
+
+
+class TaskTimeStart(BaseModel):
+    worker_id: str = Field(min_length=1, max_length=128)
+    phase: Literal["work", "testing"]
+
+
+class TaskTimePause(BaseModel):
+    worker_id: str = Field(min_length=1, max_length=128)
+
+
+class TaskTimeStateOut(BaseModel):
+    active: bool
+    task_id: Optional[int] = None
+    phase: Optional[Literal["work", "testing"]] = None
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
 
 
 class KanbanStatusExport(BaseModel):

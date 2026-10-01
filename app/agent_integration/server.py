@@ -41,11 +41,11 @@ mcp_server = FastMCP(
         "Ответ create_task содержит глобальный task_id и ссылку. Для загрузки задачи по номеру используйте get_task(task_id). "
         "Вызывайте take_task_into_work(task_id) только по просьбе пользователя взять задачу в работу; затем вносите изменения "
         "в текущий проект Codex, который может отличаться от репозитория ARMory. Записывайте ход работы или результат через "
-        "update_task. Вызывайте complete_task только по просьбе пользователя завершить задачу."
+        "update_task. Учёт времени ведётся по активным сессиям: take_task_into_work запускает «В работе», перевод в «Тестирование» переключает фазу, переход в другой статус закрывает интервал. Перед паузой вызывайте pause_task_time, после возобновления — start_task_time с текущей фазой. Вызывайте complete_task только по просьбе пользователя завершить задачу."
     ),
     streamable_http_path="/",
     json_response=True,
-    stateless_http=True,
+    stateless_http=False,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=_allowed_hosts,

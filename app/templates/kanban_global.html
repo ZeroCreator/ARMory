@@ -106,7 +106,7 @@
                         <textarea class="form-control expandable-textarea" name="description" rows="3" placeholder="Описание..."></textarea>
                     </div>
                     <div class="row">
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             <label class="form-label">Приоритет</label>
                             <select class="form-select" name="priority">
                                 <option value="low">Низкий</option>
@@ -114,11 +114,15 @@
                                 <option value="high">Высокий</option>
                             </select>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             {{ datetime_picker('task-start-date', name='start_date', label='Начало') }}
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             {{ datetime_picker('task-due-date', name='due_date', label='Дедлайн') }}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">План, мин</label>
+                            <input type="number" min="0" step="1" class="form-control" name="estimated_minutes">
                         </div>
                     </div>
                     <div class="mb-3 form-check">
@@ -472,5 +476,5 @@
     const LOCAL_STORAGE_PATH = {{ local_storage_path | tojson }};
 </script>
 <script src="/static/js/kanban_common.js?v=3"></script>
-<script src="/static/js/kanban_global.js?v=74"></script>
+<script src="/static/js/kanban_global.js?v=75"></script>
 {% endblock %}

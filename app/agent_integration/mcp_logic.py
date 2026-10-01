@@ -5,11 +5,39 @@ from __future__ import annotations
 import asyncio
 from functools import wraps
 from typing import Any, Literal
+from uuid import uuid4
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 
 from app.config import get_settings
+
+_WORKER_INSTANCE_ID = uuid4().hex
+
+
+def _worker_id(ctx: Context) -> str:
+    """Возвращает постоянный идентификатор агента в рамках MCP-сессии."""
+    return f"{_WORKER_INSTANCE_ID}-{id(ctx.session)}"
+
+
+def _start_task_time(task_id: int, phase: Literal["work", "testing"], ctx: Context) -> Any:
+    """Запускает интервал работы агента через API ARMory."""
+    return _api_request(
+        "POST",
+        f"/api/tasks/{task_id}/time/start",
+        {"worker_id": _worker_id(ctx), "phase": phase},
+    )
+
+
+def _status_time_phase(status_name: str | None) -> Literal["work", "testing"] | None:
+    """Определяет, для какого этапа задачи нужно учитывать активное время."""
+    normalized = (status_name or "").strip().casefold()
+    if any(term in normalized for term in ("тест", "testing", "test")):
+        return "testing"
+    if any(term in normalized for term in ("в работе", "в процессе", "выполняется", "progress", "doing", "active")):
+        return "work"
+    return None
+
 
 
 def _base_url(override: str | None = None) -> str:
@@ -214,6 +242,7 @@ def register_tools(server: FastMCP) -> None:
         tags: str | None = None,
         list_name: str | None = None,
         due_date: str | None = None,
+        estimated_minutes: int | None = None,
         assignee_email: str | None = None,
     ) -> dict[str, Any]:
         """Создаёт задачу ARMory и возвращает её глобальный номер и ссылку на канбан."""
@@ -242,6 +271,7 @@ def register_tools(server: FastMCP) -> None:
             "tags": tags,
             "list_name": list_name,
             "due_date": due_date,
+            "estimated_minutes": estimated_minutes,
             "assignee_email": assignee_email,
         }.items():
             if value is not None:
@@ -264,6 +294,7 @@ def register_tools(server: FastMCP) -> None:
     @_register_blocking_tool(server)
     def update_task(
         task_id: int,
+        ctx: Context,
         project_id: int | None = None,
         status_name: str | None = None,
         status_id: int | None = None,
@@ -274,6 +305,7 @@ def register_tools(server: FastMCP) -> None:
         tags: str | None = None,
         list_name: str | None = None,
         due_date: str | None = None,
+        estimated_minutes: int | None = None,
         assignee_email: str | None = None,
         result: str | None = None,
     ) -> dict[str, Any]:
@@ -297,6 +329,7 @@ def register_tools(server: FastMCP) -> None:
             "tags": tags,
             "list_name": list_name,
             "due_date": due_date,
+            "estimated_minutes": estimated_minutes,
             "assignee_email": assignee_email,
             "result": result,
         }.items():
@@ -325,10 +358,19 @@ def register_tools(server: FastMCP) -> None:
             f"/api/projects/{project_id}/tasks/{task_id}",
             payload,
         )
-        return _with_task_link(updated) if not _error(updated) else updated
+        if _error(updated):
+            return updated
+        phase = _status_time_phase((updated.get("status") or {}).get("name"))
+        if phase:
+            time_state = _start_task_time(task_id, phase, ctx)
+            if _error(time_state):
+                result = _with_task_link(updated)
+                result["time_tracking_error"] = time_state
+                return result
+        return _with_task_link(updated)
 
     @_register_blocking_tool(server)
-    def take_task_into_work(task_id: int) -> dict[str, Any]:
+    def take_task_into_work(task_id: int, ctx: Context) -> dict[str, Any]:
         """Перемещает задачу в колонку проекта «В работе» и назначает исполнителем AI-ассистента."""
         task = _api_request("GET", f"/api/tasks/{task_id}")
         if _error(task):
@@ -389,11 +431,31 @@ def register_tools(server: FastMCP) -> None:
         )
         if _error(updated):
             return updated
+        time_state = _start_task_time(task_id, "work", ctx)
         result = _with_task_link(updated)
         result["status_name"] = in_progress["name"]
         result["assignee_email"] = assignee["email"]
         result["assignee_name"] = assignee["name"]
+        if _error(time_state):
+            result["time_tracking_error"] = time_state
         return result
+
+
+    @_register_blocking_tool(server)
+    def start_task_time(task_id: int, phase: Literal["work", "testing"], ctx: Context) -> dict[str, Any]:
+        """Запускает или возобновляет учёт активной сессии работы агента над задачей."""
+        result = _start_task_time(task_id, phase, ctx)
+        return result if _error(result) else {"time_tracking": result}
+
+    @_register_blocking_tool(server)
+    def pause_task_time(task_id: int, ctx: Context) -> dict[str, Any]:
+        """Приостанавливает учёт времени агента над задачей перед переключением или возвратом пользователю."""
+        result = _api_request(
+            "POST",
+            f"/api/tasks/{task_id}/time/pause",
+            {"worker_id": _worker_id(ctx)},
+        )
+        return result if _error(result) else {"time_tracking": result}
 
     @_register_blocking_tool(server)
     def complete_task(task_id: int, result: str | None = None) -> dict[str, Any]:
