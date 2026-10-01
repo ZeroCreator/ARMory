@@ -18,7 +18,6 @@
 
 <style>
     .task-time-filter-card .form-label { color: var(--purple-surface2); }
-    .task-time-filter-card .form-check-label { color: var(--purple-surface2); }
     #task-time-table .task-time-title { color: var(--purple-surface2); }
     #task-time-table .task-time-title:hover { color: var(--purple-darker); }
 </style>
@@ -39,14 +38,6 @@
             <div class="col-md-3">
                 <label class="form-label" for="time-filter-status">Статус</label>
                 <select class="form-select" id="time-filter-status" onchange="applyTimeFilters()"></select>
-            </div>
-        </div>
-        <div class="row mt-2">
-            <div class="col-12">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="time-filter-hide-empty" onchange="applyTimeFilters()">
-                    <label class="form-check-label" for="time-filter-hide-empty">Скрыть задачи без учета времени</label>
-                </div>
             </div>
         </div>
     </div>
@@ -78,5 +69,5 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tasks_time.js?v=6"></script>
+<script src="/static/js/tasks_time.js?v=7"></script>
 {% endblock %}

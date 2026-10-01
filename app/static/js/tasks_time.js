@@ -52,11 +52,10 @@ function applyTimeFilters() {
     const search = document.getElementById('time-filter-search').value.trim().toLocaleLowerCase('ru');
     const status = document.getElementById('time-filter-status').value;
     const project = document.getElementById('time-filter-project')?.value || '';
-    const hideEmptyTime = document.getElementById('time-filter-hide-empty').checked;
     const filtered = timeTasks.filter(task => {
+        if (!hasTimeValues(task)) return false;
         if (status && task.status?.name !== status) return false;
         if (project && String(task.project_id) !== project) return false;
-        if (hideEmptyTime && !hasTimeValues(task)) return false;
         if (search) {
             const haystack = `${task.title || ''} ${task.description || ''} ${timeProjects[task.project_id] || ''}`.toLocaleLowerCase('ru');
             if (!haystack.includes(search)) return false;
