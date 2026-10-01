@@ -417,9 +417,17 @@ def register_tools(server: FastMCP) -> None:
 
     @_register_blocking_tool(server)
     def get_task(task_id: int) -> dict[str, Any]:
-        """Возвращает задачу по глобальному номеру, включая отображаемые имена исполнителей."""
+        """Возвращает задачу по глобальному номеру, включая проект и отображаемые имена исполнителей."""
         task = _api_request("GET", f"/api/tasks/{task_id}")
-        return _with_task_link(task) if not _error(task) else task
+        if _error(task):
+            return task
+        result = _with_task_link(task)
+        project = _resolve_project(task.get("project_id"))
+        if not _error(project):
+            result["project_name"] = project["name"]
+        else:
+            result["project_name_error"] = project
+        return result
 
     @_register_blocking_tool(server)
     def update_task(
@@ -503,6 +511,52 @@ def register_tools(server: FastMCP) -> None:
                 result["time_tracking_error"] = time_state
                 return result
         return _with_task_link(updated)
+
+    @_register_blocking_tool(server)
+    def update_task_time(
+        task_id: int,
+        estimated_minutes: int | None = None,
+        work_minutes: int | None = None,
+        testing_minutes: int | None = None,
+        actual_minutes: int | None = None,
+    ) -> dict[str, Any]:
+        """Задаёт указанные итоги времени задачи в минутах, не изменяя пропущенные поля."""
+        values = {
+            "estimated_minutes": estimated_minutes,
+            "work_minutes": work_minutes,
+            "testing_minutes": testing_minutes,
+            "actual_minutes": actual_minutes,
+        }
+        if all(value is None for value in values.values()):
+            return {"error": "Specify at least one task time value in minutes"}
+        if any(value is not None and value < 0 for value in values.values()):
+            return {"error": "Task time values cannot be negative"}
+
+        task = _api_request("GET", f"/api/tasks/{task_id}")
+        if _error(task):
+            return task
+        project_id = task.get("project_id")
+        if project_id is None:
+            return {"error": "Could not resolve the task's project_id"}
+
+        payload: dict[str, int] = {}
+        if estimated_minutes is not None:
+            payload["estimated_minutes"] = estimated_minutes
+        for input_name, api_name in (
+            ("work_minutes", "work_seconds"),
+            ("testing_minutes", "testing_seconds"),
+            ("actual_minutes", "actual_seconds"),
+        ):
+            value = values[input_name]
+            if value is not None:
+                payload[api_name] = value * 60
+
+        updated = _api_request(
+            "PATCH",
+            f"/api/projects/{project_id}/tasks/{task_id}",
+            payload,
+        )
+        return updated if _error(updated) else _with_task_link(updated)
 
     @_register_blocking_tool(server)
     def take_task_into_work(task_id: int, ctx: Context) -> dict[str, Any]:

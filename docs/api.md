@@ -108,7 +108,7 @@ API доступен при `PERSONAL_NOTES_ENABLED=true`.
 | POST | `/api/projects/{id}/tasks` | Создать задачу |
 | POST | `/api/projects/{id}/tasks/bulk` | Массовое создание задач (импорт ToDo) |
 | GET | `/api/projects/{id}/tasks/{task_id}` | Получить задачу |
-| PATCH | `/api/projects/{id}/tasks/{task_id}` | Обновить задачу (в т.ч. `is_closed` — закрытие и `estimated_minutes` — оценка в минутах) |
+| PATCH | `/api/projects/{id}/tasks/{task_id}` | Обновить задачу (в т.ч. `is_closed` — закрытие, `estimated_minutes` — оценка в минутах и `work_seconds`, `testing_seconds`, `actual_seconds` — ручные итоги времени в секундах) |
 | DELETE | `/api/projects/{id}/tasks/{task_id}` | Удалить задачу |
 | POST | `/api/projects/{id}/tasks/{task_id}/attachments` | Добавить вложение к задаче |
 | GET | `/api/projects/{id}/tasks/{task_id}/attachments/{att_id}/collabora` | URL редактирования вложения в Collabora Online |
