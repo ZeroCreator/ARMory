@@ -1909,10 +1909,40 @@ async def update_task_status_by_column_name(
     )
     status = status_result.scalar_one_or_none()
     if not status:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Status '{data.column_name}' not found in project"
+        global_color_result = await db.execute(
+            select(TaskStatus.color, func.count(TaskStatus.id).label("color_count"))
+            .where(TaskStatus.name == data.column_name)
+            .group_by(TaskStatus.color)
+            .order_by(func.count(TaskStatus.id).desc(), TaskStatus.color.asc())
+            .limit(1)
         )
+        global_color = global_color_result.scalar_one_or_none()
+        if global_color is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Status '{data.column_name}' not found in project",
+            )
+
+        global_order_result = await db.execute(
+            select(func.min(TaskStatus.sort_order)).where(TaskStatus.name == data.column_name)
+        )
+        sort_order = global_order_result.scalar_one()
+        await db.execute(
+            update(TaskStatus)
+            .where(
+                TaskStatus.project_id == task.project_id,
+                TaskStatus.sort_order >= sort_order,
+            )
+            .values(sort_order=TaskStatus.sort_order + 1)
+        )
+        status = TaskStatus(
+            project_id=task.project_id,
+            name=data.column_name,
+            color=global_color,
+            sort_order=sort_order,
+        )
+        db.add(status)
+        await db.flush()
 
     if data.insert_top and task.status_id != status.id:
         await db.execute(
