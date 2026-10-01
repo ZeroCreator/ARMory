@@ -193,6 +193,7 @@ async function loadFilters() {
             api(`${API_BASE}/assignees`),
         ]);
         populateSelect('filter-priority', filterOptions.priorities.map(p => ({ value: p, label: priorityLabel(p) })), 'value', 'label');
+        populateSelect('filter-list', (filterOptions.list_names || []).map(name => ({ value: name, label: name })), 'value', 'label');
         populateTagFilterOptions('filter-tag', filterOptions.tags);
         populateAssigneeSelects(kanbanAssignees);
     } catch (e) {
@@ -299,6 +300,7 @@ function buildQueryString() {
     const params = new URLSearchParams();
     const priority = document.getElementById('filter-priority')?.value;
     const assignee = document.getElementById('filter-assignee')?.value;
+    const listName = document.getElementById('filter-list')?.value;
     const tag = document.getElementById('filter-tag')?.value;
     const dueBefore = document.getElementById('filter-due-before')?.value;
     const createdAfter = document.getElementById('filter-created-after')?.value;
@@ -306,6 +308,7 @@ function buildQueryString() {
 
     if (priority) params.append('priority', priority);
     if (assignee) params.append('assignee_email', assignee);
+    if (listName) params.append('list_name', listName);
     if (tag) params.append('tags', tag);
     if (dueBefore) params.append('due_before', new Date(dueBefore).toISOString());
     if (createdAfter) params.append('created_after', new Date(createdAfter).toISOString());
@@ -1501,6 +1504,7 @@ function resetFilters() {
     document.getElementById('filter-text-search').value = '';
     document.getElementById('filter-priority').value = '';
     document.getElementById('filter-assignee').value = '';
+    document.getElementById('filter-list').value = '';
     document.getElementById('filter-tag').value = '';
     document.getElementById('filter-due-before').value = '';
     document.getElementById('filter-created-after').value = '';

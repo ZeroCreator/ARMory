@@ -20,6 +20,12 @@
         </select>
     </div>
     <div class="mb-3">
+        <label class="form-label" for="filter-list">Список</label>
+        <select class="form-select" id="filter-list" onchange="applyFilters()">
+            <option value="">Все</option>
+        </select>
+    </div>
+    <div class="mb-3">
         <label class="form-label" for="filter-tag">Тег</label>
         <select class="form-select" id="filter-tag" onchange="applyFilters()">
             <option value="">Все</option>

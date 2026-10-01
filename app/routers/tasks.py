@@ -360,6 +360,7 @@ async def get_kanban_board(
     project_id: int,
     priority: Optional[str] = None,
     assignee_email: Optional[str] = None,
+    list_name: Optional[str] = None,
     tags: Optional[str] = None,
     created_after: Optional[datetime] = None,
     created_before: Optional[datetime] = None,
@@ -392,6 +393,8 @@ async def get_kanban_board(
                 TaskAssignee.assignee_email.ilike(search),
             )
         ).distinct()
+    if list_name is not None:
+        tasks_query = tasks_query.where(Task.list_name == list_name)
     if tags is not None:
         tasks_query = tasks_query.where(Task.tags.ilike(f"%{tags}%"))
     if created_after is not None:
@@ -1838,6 +1841,7 @@ async def global_kanban(
     project_id: Optional[int] = None,
     priority: Optional[str] = None,
     assignee_email: Optional[str] = None,
+    list_name: Optional[str] = None,
     tags: Optional[str] = None,
     created_after: Optional[datetime] = None,
     created_before: Optional[datetime] = None,
@@ -1866,6 +1870,8 @@ async def global_kanban(
                 TaskAssignee.assignee_email.ilike(search),
             )
         ).distinct()
+    if list_name is not None:
+        query = query.where(Task.list_name == list_name)
     if tags is not None:
         query = query.where(Task.tags.ilike(f"%{tags}%"))
     if created_after is not None:
