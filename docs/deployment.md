@@ -138,7 +138,7 @@ ARMory автоматически проксирует `/collabora/*` на вн�
 ```bash
 sudo apt update && sudo apt install nginx certbot python3-certbot-nginx -y
 
-sudo tee /etc/nginx/sites-available/<your-app> << 'EOF'
+sudo tee <nginx-sites-available-directory>/<your-app> << 'EOF'
 server {
     listen 80;
     server_name <your-domain>;
@@ -153,7 +153,7 @@ server {
 }
 EOF
 
-sudo ln -s /etc/nginx/sites-available/<your-app> /etc/nginx/sites-enabled/
+sudo ln -s <nginx-sites-available-directory>/<your-app> <nginx-sites-enabled-directory>/
 sudo nginx -t && sudo systemctl restart nginx
 
 # SSL
