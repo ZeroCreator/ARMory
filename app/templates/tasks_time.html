@@ -150,10 +150,25 @@
     </div>
 </div>
 
+<div id="task-time-context-menu" class="kanban-context-menu" role="menu">
+    <button type="button" class="kanban-context-item" data-action="copy-link" role="menuitem">
+        <i class="bi bi-link-45deg me-2" aria-hidden="true"></i> Ссылка на задачу
+    </button>
+    <button type="button" class="kanban-context-item" data-action="edit-time" role="menuitem">
+        <i class="bi bi-stopwatch me-2" aria-hidden="true"></i> Редактировать время
+    </button>
+    <button type="button" class="kanban-context-item" data-action="edit-task" role="menuitem">
+        <i class="bi bi-pencil me-2" aria-hidden="true"></i> Редактировать задачу
+    </button>
+</div>
+
+{% include 'partials/task_editor_modals.html' %}
+
 <script>
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
 <script src="/static/js/tag_filter.js?v=2"></script>
-<script src="/static/js/tasks_time.js?v=13"></script>
+<script src="/static/js/tasks_list.js?v=53"></script>
+<script src="/static/js/tasks_time.js?v=14"></script>
 {% endblock %}

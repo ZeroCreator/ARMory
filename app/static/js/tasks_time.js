@@ -4,9 +4,18 @@ let timeProjects = {};
 let timeFilterOptions = {};
 let timeSort = { key: 'created_at', direction: 'desc' };
 let editingTimeTaskId = null;
+let contextTimeTaskId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('task-time-edit-form').addEventListener('submit', saveTaskTimeValues);
+    document.getElementById('task-time-table-body').addEventListener('contextmenu', showTaskTimeContextMenu);
+    document.getElementById('task-time-context-menu').addEventListener('click', handleTaskTimeContextAction);
+    document.addEventListener('click', hideTaskTimeContextMenu);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') hideTaskTimeContextMenu();
+    });
+    document.addEventListener('scroll', hideTaskTimeContextMenu, true);
+    window.addEventListener('resize', hideTaskTimeContextMenu);
     await loadTaskTimeData();
     window.setInterval(loadTaskTimeData, 60000);
 });
@@ -28,6 +37,10 @@ async function loadTaskTimeData() {
         const projects = await projectsResponse.json();
         timeFilterOptions = await filterResponse.json();
         timeProjects = Object.fromEntries(projects.map(project => [project.id, project.name]));
+        allTasks = timeTasks;
+        projectsMap = timeProjects;
+        filterOptions = timeFilterOptions;
+        assigneesMap = Object.fromEntries((timeFilterOptions.assignees || []).map(assignee => [assignee.email, assignee.name]));
         populateTimeFilters();
         applyTimeFilters();
     } catch (error) {
@@ -207,6 +220,7 @@ function sortTaskTime(key) {
 }
 
 function renderTaskTimeTable(tasks) {
+    hideTaskTimeContextMenu();
     const body = document.getElementById('task-time-table-body');
     const foot = document.getElementById('task-time-table-foot');
     document.getElementById('task-time-export-xlsx').disabled = !tasks.length;
@@ -239,10 +253,13 @@ function renderTaskTimeTable(tasks) {
         const deviation = estimate == null ? null : actual - estimate;
         const deviationClass = deviation == null ? 'text-muted' : deviation > 0 ? 'text-danger' : deviation < 0 ? 'text-success' : 'text-muted';
         const projectCell = IS_GLOBAL ? `<td>${escapeTimeHtml(timeProjects[task.project_id] || `Проект #${task.project_id}`)}</td>` : '';
-        return `<tr>
+        return `<tr data-task-id="${task.id}">
             <td>${task.id}</td>
             ${projectCell}
-            <td><button class="task-time-title" type="button" data-task-id="${task.id}" onclick="openTaskTimeEditor(${task.id})">${escapeTimeHtml(task.title || task.description || '—')}</button></td>
+            <td><div class="d-flex align-items-center gap-2">
+                <button class="task-time-title flex-grow-1" type="button" data-task-id="${task.id}" onclick="openTaskTimeEditor(${task.id})">${escapeTimeHtml(task.title || task.description || '—')}</button>
+                <button class="btn btn-sm btn-outline-primary flex-shrink-0" type="button" title="Редактировать задачу" aria-label="Редактировать задачу" onclick="openTaskViewModal(${task.id})"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>
+            </div></td>
             <td>${escapeTimeHtml(task.status?.name || '—')}</td>
             <td class="text-nowrap">${estimate == null ? '—' : formatEffortTime(estimate)}</td>
             <td class="text-nowrap">${formatEffortTime(task.work_seconds || 0)}</td>
@@ -262,6 +279,34 @@ function renderTaskTimeTable(tasks) {
         <td>${formatEffortTime(actualTotal)}</td>
         <td class="${totalDeviationClass}">${plannedCount === tasks.length ? formatSignedEffortTime(totalDeviation) : '—'}</td>
     </tr>`;
+}
+
+function showTaskTimeContextMenu(event) {
+    const row = event.target.closest('tr[data-task-id]');
+    if (!row) return;
+    event.preventDefault();
+    event.stopPropagation();
+    contextTimeTaskId = Number(row.dataset.taskId);
+    const menu = document.getElementById('task-time-context-menu');
+    menu.style.display = 'block';
+    menu.style.left = `${Math.max(0, Math.min(event.clientX, window.innerWidth - menu.offsetWidth))}px`;
+    menu.style.top = `${Math.max(0, Math.min(event.clientY, window.innerHeight - menu.offsetHeight))}px`;
+}
+
+function hideTaskTimeContextMenu() {
+    const menu = document.getElementById('task-time-context-menu');
+    if (menu) menu.style.display = 'none';
+    contextTimeTaskId = null;
+}
+
+function handleTaskTimeContextAction(event) {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    const task = timeTasks.find(item => item.id === contextTimeTaskId);
+    if (!action || !task) return;
+    hideTaskTimeContextMenu();
+    if (action === 'copy-link') copyTaskLink(task.project_id, task.id);
+    if (action === 'edit-time') openTaskTimeEditor(task.id);
+    if (action === 'edit-task') openTaskViewModal(task.id);
 }
 
 function openTaskTimeEditor(taskId) {

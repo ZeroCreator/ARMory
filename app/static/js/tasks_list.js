@@ -57,6 +57,7 @@ let importNextTempId = 1;
 
 document.addEventListener('DOMContentLoaded', async () => {
     loadCurrentUser();
+    if (!document.getElementById('tasks-table-body')) return;
     if (!IS_GLOBAL) {
         await loadProjectHeader(PROJECT_ID);
     } else {
@@ -158,6 +159,7 @@ async function loadProjectHeader(projectId) {
 }
 
 async function loadFilters() {
+    if (document.getElementById('task-time-table')) return loadTaskTimeData();
     try {
         const url = IS_GLOBAL ? `${API_BASE}/kanban/filters` : `${API_BASE}/projects/${PROJECT_ID}/kanban/filters`;
         filterOptions = await api(url);
@@ -194,6 +196,7 @@ function populateSelect(id, items, defaultLabel = 'Все') {
 }
 
 async function loadTasks() {
+    if (document.getElementById('task-time-table')) return loadTaskTimeData();
     const tbody = document.getElementById('tasks-table-body');
     tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4">Загрузка...</td></tr>';
     taskStatusHistory = {};
@@ -273,6 +276,12 @@ function rebuildStatusFilter() {
 }
 
 function applyFilters() {
+    if (document.getElementById('task-time-table')) {
+        timeTasks = allTasks;
+        populateTimeFilters();
+        applyTimeFilters();
+        return;
+    }
     const search = document.getElementById('filter-search')?.value.toLowerCase().trim() || '';
     const projectId = document.getElementById('filter-project')?.value || '';
     const status = document.getElementById('filter-status')?.value || '';
