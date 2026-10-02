@@ -196,6 +196,54 @@ async def _close_stale_task_time_sessions(conn) -> None:
     )
 
 
+async def _ensure_mcp_oauth_schema(conn) -> None:
+    """Сохраняет данные старого OAuth-хранилища при обновлении его формата."""
+    columns = await conn.run_sync(
+        lambda sync_conn: {
+            table: {column["name"] for column in inspect(sync_conn).get_columns(table)}
+            for table in ("mcp_oauth_clients", "mcp_oauth_tokens")
+        }
+    )
+    client_columns = columns["mcp_oauth_clients"]
+    rename_client_data = "client_info" not in client_columns and "client_data" in client_columns
+    if "client_info" not in client_columns and not rename_client_data:
+        raise RuntimeError("Неизвестная структура mcp_oauth_clients: нет client_info или client_data")
+
+    if conn.dialect.name != "sqlite":
+        if rename_client_data:
+            raise RuntimeError("Обновление старого OAuth-хранилища требует резервной копии SQLite")
+        return
+
+    numeric_dates = []
+    for column in ("expires_at", "revoked_at"):
+        result = await conn.execute(text(
+            f"SELECT 1 FROM mcp_oauth_tokens WHERE typeof({column}) IN ('integer', 'real') LIMIT 1"
+        ))
+        if result.first() is not None:
+            invalid_dates = await conn.execute(text(
+                f"SELECT 1 FROM mcp_oauth_tokens WHERE typeof({column}) IN ('integer', 'real') "
+                f"AND strftime('%Y-%m-%d %H:%M:%f', {column}, 'unixepoch') IS NULL LIMIT 1"
+            ))
+            if invalid_dates.first() is not None:
+                raise RuntimeError(f"Недопустимая числовая дата в mcp_oauth_tokens.{column}")
+            numeric_dates.append(column)
+
+    if not rename_client_data and not numeric_dates:
+        return
+
+    backup_path = _backup_database_before_migration("mcp_oauth")
+    logger.info("Создан бэкап перед обновлением OAuth-хранилища MCP: %s", backup_path)
+    if rename_client_data:
+        await conn.execute(text(
+            "ALTER TABLE mcp_oauth_clients RENAME COLUMN client_data TO client_info"
+        ))
+    for column in numeric_dates:
+        await conn.execute(text(
+            f"UPDATE mcp_oauth_tokens SET {column} = strftime('%Y-%m-%d %H:%M:%f', {column}, 'unixepoch') "
+            f"WHERE typeof({column}) IN ('integer', 'real')"
+        ))
+
+
 async def _reminder_loop():
     while True:
         try:
@@ -210,6 +258,7 @@ async def _reminder_loop():
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _ensure_mcp_oauth_schema(conn)
         await _ensure_collapsed_columns(conn)
         await _ensure_affair_shared_column(conn)
         await _ensure_affair_news_column(conn)
