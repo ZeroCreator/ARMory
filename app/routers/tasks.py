@@ -829,6 +829,9 @@ async def pause_task_time(
     now = datetime.utcnow()
     time_session.ended_at = now
     await db.commit()
+    task = await db.get(Task, task_id)
+    if task is not None:
+        broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
     return TaskTimeStateOut(
         active=False,
         task_id=task_id,
