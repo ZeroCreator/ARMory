@@ -263,7 +263,14 @@ def _default_task_assignee_name(ctx: Context) -> str | dict[str, Any]:
         except (AttributeError, ValueError):
             request = None
         scope = getattr(request, "scope", None)
-        email = get_authenticated_email_from_scope(scope, settings) if isinstance(scope, dict) else None
+        scope_state = scope.get("state") if isinstance(scope, dict) else None
+        email = (
+            normalize_email(scope_state.get("user_email"))
+            if isinstance(scope_state, dict)
+            else ""
+        )
+        if not email and isinstance(scope, dict):
+            email = get_authenticated_email_from_scope(scope, settings)
         if not email:
             return {"error": "Could not identify the authenticated user for this MCP request"}
 
