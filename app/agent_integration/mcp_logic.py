@@ -255,28 +255,28 @@ def _register_blocking_tool(server: FastMCP):
     return register
 
 
-def _default_task_assignee_name(ctx: Context) -> str | dict[str, Any]:
+def _default_task_assignee_name(ctx: Context) -> tuple[str | None, bool]:
     settings = get_settings()
-    if settings.auth_required:
-        try:
-            request = ctx.request_context.request
-        except (AttributeError, ValueError):
-            request = None
-        scope = getattr(request, "scope", None)
-        scope_state = scope.get("state") if isinstance(scope, dict) else None
-        email = (
-            normalize_email(scope_state.get("user_email"))
-            if isinstance(scope_state, dict)
-            else ""
-        )
-        if not email and isinstance(scope, dict):
+    try:
+        request = ctx.request_context.request
+    except (AttributeError, ValueError):
+        request = None
+    scope = getattr(request, "scope", None)
+    if isinstance(scope, dict):
+        authenticated_user = scope.get("user")
+        access_token = getattr(authenticated_user, "access_token", None)
+        email = normalize_email(getattr(access_token, "user_email", None))
+        scope_state = scope.get("state")
+        if not email and isinstance(scope_state, dict):
+            email = normalize_email(scope_state.get("user_email"))
+        if not email:
             email = get_authenticated_email_from_scope(scope, settings)
         if not email:
-            return {"error": "Could not identify the authenticated user for this MCP request"}
+            return None, True
 
         assignees = _api_request("GET", "/api/assignees")
-        if _error(assignees):
-            return assignees
+        if _error(assignees) or not isinstance(assignees, list):
+            return None, True
         match = next(
             (
                 assignee for assignee in assignees
@@ -286,13 +286,11 @@ def _default_task_assignee_name(ctx: Context) -> str | dict[str, Any]:
             None,
         )
         if match is None:
-            return {"error": "The authenticated user has no display name in the ARMory assignee directory"}
-        return " ".join(match["name"].split())
+            return None, True
+        return " ".join(match["name"].split()), False
 
     local_assignee_name = " ".join((settings.mcp_local_assignee_name or "").split())
-    if not local_assignee_name:
-        return {"error": "MCP_LOCAL_ASSIGNEE_NAME is not configured for the local MCP server"}
-    return local_assignee_name
+    return local_assignee_name or None, not bool(local_assignee_name)
 
 
 def register_tools(server: FastMCP) -> None:
@@ -363,13 +361,13 @@ def register_tools(server: FastMCP) -> None:
         if estimated_minutes < 1:
             return {"error": "estimated_minutes must be greater than zero"}
 
-        default_assignee_name = _default_task_assignee_name(ctx)
-        if isinstance(default_assignee_name, dict):
-            return default_assignee_name
+        default_assignee_name, current_user_not_found = _default_task_assignee_name(ctx)
         agent_assignee = _api_request("POST", "/api/assignees/mcp-agent")
         if _error(agent_assignee):
             return agent_assignee
-        requested_assignees = [default_assignee_name, *(assignee_names or [])]
+        requested_assignees = list(assignee_names or [])
+        if default_assignee_name:
+            requested_assignees.insert(0, default_assignee_name)
         normalized_assignees = []
         seen_assignees = set()
         for name in requested_assignees:
@@ -420,6 +418,7 @@ def register_tools(server: FastMCP) -> None:
         result = _with_task_link(task)
         result["project_name"] = project["name"]
         result["status_name"] = status["name"]
+        result["assignee_prompt_required"] = current_user_not_found and not normalized_assignees
         return result
 
     @_register_blocking_tool(server)

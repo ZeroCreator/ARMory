@@ -21,6 +21,7 @@ from urllib.parse import urlencode
 
 from app.auth import get_email_from_scope
 from app.database import engine, Base, AsyncSessionLocal
+from app.routers import mcp_oauth
 from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, wopi, collabora, tasks, assignees, extensions, mcp as mcp_router, events, comments, affairs, auth as auth_router
 from app.config import get_settings
 from app.extensions import enabled_extensions
@@ -41,6 +42,11 @@ def _is_auth_public_path(path: str) -> bool:
         or path.startswith("/auth/")
         or path == "/static"
         or path.startswith("/static/")
+        or path in {
+            "/.well-known/oauth-protected-resource",
+            "/.well-known/oauth-protected-resource/mcp",
+            "/.well-known/oauth-authorization-server/mcp",
+        }
     )
 
 
@@ -265,6 +271,7 @@ app.include_router(collabora.router)
 app.include_router(tasks.router)
 app.include_router(tasks.global_router)
 app.include_router(assignees.router)
+app.include_router(mcp_oauth.router)
 app.mount("/mcp", mcp_router.mcp_asgi_app, name="mcp")
 app.include_router(events.router)
 app.include_router(comments.router)

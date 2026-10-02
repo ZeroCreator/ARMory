@@ -4,9 +4,11 @@ from urllib.parse import urlsplit
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 
 from app.config import get_settings
 from app.agent_integration.mcp_logic import register_tools
+from app.agent_integration.oauth_provider import mcp_oauth_provider
 
 
 _settings = get_settings()
@@ -35,6 +37,17 @@ _allowed_origins = [
 
 mcp_server = FastMCP(
     name="ARMory Kanban",
+    auth_server_provider=mcp_oauth_provider,
+    auth=AuthSettings(
+        issuer_url=f"{_settings.armory_public_url.rstrip('/')}/mcp",
+        resource_server_url=f"{_settings.armory_public_url.rstrip('/')}/mcp",
+        required_scopes=["kanban"],
+        client_registration_options=ClientRegistrationOptions(
+            enabled=True,
+            valid_scopes=["kanban"],
+            default_scopes=["kanban"],
+        ),
+    ),
     instructions=(
         "Kanban ARMory — общая система задач для всех проектов ARMory и всех MCP-клиентов, включая агентов из других репозиториев. "
         "Команду /task ищите где угодно в сообщении пользователя. Если сразу после /task указан номер задачи, "
@@ -65,9 +78,13 @@ mcp_server = FastMCP(
         "Исполнителей передавайте отображаемыми именами через assignee_names; email — только внутренний идентификатор API, его не нужно запрашивать у пользователя. "
         "assignee_names задаёт полный список и заменяет текущий: передавайте всех нужных исполнителей. get_task и list_tasks возвращают текущие имена исполнителей. "
         "Если в ответе есть assignee_names_error, не меняйте список исполнителей, пока сопоставление имён не будет исправлено. "
-        "При создании каждой новой задачи MCP автоматически назначает двух исполнителей: инициатора "
-        "(на сервере — пользователя подтверждённой сессии по его имени в справочнике, локально — имя из MCP_LOCAL_ASSIGNEE_NAME) "
-        "и AI Assistant. Дополнительных исполнителей из запроса пользователя сохраняйте. "
+        "При создании задачи назначайте подтверждённого OAuth-пользователя, если он передан MCP-запросом и найден в справочнике исполнителей, и AI Assistant. "
+        "Если пользователя не удалось сопоставить по email или имени, всё равно создайте задачу с AI Assistant. "
+        "Один MCP_API_KEY не определяет человека: запросы только с этим ключом всё равно создавайте, назначая AI Assistant. "
+        "Для HTTP-входа пользователя Codex-клиент должен пройти OAuth-вход в MCP; "
+        "локальный stdio-сервер использует MCP_LOCAL_ASSIGNEE_NAME. Дополнительных исполнителей из запроса сохраняйте. "
+        "Если в результате create_task поле assignee_prompt_required равно true, сообщите, что задача назначена AI Assistant, и предложите пользователю указать исполнителя. "
+        "Если пользователь назовёт исполнителя, получите текущий список через get_task и передайте полный список через update_task.assignee_names, сохранив AI Assistant. "
         "Когда пользователь поручает задачу агенту, вызывайте take_task_into_work: добавляйте AI Assistant, сохраняя всех текущих исполнителей, "
         "и переводите задачу в «В работе». Этот вызов запускает учёт рабочего времени. При переводе задачи в «Тестирование» "
         "учёт переключается на тестирование; при переходе в другой статус интервал закрывается. При переключении агента на новую задачу "

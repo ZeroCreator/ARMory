@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, Enum, Boolean, Index, text
+from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, Enum, Boolean, Index, JSON, text
 from sqlalchemy.orm import relationship
 import enum
 from app.database import Base
@@ -362,3 +362,46 @@ class AuthUser(Base):
         onupdate=datetime.datetime.utcnow,
         nullable=False,
     )
+
+
+class MCPOAuthClient(Base):
+    __tablename__ = "mcp_oauth_clients"
+
+    client_id = Column(String(64), primary_key=True)
+    client_info = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+
+class MCPOAuthGrant(Base):
+    __tablename__ = "mcp_oauth_grants"
+
+    id = Column(String(64), primary_key=True)
+    client_id = Column(String(64), ForeignKey("mcp_oauth_clients.client_id", ondelete="CASCADE"), nullable=False, index=True)
+    redirect_uri = Column(Text, nullable=False)
+    redirect_uri_provided_explicitly = Column(Boolean, nullable=False, default=True)
+    state = Column(Text, nullable=False)
+    code_challenge = Column(String(128), nullable=False)
+    code_challenge_method = Column(String(8), nullable=False)
+    scopes = Column(JSON, nullable=False)
+    resource = Column(Text, nullable=False)
+    user_email = Column(String(255), nullable=True)
+    code_hash = Column(String(64), nullable=True, unique=True, index=True)
+    status = Column(String(16), nullable=False, default="pending", index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True)
+
+
+class MCPOAuthToken(Base):
+    __tablename__ = "mcp_oauth_tokens"
+
+    token_hash = Column(String(64), primary_key=True)
+    token_type = Column(String(16), nullable=False, index=True)
+    family_id = Column(String(64), nullable=False, index=True)
+    client_id = Column(String(64), ForeignKey("mcp_oauth_clients.client_id", ondelete="CASCADE"), nullable=False, index=True)
+    user_email = Column(String(255), nullable=False, index=True)
+    scopes = Column(JSON, nullable=False)
+    resource = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    revoked_at = Column(DateTime, nullable=True)
