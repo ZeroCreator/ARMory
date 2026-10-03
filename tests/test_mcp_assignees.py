@@ -82,7 +82,8 @@ def test_authenticated_identity_errors_do_not_assign_local_user(settings, monkey
 
 
 @pytest.mark.parametrize("auth_required", [False, True])
-def test_create_task_over_http_assigns_local_user_only_in_local_mode(settings, monkeypatch, auth_required):
+@pytest.mark.parametrize("input_paths", [None, ["<project-directory>", "<project-directory>/file with spaces.txt", "<project-directory>"]])
+def test_create_task_over_http_assigns_local_user_only_in_local_mode(settings, monkeypatch, auth_required, input_paths):
     settings.auth_required = auth_required
     directory = [
         {"name": "<local-assignee>", "email": "<local-email>"},
@@ -90,6 +91,7 @@ def test_create_task_over_http_assigns_local_user_only_in_local_mode(settings, m
         {"name": "<additional-assignee>", "email": "<additional-email>"},
     ]
     created_payload = {}
+    saved_attachments = []
 
     def api_request(method, path, json_body=None):
         if method == "GET" and path == "/api/assignees":
@@ -103,6 +105,9 @@ def test_create_task_over_http_assigns_local_user_only_in_local_mode(settings, m
         if method == "POST" and path == "/api/projects/1/tasks":
             created_payload.update(json_body)
             return {"id": 3, "project_id": 1, **json_body}
+        if method == "POST" and path == "/api/projects/1/tasks/3/attachments":
+            saved_attachments.append(json_body)
+            return {"id": len(saved_attachments), **json_body}
         pytest.fail(f"Unexpected API request: {method} {path}")
 
     monkeypatch.setattr(mcp_logic, "_api_request", api_request)
@@ -114,6 +119,7 @@ def test_create_task_over_http_assigns_local_user_only_in_local_mode(settings, m
     result = asyncio.run(tool.fn(
         title="<task-title>", estimated_minutes=15, project_id=1, ctx=ctx,
         assignee_names=["<additional-assignee>"],
+        input_paths=input_paths,
     ))
 
     expected_emails = ["<additional-email>", "<agent-email>"]
@@ -127,3 +133,65 @@ def test_create_task_over_http_assigns_local_user_only_in_local_mode(settings, m
     assert created_payload["assignee_emails"] == expected_emails
     assert result["assignee_names"] == expected_names
     assert result["assignee_prompt_required"] is False
+    assert saved_attachments == [
+        {"attachment_type": "link", "title": path, "url": path}
+        for path in dict.fromkeys(input_paths or [])
+    ]
+    if input_paths:
+        assert len(result["attachments"]) == 2
+
+
+def test_update_input_paths_preserves_attachments_and_reports_retryable_errors(monkeypatch):
+    existing = {"id": 4, "attachment_type": "link", "url": "<project-directory>"}
+    task = {"id": 3, "project_id": 1, "status_id": 2, "attachments": [existing]}
+    saved = []
+    failing_path = "<project-directory>/unavailable.txt"
+
+    def api_request(method, path, json_body=None):
+        if method == "GET" and path == "/api/tasks/3":
+            return task
+        if method == "POST" and path == "/api/projects/1/tasks/3/attachments":
+            if json_body["url"] == failing_path:
+                return {"error": "HTTP 503"}
+            saved.append(json_body)
+            return {"id": 5, **json_body}
+        pytest.fail(f"Unexpected API request: {method} {path}")
+
+    monkeypatch.setattr(mcp_logic, "_api_request", api_request)
+    server = FastMCP("<test-server>")
+    mcp_logic.register_tools(server)
+    tool = server._tool_manager.get_tool("update_task")
+    paths = ["<project-directory>", "<project-directory>/file with spaces.txt", failing_path, " "]
+    result = asyncio.run(tool.fn(task_id=3, ctx=make_context(None), input_paths=paths))
+
+    assert result["task_id"] == 3
+    assert result["attachments"] == [existing, {"id": 5, **saved[0]}]
+    assert result["input_paths_errors"] == [{"path": failing_path, "error": {"error": "HTTP 503"}}]
+    assert len(saved) == 1
+    assert task["attachments"] == [existing]
+
+    task["attachments"] = result["attachments"]
+    repeated = asyncio.run(tool.fn(task_id=3, project_id=1, ctx=make_context(None), input_paths=paths))
+    assert repeated["attachments"] == result["attachments"]
+    assert len(saved) == 1
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "allowed"),
+    [
+        ("POST", "/api/projects/1/tasks/3/attachments", True),
+        ("DELETE", "/api/projects/1/tasks/3/attachments/4", False),
+        ("POST", "/api/projects/1/tasks/3/attachments/upload", False),
+        ("POST", "/api/projects/1/tasks/3/attachments/4/open", False),
+    ],
+)
+def test_mcp_service_attachment_access_is_limited(method, path, allowed):
+    from app.auth import _mcp_service_email
+
+    settings = SimpleNamespace(mcp_api_key="<mcp-api-key>", ai_assignee_email="<agent-email>")
+    result = _mcp_service_email(
+        {"method": method, "path": path},
+        {"authorization": "Bearer <mcp-api-key>"},
+        settings,
+    )
+    assert (result is not None) is allowed

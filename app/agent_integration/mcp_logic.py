@@ -86,6 +86,33 @@ def _error(result: Any) -> bool:
     return isinstance(result, dict) and "error" in result
 
 
+def _add_input_paths(task: dict[str, Any], input_paths: list[str] | None) -> dict[str, Any]:
+    """Сохраняет вводные как ссылки без чтения файлов и повторного добавления путей."""
+    if not input_paths:
+        return task
+    result = dict(task)
+    attachments = list(task.get("attachments") or [])
+    result["attachments"] = attachments
+    known_paths = {attachment.get("url") for attachment in attachments}
+    errors = []
+    for path in dict.fromkeys(input_paths):
+        if not path.strip() or path in known_paths:
+            continue
+        attachment = _api_request(
+            "POST",
+            f"/api/projects/{task['project_id']}/tasks/{task['id']}/attachments",
+            {"attachment_type": "link", "title": path, "url": path},
+        )
+        if _error(attachment):
+            errors.append({"path": path, "error": attachment})
+        else:
+            attachments.append(attachment)
+            known_paths.add(path)
+    if errors:
+        result["input_paths_errors"] = errors
+    return result
+
+
 def _list_projects(query: str | None = None) -> list[dict[str, Any]] | dict[str, Any]:
     projects = _api_request("GET", "/api/projects")
     if _error(projects):
@@ -364,8 +391,9 @@ def register_tools(server: FastMCP) -> None:
         list_name: str | None = None,
         due_date: str | None = None,
         assignee_names: list[str] | None = None,
+        input_paths: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Создаёт задачу ARMory с плановой оценкой, инициатором и AI Assistant."""
+        """Создаёт задачу с оценкой и исполнителями; input_paths сохраняет пути из промпта во вложениях."""
         if estimated_minutes < 1:
             return {"error": "estimated_minutes must be greater than zero"}
 
@@ -423,7 +451,7 @@ def register_tools(server: FastMCP) -> None:
         task = _api_request("POST", f"/api/projects/{project['id']}/tasks", payload)
         if _error(task):
             return task
-        result = _with_task_link(task)
+        result = _with_task_link(_add_input_paths(task, input_paths))
         result["project_name"] = project["name"]
         result["status_name"] = status["name"]
         result["assignee_prompt_required"] = bool(assignee_resolution_error) and not normalized_assignees
@@ -462,8 +490,9 @@ def register_tools(server: FastMCP) -> None:
         estimated_minutes: int | None = None,
         assignee_names: list[str] | None = None,
         result: str | None = None,
+        input_paths: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Изменяет поля задачи и полный список assignee_names; запускает таймер только при смене на рабочую стадию или тестирование."""
+        """Изменяет поля и исполнителей, добавляет input_paths во вложения; запускает таймер при смене рабочей стадии."""
         task: dict[str, Any] | None = None
         if project_id is None or status_name is not None or status_id is not None:
             task = _api_request("GET", f"/api/tasks/{task_id}")
@@ -509,16 +538,20 @@ def register_tools(server: FastMCP) -> None:
                 }
             payload["status_id"] = status["id"]
 
-        if not payload:
+        if not payload and not input_paths:
             return {"error": "No task fields were provided to update"}
 
-        updated = _api_request(
-            "PATCH",
-            f"/api/projects/{project_id}/tasks/{task_id}",
-            payload,
-        )
+        if payload:
+            updated = _api_request(
+                "PATCH",
+                f"/api/projects/{project_id}/tasks/{task_id}",
+                payload,
+            )
+        else:
+            updated = task or _api_request("GET", f"/api/tasks/{task_id}")
         if _error(updated):
             return updated
+        updated = _add_input_paths(updated, input_paths)
         status_changed = task is not None and updated.get("status_id") != task.get("status_id")
         phase = _status_time_phase((updated.get("status") or {}).get("name")) if status_changed else None
         if phase and not updated.get("is_closed"):
