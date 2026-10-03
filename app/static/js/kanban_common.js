@@ -2,6 +2,17 @@
 // ОБЩАЯ ЛОГИКА DRAG-AND-DROP KANBANА
 // ═══════════════════════════════════════════════════
 
+function refreshKanbanTaskCard(card, task) {
+    const template = document.createElement('template');
+    template.innerHTML = renderTaskCard(task).trim();
+    const updatedCard = template.content.firstElementChild;
+    if (card.innerHTML !== updatedCard.innerHTML) card.innerHTML = updatedCard.innerHTML;
+    card.classList.toggle('kanban-card-closed', Boolean(task.is_closed));
+    if (updatedCard.hasAttribute('data-status-id')) {
+        card.dataset.statusId = updatedCard.dataset.statusId;
+    }
+}
+
 function setKanbanFilterSidebarOpen(isOpen) {
     const sidebar = document.getElementById('kanban-filter-sidebar');
     const openButton = document.getElementById('kanban-filter-open');

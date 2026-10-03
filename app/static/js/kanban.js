@@ -80,7 +80,7 @@ function connectKanbanEvents(projectId) {
             }
             if (event.type === 'task_completed') {
                 showToast(event.message || `Задача №${event.task_id} выполнена`, 'success');
-            } else if (event.type === 'task_changed') {
+            } else if (event.type === 'task_changed' || event.type === 'task_time_changed') {
                 handleKanbanTaskChanged(event, projectId);
             } else {
                 console.log('[SSE] reloading board');
@@ -122,12 +122,15 @@ async function handleKanbanTaskChanged(event, projectId) {
     try {
         const task = await api(`${API_BASE}/projects/${projectId}/tasks/${event.task_id}`);
         const idx = kanbanData.tasks.findIndex(t => t.id === task.id);
+        if (event.type === 'task_time_changed') {
+            if (idx !== -1) kanbanData.tasks[idx] = task;
+            return;
+        }
         if (idx !== -1) {
             kanbanData.tasks[idx] = task;
         } else {
             kanbanData.tasks.unshift(task);
         }
-        task._isNew = true;
         updateKanbanTaskCard(task);
     } catch (err) {
         console.error('Failed to fetch updated task:', err);
@@ -139,19 +142,15 @@ function updateKanbanTaskCard(task) {
     const columnBody = document.querySelector(`.kanban-column-body[data-status-id="${task.status_id}"]`);
 
     if (!columnBody) {
-        // Column not found, fallback to full reload.
+        // При отсутствии колонки обновляем структуру всей доски.
         loadKanbanBoard(task.project_id);
         return;
     }
 
     if (existingCard) {
         const currentStatusId = parseInt(existingCard.closest('.kanban-column-body')?.dataset.statusId, 10);
-        if (currentStatusId === task.status_id) {
-            existingCard.outerHTML = renderTaskCard(task);
-        } else {
-            existingCard.remove();
-            prependTaskCard(columnBody, task);
-        }
+        refreshKanbanTaskCard(existingCard, task);
+        if (currentStatusId !== task.status_id) columnBody.prepend(existingCard);
     } else {
         prependTaskCard(columnBody, task);
     }
@@ -416,11 +415,10 @@ function renderTaskCard(task) {
 
     const attachmentsHtml = renderCardAttachments(task.attachments);
     const closedClass = task.is_closed ? 'kanban-card-closed' : '';
-    const newClass = task._isNew ? 'kanban-card-new' : '';
     const closedBadge = task.is_closed ? '<span class="badge bg-secondary ms-2"><i class="bi bi-check-circle"></i> Закрыто</span>' : '';
 
     return `
-        <div class="kanban-card ${closedClass} ${newClass}" data-id="${task.id}" data-status-id="${task.status_id}" onclick="handleCardClick(${task.id}, this)">
+        <div class="kanban-card ${closedClass}" data-id="${task.id}" data-status-id="${task.status_id}" onclick="handleCardClick(${task.id}, this)">
             <div class="d-flex justify-content-between align-items-center mb-1">
                 <span class="badge bg-orange">#${task.id}</span>
                 <span class="badge ${priorityClass} priority-badge">${priorityLabel}</span>
