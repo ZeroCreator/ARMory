@@ -262,6 +262,7 @@ def _default_task_assignee_name(ctx: Context) -> tuple[str | None, str | None]:
     except (AttributeError, ValueError):
         request = None
     scope = getattr(request, "scope", None)
+    email = ""
     if isinstance(scope, dict):
         authenticated_user = scope.get("user")
         access_token = getattr(authenticated_user, "access_token", None)
@@ -271,9 +272,10 @@ def _default_task_assignee_name(ctx: Context) -> tuple[str | None, str | None]:
             email = normalize_email(scope_state.get("user_email"))
         if not email:
             email = get_authenticated_email_from_scope(scope, settings)
-        if not email:
+        if not email and settings.auth_required:
             return None, "authenticated_user_missing"
 
+    if email:
         assignees = _api_request("GET", "/api/assignees")
         if _error(assignees) or not isinstance(assignees, list):
             return None, "assignee_directory_unavailable"
