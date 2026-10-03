@@ -189,6 +189,21 @@ async def _ensure_task_manual_time_columns(conn) -> None:
         await conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {name} {definition}"))
 
 
+async def _ensure_task_time_completed_column(conn) -> None:
+    """Добавляет признак завершения интервала после резервного копирования базы."""
+    columns = await conn.run_sync(
+        lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("task_time_sessions")}
+    )
+    if "completed" in columns:
+        return
+    backup_path = _backup_database_before_migration("task_time_completed")
+    with sqlite3.connect(f"{backup_path.resolve().as_uri()}?mode=ro", uri=True) as backup_db:
+        if backup_db.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+            raise RuntimeError("Проверка резервной копии перед добавлением статуса времени не пройдена")
+    logger.info("Создан бэкап перед добавлением статуса времени: %s", backup_path)
+    await conn.execute(text("ALTER TABLE task_time_sessions ADD COLUMN completed BOOLEAN NOT NULL DEFAULT 0"))
+
+
 async def _close_stale_task_time_sessions(conn) -> None:
     await conn.execute(
         text("UPDATE task_time_sessions SET ended_at = :ended_at WHERE ended_at IS NULL"),
@@ -264,6 +279,7 @@ async def lifespan(app: FastAPI):
         await _ensure_affair_news_column(conn)
         await _ensure_task_estimated_minutes_column(conn)
         await _ensure_task_manual_time_columns(conn)
+        await _ensure_task_time_completed_column(conn)
         await _close_stale_task_time_sessions(conn)
 
         # Создаём data-директории, если их нет

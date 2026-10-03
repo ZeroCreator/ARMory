@@ -195,3 +195,23 @@ def test_mcp_service_attachment_access_is_limited(method, path, allowed):
         settings,
     )
     assert (result is not None) is allowed
+
+
+@pytest.mark.parametrize("completed", [False, True])
+def test_pause_task_time_passes_explicit_completion_without_changing_kanban(monkeypatch, completed):
+    requests = []
+    expected_status = "completed" if completed else "paused"
+
+    def api_request(method, path, json_body=None):
+        requests.append((method, path, json_body))
+        return {"active": False, "time_tracking_status": expected_status}
+
+    monkeypatch.setattr(mcp_logic, "_api_request", api_request)
+    monkeypatch.setattr(mcp_logic, "_worker_id", lambda ctx: "<worker-id>")
+    server = FastMCP("<test-server>")
+    mcp_logic.register_tools(server)
+    tool = server._tool_manager.get_tool("pause_task_time")
+    result = asyncio.run(tool.fn(task_id=3, ctx=make_context(None), completed=completed))
+
+    assert requests == [("POST", "/api/tasks/3/time/pause", {"worker_id": "<worker-id>", "completed": completed})]
+    assert result["time_tracking"]["time_tracking_status"] == expected_status

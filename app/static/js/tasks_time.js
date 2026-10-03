@@ -6,6 +6,13 @@ let timeSort = { key: 'created_at', direction: 'desc' };
 let editingTimeTaskId = null;
 let contextTimeTaskId = null;
 
+window.addEventListener('armory:kanban', event => {
+    const data = event.detail;
+    if (!IS_GLOBAL && data.project_id != null && data.project_id !== PROJECT_ID) return;
+    if (['task_changed', 'task_time_changed', 'board_changed'].includes(data.type)) loadTaskTimeData();
+});
+window.addEventListener('armory:events-connected', () => loadTaskTimeData());
+
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('task-time-edit-form').addEventListener('submit', saveTaskTimeValues);
     document.getElementById('task-time-table-body').addEventListener('contextmenu', showTaskTimeContextMenu);
@@ -16,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.addEventListener('scroll', hideTaskTimeContextMenu, true);
     window.addEventListener('resize', hideTaskTimeContextMenu);
+    startUnreadStream();
     await loadTaskTimeData();
     window.setInterval(loadTaskTimeData, 60000);
 });
@@ -47,7 +55,7 @@ async function loadTaskTimeData() {
         displayedTimeTasks = [];
         const exportButton = document.getElementById('task-time-export-xlsx');
         if (exportButton) exportButton.disabled = true;
-        tableBody.innerHTML = `<tr><td colspan="${IS_GLOBAL ? 9 : 8}" class="text-center text-danger py-4">${escapeTimeHtml(error.message)}</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="${IS_GLOBAL ? 10 : 9}" class="text-center text-danger py-4">${escapeTimeHtml(error.message)}</td></tr>`;
     }
 }
 
@@ -207,6 +215,7 @@ function getTimeSortValue(task, key) {
     if (key === 'project') return timeProjects[task.project_id] || '';
     if (key === 'title') return task.title || task.description || '';
     if (key === 'status') return task.status?.name || '';
+    if (key === 'time_tracking_status') return getTimeTrackingLabel(task.time_tracking_status);
     return task[key] ?? -1;
 }
 
@@ -219,13 +228,17 @@ function sortTaskTime(key) {
     applyTimeFilters();
 }
 
+function getTimeTrackingLabel(status) {
+    return ({ running: 'В работе', completed: 'Завершено', paused: 'Остановлено' })[status] || '—';
+}
+
 function renderTaskTimeTable(tasks) {
     hideTaskTimeContextMenu();
     const body = document.getElementById('task-time-table-body');
     const foot = document.getElementById('task-time-table-foot');
     document.getElementById('task-time-export-xlsx').disabled = !tasks.length;
     const projectColumnCount = IS_GLOBAL ? 1 : 0;
-    const columnCount = 8 + projectColumnCount;
+    const columnCount = 9 + projectColumnCount;
     if (!tasks.length) {
         body.innerHTML = `<tr><td colspan="${columnCount}" class="text-center text-muted py-4">Нет задач</td></tr>`;
         foot.innerHTML = '';
@@ -261,6 +274,7 @@ function renderTaskTimeTable(tasks) {
                 <button class="btn btn-sm btn-outline-primary flex-shrink-0" type="button" title="Редактировать задачу" aria-label="Редактировать задачу" onclick="openTaskViewModal(${task.id})"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>
             </div></td>
             <td>${escapeTimeHtml(task.status?.name || '—')}</td>
+            <td class="text-nowrap">${getTimeTrackingLabel(task.time_tracking_status)}</td>
             <td class="text-nowrap">${estimate == null ? '—' : formatEffortTime(estimate)}</td>
             <td class="text-nowrap">${formatEffortTime(task.work_seconds || 0)}</td>
             <td class="text-nowrap">${formatEffortTime(task.testing_seconds || 0)}</td>
@@ -272,7 +286,7 @@ function renderTaskTimeTable(tasks) {
     const totalDeviation = actualTotal - plannedTotal;
     const totalDeviationClass = totalDeviation > 0 ? 'text-danger' : totalDeviation < 0 ? 'text-success' : 'text-muted';
     foot.innerHTML = `<tr>
-        <td colspan="${3 + projectColumnCount}" class="text-end">Итого</td>
+        <td colspan="${4 + projectColumnCount}" class="text-end">Итого</td>
         <td>${plannedCount ? formatEffortTime(plannedTotal) : '—'}</td>
         <td>${formatEffortTime(workTotal)}</td>
         <td>${formatEffortTime(testingTotal)}</td>

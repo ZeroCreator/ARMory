@@ -102,6 +102,7 @@
                 {% if not project_id %}<th role="button" onclick="sortTaskTime('project')">Проект</th>{% endif %}
                 <th role="button" onclick="sortTaskTime('title')">Задача</th>
                 <th role="button" onclick="sortTaskTime('status')">Статус</th>
+                <th role="button" onclick="sortTaskTime('time_tracking_status')">Статус времени</th>
                 <th role="button" onclick="sortTaskTime('estimated_minutes')">План</th>
                 <th role="button" onclick="sortTaskTime('work_seconds')">В работе</th>
                 <th role="button" onclick="sortTaskTime('testing_seconds')">Тестирование</th>
@@ -110,7 +111,7 @@
             </tr>
         </thead>
         <tbody id="task-time-table-body">
-            <tr><td colspan="{% if project_id %}8{% else %}9{% endif %}" class="text-center text-muted py-4">Загрузка...</td></tr>
+            <tr><td colspan="{% if project_id %}9{% else %}10{% endif %}" class="text-center text-muted py-4">Загрузка...</td></tr>
         </tbody>
         <tfoot class="table-light fw-semibold" id="task-time-table-foot"></tfoot>
     </table>
@@ -170,5 +171,5 @@
 </script>
 <script src="/static/js/tag_filter.js?v=2"></script>
 <script src="/static/js/tasks_list.js?v=53"></script>
-<script src="/static/js/tasks_time.js?v=14"></script>
+<script src="/static/js/tasks_time.js?v=16"></script>
 {% endblock %}

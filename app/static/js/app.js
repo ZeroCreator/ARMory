@@ -335,10 +335,20 @@ let unreadEventSource = null;
 
 function startUnreadStream() {
     if (unreadEventSource || !window.EventSource) return;
-    if (!document.getElementById('projects-list')) return;
+    if (!document.getElementById('projects-list') && !document.getElementById('task-time-table')) return;
     const eventsUrl = new URL(`${API_BASE}/events`, window.location.origin);
     if (dailyNewsDate) eventsUrl.searchParams.set('daily_date', dailyNewsDate);
     unreadEventSource = new EventSource(eventsUrl);
+    unreadEventSource.addEventListener('kanban', event => {
+        try {
+            window.dispatchEvent(new CustomEvent('armory:kanban', { detail: JSON.parse(event.data) }));
+        } catch (error) {
+            console.error('Не удалось обработать событие Kanban:', error);
+        }
+    });
+    unreadEventSource.addEventListener('open', () => {
+        window.dispatchEvent(new Event('armory:events-connected'));
+    });
     unreadEventSource.addEventListener('unread', (e) => {
         loadUnreadCountsAndUpdateBells();
     });
@@ -392,8 +402,10 @@ window.addEventListener('pagehide', () => {
 });
 
 window.addEventListener('pageshow', () => {
-    if (document.getElementById('projects-list')) {
+    if (document.getElementById('projects-list') || document.getElementById('task-time-table')) {
         startUnreadStream();
+    }
+    if (document.getElementById('projects-list')) {
         loadUnreadCountsAndUpdateBells();
     }
 });

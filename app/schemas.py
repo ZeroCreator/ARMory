@@ -312,6 +312,7 @@ class TaskOut(BaseModel):
     work_seconds: int = 0
     testing_seconds: int = 0
     actual_seconds: int = 0
+    time_tracking_status: Optional[Literal["running", "completed", "paused"]] = None
 
 
 class TaskCreate(BaseModel):
@@ -490,10 +491,12 @@ class TaskTimeStart(BaseModel):
 
 class TaskTimePause(BaseModel):
     worker_id: str = Field(min_length=1, max_length=128)
+    completed: bool = False
 
 
 class TaskTimeStateOut(BaseModel):
     active: bool
+    time_tracking_status: Optional[Literal["running", "completed", "paused"]] = None
     task_id: Optional[int] = None
     phase: Optional[Literal["work", "testing"]] = None
     started_at: Optional[datetime] = None

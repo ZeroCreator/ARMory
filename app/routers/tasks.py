@@ -780,11 +780,13 @@ async def start_task_time(
     if active_session and active_session.task_id == task_id and active_session.phase == data.phase:
         return TaskTimeStateOut(
             active=True,
+            time_tracking_status="running",
             task_id=active_session.task_id,
             phase=active_session.phase,
             started_at=active_session.started_at,
         )
 
+    previous_task = await db.get(Task, active_session.task_id) if active_session else None
     now = datetime.utcnow()
     await _close_task_time_sessions(db, worker_id=data.worker_id, ended_at=now)
     time_session = TaskTimeSession(
@@ -796,9 +798,12 @@ async def start_task_time(
     db.add(time_session)
     await db.commit()
     await db.refresh(time_session)
+    if previous_task is not None and previous_task.id != task_id:
+        broadcast({"type": "task_time_changed", "project_id": previous_task.project_id, "task_id": previous_task.id})
     broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
     return TaskTimeStateOut(
         active=True,
+        time_tracking_status="running",
         task_id=task_id,
         phase=data.phase,
         started_at=time_session.started_at,
@@ -812,32 +817,38 @@ async def pause_task_time(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Останавливает активный интервал агента для указанной задачи."""
+    """Сохраняет паузу или явное завершение последнего интервала агента."""
     _require_mcp_time_request(request)
     active_result = await db.execute(
         select(TaskTimeSession)
         .where(
             TaskTimeSession.task_id == task_id,
             TaskTimeSession.worker_id == data.worker_id,
-            TaskTimeSession.ended_at.is_(None),
         )
+        .order_by(TaskTimeSession.started_at.desc(), TaskTimeSession.id.desc())
+        .limit(1)
     )
     time_session = active_result.scalar_one_or_none()
-    if time_session is None:
-        return TaskTimeStateOut(active=False)
-
-    now = datetime.utcnow()
-    time_session.ended_at = now
-    await db.commit()
     task = await db.get(Task, task_id)
+    if time_session is None:
+        return TaskTimeStateOut(active=False, time_tracking_status=task.time_tracking_status if task else None)
+
+    changed = time_session.ended_at is None or (data.completed and not time_session.completed)
+    if changed:
+        time_session.ended_at = time_session.ended_at or datetime.utcnow()
+        time_session.completed = data.completed
+        await db.commit()
     if task is not None:
-        broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
+        await db.refresh(task, attribute_names=["time_sessions"])
+        if changed:
+            broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
     return TaskTimeStateOut(
         active=False,
+        time_tracking_status=task.time_tracking_status if task else None,
         task_id=task_id,
         phase=time_session.phase,
         started_at=time_session.started_at,
-        ended_at=now,
+        ended_at=time_session.ended_at,
     )
 
 

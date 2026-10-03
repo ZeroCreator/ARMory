@@ -290,6 +290,16 @@ class Task(Base):
             return self.manual_actual_seconds + max(0, tracked - self.manual_actual_session_baseline)
         return self.work_seconds + self.testing_seconds
 
+    @property
+    def time_tracking_status(self) -> str | None:
+        """Возвращает состояние учёта времени независимо от колонки Kanban."""
+        if any(session.ended_at is None for session in self.time_sessions):
+            return "running"
+        if not self.time_sessions:
+            return None
+        latest = max(self.time_sessions, key=lambda session: (session.ended_at, session.started_at, session.id or 0))
+        return "completed" if latest.completed else "paused"
+
 
 class TaskStatusHistory(Base):
     __tablename__ = "task_status_history"
@@ -320,6 +330,7 @@ class TaskTimeSession(Base):
     phase = Column(String(20), nullable=False)
     started_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
+    completed = Column(Boolean, nullable=False, default=False, server_default=text("0"))
 
     task = relationship("Task", back_populates="time_sessions")
 

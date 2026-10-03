@@ -140,3 +140,89 @@ def test_new_task_still_appears_and_structure_events_reload_board(board_page):
     page.wait_for_function('!document.querySelector(\'.kanban-card[data-id="2"]\').classList.contains("kanban-card-new")')
     page.evaluate("emitKanbanEvent({type: 'board_changed', project_id: 1})")
     assert page.evaluate("window.fullReloads") == 1
+
+
+@pytest.mark.parametrize("is_global", [False, True])
+def test_time_status_column_updates_via_shared_events_and_keeps_totals_aligned(browser, is_global):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content=f"const IS_GLOBAL = {str(is_global).lower()}; const PROJECT_ID = IS_GLOBAL ? null : 1;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            window.timeReloads = 0;
+            loadTaskTimeData = () => {
+                window.timeReloads++;
+                renderTaskTimeTable([window.nextTimeTask]);
+            };
+            window.nextTimeTask = {
+                id: 1, project_id: 1, title: '<task-title>', status: {name: 'Тестирование'},
+                estimated_minutes: 30, testing_seconds: 120, actual_seconds: 120,
+                time_tracking_status: 'running',
+            };
+            renderTaskTimeTable([window.nextTimeTask]);
+        }''')
+        expected_columns = 10 if is_global else 9
+        status_index = 4 if is_global else 3
+        assert page.locator('#task-time-table-body td').count() == expected_columns
+        assert page.locator('#task-time-table-body td').nth(status_index).inner_text() == 'В работе'
+        for status, label in [('paused', 'Остановлено'), ('completed', 'Завершено'), ('running', 'В работе')]:
+            page.evaluate('''status => {
+                window.nextTimeTask.time_tracking_status = status;
+                window.dispatchEvent(new CustomEvent('armory:kanban', {
+                    detail: {type: 'task_time_changed', project_id: 1, task_id: 1},
+                }));
+            }''', status)
+            assert page.locator('#task-time-table-body td').nth(status_index).inner_text() == label
+            assert page.locator('#task-time-table-body td').nth(status_index - 1).inner_text() == 'Тестирование'
+        assert page.locator('#task-time-table-foot td').first.get_attribute('colspan') == str(status_index + 1)
+        assert page.locator('#task-time-table-foot td').nth(1).inner_text() == '30 мин'
+        page.evaluate("window.dispatchEvent(new Event('armory:events-connected'))")
+        assert page.evaluate('window.timeReloads') == 4
+        page.evaluate("window.dispatchEvent(new CustomEvent('armory:kanban', {detail: {type: 'task_time_changed', project_id: 2}}))")
+        assert page.evaluate('window.timeReloads') == (5 if is_global else 4)
+        page.evaluate('renderTaskTimeTable([])')
+        assert page.locator('#task-time-table-body td').get_attribute('colspan') == str(expected_columns)
+    finally:
+        page.close()
+
+
+@pytest.mark.parametrize("container_id", ["projects-list", "task-time-table"])
+def test_shared_sse_forwards_time_events_without_opening_another_stream(browser, container_id):
+    page = browser.new_page()
+    try:
+        page.set_content(f'<div id="{container_id}"></div>')
+        page.add_script_tag(content='''
+            const API_BASE = '/api';
+            window.streamCount = 0;
+            window.URL = class {
+                constructor() { this.searchParams = new URLSearchParams(); }
+            };
+            window.EventSource = class extends EventTarget {
+                constructor() { super(); window.streamCount++; window.sharedStream = this; }
+                close() {}
+            };
+            window.addEventListener('armory:kanban', event => {window.lastTimeEvent = event.detail;});
+            window.addEventListener('armory:events-connected', () => {window.connected = true;});
+        ''')
+        source = (STATIC_ROOT / 'app.js').read_text()
+        start = source.index('let unreadEventSource = null;')
+        end = source.index('async function loadUnreadCountsAndUpdateBells()', start)
+        page.add_script_tag(content='let dailyNewsDate = null;\n' + source[start:end])
+        page.evaluate('''() => {
+            startUnreadStream();
+            startUnreadStream();
+            window.sharedStream.dispatchEvent(new Event('open'));
+            const event = new Event('kanban');
+            event.data = JSON.stringify({type: 'task_time_changed', project_id: 1, task_id: 2});
+            window.sharedStream.dispatchEvent(event);
+        }''')
+        assert page.evaluate('window.streamCount') == 1
+        assert page.evaluate('window.connected') is True
+        assert page.evaluate('window.lastTimeEvent') == {'type': 'task_time_changed', 'project_id': 1, 'task_id': 2}
+    finally:
+        page.close()

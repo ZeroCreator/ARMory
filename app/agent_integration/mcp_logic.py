@@ -560,6 +560,7 @@ def register_tools(server: FastMCP) -> None:
                 result = _with_task_link(updated)
                 result["time_tracking_error"] = time_state
                 return result
+            updated["time_tracking_status"] = time_state.get("time_tracking_status", "running")
         return _with_task_link(updated)
 
     @_register_blocking_tool(server)
@@ -679,6 +680,8 @@ def register_tools(server: FastMCP) -> None:
         result["status_name"] = in_progress["name"]
         if _error(time_state):
             result["time_tracking_error"] = time_state
+        else:
+            result["time_tracking_status"] = time_state.get("time_tracking_status", "running")
         return result
 
     @_register_blocking_tool(server)
@@ -688,12 +691,12 @@ def register_tools(server: FastMCP) -> None:
         return result if _error(result) else {"time_tracking": result}
 
     @_register_blocking_tool(server)
-    def pause_task_time(task_id: int, ctx: Context) -> dict[str, Any]:
-        """Приостанавливает учёт времени агента над задачей перед переключением или возвратом пользователю."""
+    def pause_task_time(task_id: int, ctx: Context, completed: bool = False) -> dict[str, Any]:
+        """Останавливает таймер: completed=True отмечает завершение, False — паузу для ожидания или переключения."""
         result = _api_request(
             "POST",
             f"/api/tasks/{task_id}/time/pause",
-            {"worker_id": _worker_id(ctx)},
+            {"worker_id": _worker_id(ctx), "completed": completed},
         )
         return result if _error(result) else {"time_tracking": result}
 
