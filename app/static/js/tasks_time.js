@@ -2,6 +2,8 @@ let timeTasks = [];
 let displayedTimeTasks = [];
 let timeProjects = {};
 let timeFilterOptions = {};
+let timeStatuses = {};
+const pendingTimeControls = new Set();
 let timeSort = { key: 'created_at', direction: 'desc' };
 let editingTimeTaskId = null;
 let contextTimeTaskId = null;
@@ -42,6 +44,12 @@ async function loadTaskTimeData() {
         if (!projectsResponse.ok) throw new Error(await projectsResponse.text());
         if (!filterResponse.ok) throw new Error(await filterResponse.text());
         timeTasks = await tasksResponse.json();
+        const statusEntries = await Promise.all([...new Set(timeTasks.map(task => task.project_id))].map(async projectId => {
+            const response = await fetch(`/api/projects/${projectId}/task-statuses`, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error(await response.text());
+            return [projectId, await response.json()];
+        }));
+        timeStatuses = Object.fromEntries(statusEntries);
         const projects = await projectsResponse.json();
         timeFilterOptions = await filterResponse.json();
         timeProjects = Object.fromEntries(projects.map(project => [project.id, project.name]));
@@ -232,6 +240,62 @@ function getTimeTrackingLabel(status) {
     return ({ running: 'В работе', completed: 'Завершено', paused: 'Остановлено' })[status] || '—';
 }
 
+function renderTimeStatusControl(task) {
+    const statuses = timeStatuses[task.project_id] || (task.status ? [{ ...task.status, id: task.status_id }] : []);
+    const disabled = task.time_tracking_status === 'running' || pendingTimeControls.has(task.id);
+    return `<select class="form-select form-select-sm task-time-status" aria-label="Статус" ${disabled ? 'disabled' : ''}
+        onchange="changeTimeTaskStatus(${task.id}, this.value)">${statuses.map(status =>
+        `<option value="${status.id}" ${status.id === task.status_id ? 'selected' : ''}>${escapeTimeHtml(status.name)}</option>`
+    ).join('')}</select>`;
+}
+
+function renderTimeTimerControl(task, phase) {
+    const running = task.time_tracking_status === 'running';
+    const manual = running && task.manual_time_phase === phase;
+    const unavailable = running && !manual;
+    const label = unavailable ? 'ручной таймер не доступен' : manual ? 'остановить таймер' : 'запустить таймер';
+    const mode = unavailable ? 'secondary' : manual ? 'danger' : 'success';
+    return `<span title="${label}" class="task-time-timer-wrapper"><button type="button"
+        class="btn btn-sm task-time-timer task-time-timer-${mode}" aria-label="${label}"
+        ${unavailable || pendingTimeControls.has(task.id) ? 'disabled' : ''}
+        onclick="controlTimeTaskTimer(${task.id}, '${phase}')"><i class="bi bi-clock" aria-hidden="true"></i></button></span>`;
+}
+
+async function changeTimeTaskStatus(taskId, statusId) {
+    const task = timeTasks.find(item => item.id === taskId);
+    if (!task || task.time_tracking_status === 'running') return;
+    await sendTimeTaskControl(taskId, 'status', 'PATCH', { status_id: Number(statusId) });
+}
+
+async function controlTimeTaskTimer(taskId, phase) {
+    const task = timeTasks.find(item => item.id === taskId);
+    if (!task) return;
+    const running = task.time_tracking_status === 'running';
+    if (running && task.manual_time_phase !== phase) return;
+    await sendTimeTaskControl(taskId, running ? 'manual/pause' : 'manual/start', 'POST', running ? undefined : { phase });
+}
+
+async function sendTimeTaskControl(taskId, action, method, payload) {
+    if (pendingTimeControls.has(taskId)) return;
+    pendingTimeControls.add(taskId);
+    renderTaskTimeTable(displayedTimeTasks);
+    try {
+        const response = await fetch(`/api/tasks/${taskId}/time/${action}`, {
+            method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+            body: payload === undefined ? undefined : JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || response.statusText);
+        }
+    } catch (error) {
+        if (typeof showToast === 'function') showToast(error.message, 'danger');
+    } finally {
+        pendingTimeControls.delete(taskId);
+        await loadTaskTimeData();
+    }
+}
+
 function renderTaskTimeTable(tasks) {
     hideTaskTimeContextMenu();
     const body = document.getElementById('task-time-table-body');
@@ -273,11 +337,11 @@ function renderTaskTimeTable(tasks) {
                 <button class="task-time-title flex-grow-1" type="button" data-task-id="${task.id}" onclick="openTaskTimeEditor(${task.id})">${escapeTimeHtml(task.title || task.description || '—')}</button>
                 <button class="btn btn-sm btn-outline-primary flex-shrink-0" type="button" title="Редактировать задачу" aria-label="Редактировать задачу" onclick="openTaskViewModal(${task.id})"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>
             </div></td>
-            <td>${escapeTimeHtml(task.status?.name || '—')}</td>
+            <td>${renderTimeStatusControl(task)}</td>
             <td class="text-nowrap">${getTimeTrackingLabel(task.time_tracking_status)}</td>
             <td class="text-nowrap">${estimate == null ? '—' : formatEffortTime(estimate)}</td>
-            <td class="text-nowrap">${formatEffortTime(task.work_seconds || 0)}</td>
-            <td class="text-nowrap">${formatEffortTime(task.testing_seconds || 0)}</td>
+            <td class="text-nowrap"><div class="task-time-effort"><span>${formatEffortTime(task.work_seconds || 0)}</span>${renderTimeTimerControl(task, 'work')}</div></td>
+            <td class="text-nowrap"><div class="task-time-effort"><span>${formatEffortTime(task.testing_seconds || 0)}</span>${renderTimeTimerControl(task, 'testing')}</div></td>
             <td class="text-nowrap fw-semibold">${formatEffortTime(actual)}</td>
             <td class="text-nowrap ${deviationClass}">${deviation == null ? '—' : formatSignedEffortTime(deviation)}</td>
         </tr>`;

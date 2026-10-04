@@ -291,6 +291,12 @@ class Task(Base):
         return self.work_seconds + self.testing_seconds
 
     @property
+    def manual_time_phase(self) -> str | None:
+        """Возвращает этап активного ручного таймера."""
+        return next((session.phase for session in self.time_sessions
+                     if session.ended_at is None and session.worker_id == f"manual:task:{self.id}"), None)
+
+    @property
     def time_tracking_status(self) -> str | None:
         """Возвращает состояние учёта времени независимо от колонки Kanban."""
         if any(session.ended_at is None for session in self.time_sessions):

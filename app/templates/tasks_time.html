@@ -19,6 +19,16 @@
     .task-time-page-title { white-space: nowrap; pointer-events: none; }
     #task-time-table .task-time-title { color: var(--purple-surface2); background: none; border: 0; padding: 0; text-align: left; }
     #task-time-table .task-time-title:hover { color: var(--purple-darker); }
+    #task-time-table .task-time-status { min-width: 9rem; background-color: #f8f9fa; color: #212529; }
+    #task-time-table .task-time-status option { background-color: #f8f9fa; color: #212529; }
+    #task-time-table .task-time-timer { color: #fff; border: 0; }
+    #task-time-table .task-time-timer-success { background: linear-gradient(135deg, #198754, #146c43); }
+    #task-time-table .task-time-timer-danger { background: linear-gradient(135deg, #dc3545, #b02a37); }
+    #task-time-table .task-time-timer-secondary { background: linear-gradient(135deg, #6c757d, #495057); }
+    #task-time-table .task-time-timer-wrapper { display: inline-block; }
+    #task-time-table .task-time-effort { display: flex; align-items: center; justify-content: space-between; gap: .5rem; text-align: left; }
+    #task-time-table .task-time-effort .task-time-timer-wrapper { flex-shrink: 0; }
+    #task-time-table .task-time-timer:disabled { pointer-events: none; opacity: 1; }
 </style>
 
 <div id="task-time-filters" class="card mb-4 border-0 shadow-sm kanban-filters">
@@ -171,5 +181,5 @@
 </script>
 <script src="/static/js/tag_filter.js?v=2"></script>
 <script src="/static/js/tasks_list.js?v=53"></script>
-<script src="/static/js/tasks_time.js?v=16"></script>
+<script src="/static/js/tasks_time.js?v=18"></script>
 {% endblock %}

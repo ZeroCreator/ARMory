@@ -313,6 +313,7 @@ class TaskOut(BaseModel):
     testing_seconds: int = 0
     actual_seconds: int = 0
     time_tracking_status: Optional[Literal["running", "completed", "paused"]] = None
+    manual_time_phase: Optional[Literal["work", "testing"]] = None
 
 
 class TaskCreate(BaseModel):
@@ -482,6 +483,14 @@ class KanbanTaskExport(BaseModel):
     sort_order: int = 0
     status_name: str
     attachments: List[KanbanAttachmentExport] = []
+
+
+class TaskManualTimeStart(BaseModel):
+    phase: Literal["work", "testing"]
+
+
+class TaskTimeStatusUpdate(BaseModel):
+    status_id: int = Field(gt=0)
 
 
 class TaskTimeStart(BaseModel):

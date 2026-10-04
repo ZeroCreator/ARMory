@@ -55,6 +55,60 @@ async def time_api(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["work", "testing"])
+async def test_manual_timer_accumulates_selected_phase_and_blocks_status_until_paused(time_api, phase):
+    client, sessions, events = time_api
+    client.headers.pop("Authorization")
+    started = await client.post("/api/tasks/1/time/manual/start", json={"phase": phase})
+    assert started.status_code == 200
+    assert started.json()["manual_time_phase"] == phase
+    assert started.json()["status_id"] == 2
+    async with sessions() as db:
+        interval = (await db.execute(select(TaskTimeSession))).scalar_one()
+        interval.started_at = datetime.utcnow() - timedelta(minutes=3)
+        await db.commit()
+    assert (await client.post("/api/tasks/1/time/manual/start", json={"phase": phase})).status_code == 409
+    assert (await client.patch("/api/tasks/1/time/status", json={"status_id": 1})).status_code == 409
+    paused = await client.post("/api/tasks/1/time/manual/pause")
+    assert paused.status_code == 200
+    assert paused.json()["manual_time_phase"] is None
+    assert paused.json()["time_tracking_status"] == "paused"
+    assert paused.json()[f"{phase}_seconds"] >= 180
+    assert paused.json()["actual_seconds"] == paused.json()[f"{phase}_seconds"]
+    assert (await client.patch("/api/tasks/1/time/status", json={"status_id": 999})).status_code == 404
+    changed = await client.patch("/api/tasks/1/time/status", json={"status_id": 1})
+    assert changed.status_code == 200
+    assert changed.json()["time_tracking_status"] == "paused"
+    assert changed.json()["status_id"] == 1
+    assert events[-1]["type"] == "task_changed"
+    resumed = await client.post("/api/tasks/1/time/manual/start", json={"phase": phase})
+    assert resumed.json()[f"{phase}_seconds"] >= 180
+    assert (await client.get("/api/tasks")).json()[0]["manual_time_phase"] == phase
+
+
+@pytest.mark.asyncio
+async def test_agent_takes_over_manual_timer_and_cannot_be_stopped_from_manual_controls(time_api):
+    client, sessions, _ = time_api
+    await client.post("/api/tasks/1/time/manual/start", json={"phase": "work"})
+    async with sessions() as db:
+        interval = (await db.execute(select(TaskTimeSession))).scalar_one()
+        interval.started_at = datetime.utcnow() - timedelta(minutes=2)
+        await db.commit()
+    response = await client.post("/api/tasks/1/time/start", json={"worker_id": "<worker-id>", "phase": "testing"})
+    assert response.status_code == 200
+    task = (await client.get("/api/tasks/1")).json()
+    assert task["manual_time_phase"] is None
+    assert task["work_seconds"] >= 120
+    assert task["time_tracking_status"] == "running"
+    assert (await client.post("/api/tasks/1/time/manual/pause")).status_code == 409
+    assert (await client.post("/api/tasks/1/time/manual/start", json={"phase": "work"})).status_code == 409
+    assert (await client.patch("/api/tasks/1/time/status", json={"status_id": 1})).status_code == 409
+    assert (await client.post("/api/tasks/1/time/pause", json={"worker_id": "manual:task:1"})).status_code == 422
+    await client.post("/api/tasks/1/time/pause", json={"worker_id": "<worker-id>", "completed": True})
+    assert (await client.post("/api/tasks/1/time/manual/start", json={"phase": "testing"})).status_code == 200
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(("phase", "status_id", "status_name"), [("work", 1, "В работе"), ("testing", 2, "Тестирование")])
 async def test_pause_completion_and_resume_are_independent_of_kanban(time_api, phase, status_id, status_name):
     client, sessions, _ = time_api

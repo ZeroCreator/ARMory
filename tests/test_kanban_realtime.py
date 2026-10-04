@@ -191,6 +191,95 @@ def test_time_status_column_updates_via_shared_events_and_keeps_totals_aligned(b
         page.close()
 
 
+@pytest.mark.parametrize("phase", ["work", "testing"])
+def test_time_controls_start_stop_and_lock_on_agent_events(browser, phase):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button><div id="task-time-context-menu"></div>
+            <table id="task-time-table"><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        template = (STATIC_ROOT.parents[1] / "templates" / "tasks_time.html").read_text()
+        page.add_style_tag(content=template.split('<style>', 1)[1].split('</style>', 1)[0])
+        page.add_style_tag(content='#task-time-table td { min-width: 180px; }')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            timeStatuses = {1: [{id: 1, name: 'В работе'}, {id: 2, name: 'Тестирование'}, {id: 3, name: '<status-name>'}]};
+            timeTasks = [{id: 1, project_id: 1, title: '<task-title>', status_id: 1, status: {name: 'В работе'}, time_tracking_status: 'completed'}];
+            displayedTimeTasks = timeTasks;
+            window.controlRequests = [];
+            window.fetch = async (url, options) => {
+                const body = options.body ? JSON.parse(options.body) : null;
+                controlRequests.push({url, method: options.method, body});
+                const task = timeTasks[0];
+                if (url.endsWith('/start')) {
+                    task.time_tracking_status = 'running'; task.manual_time_phase = body.phase;
+                } else if (url.endsWith('/pause')) {
+                    task.time_tracking_status = 'paused'; task.manual_time_phase = null;
+                } else {
+                    task.status_id = body.status_id;
+                }
+                return {ok: true};
+            };
+            loadTaskTimeData = async () => renderTaskTimeTable(timeTasks);
+            renderTaskTimeTable(timeTasks);
+        }''')
+        status = page.locator('.task-time-status')
+        timers = page.locator('.task-time-timer')
+        timer = timers.nth(0 if phase == 'work' else 1)
+        other = timers.nth(1 if phase == 'work' else 0)
+        assert status.locator('option').count() == 3
+        assert status.is_enabled()
+        assert status.evaluate("element => getComputedStyle(element).color") == 'rgb(33, 37, 41)'
+        assert status.evaluate("element => getComputedStyle(element).backgroundColor") == 'rgb(248, 249, 250)'
+        for cell in page.locator('.task-time-effort').all():
+            geometry = cell.evaluate('''element => {
+                const cell = element.getBoundingClientRect();
+                const value = element.firstElementChild.getBoundingClientRect();
+                const button = element.lastElementChild.getBoundingClientRect();
+                return {left: value.left - cell.left, right: cell.right - button.right,
+                    center: (value.top + value.bottom - button.top - button.bottom) / 2};
+            }''')
+            assert abs(geometry['left']) < 1
+            assert abs(geometry['right']) < 1
+            assert abs(geometry['center']) < 1
+        assert timer.get_attribute('aria-label') == 'запустить таймер'
+        timer.click()
+        assert timer.get_attribute('aria-label') == 'остановить таймер'
+        assert 'task-time-timer-danger' in timer.get_attribute('class')
+        assert status.is_disabled()
+        assert status.evaluate("element => getComputedStyle(element).color") == 'rgb(33, 37, 41)'
+        assert other.is_disabled()
+        assert other.locator('..').get_attribute('title') == 'ручной таймер не доступен'
+        timer.click()
+        assert timer.get_attribute('aria-label') == 'запустить таймер'
+        assert status.is_enabled()
+        status.select_option('3')
+        assert page.evaluate('controlRequests') == [
+            {'url': '/api/tasks/1/time/manual/start', 'method': 'POST', 'body': {'phase': phase}},
+            {'url': '/api/tasks/1/time/manual/pause', 'method': 'POST', 'body': None},
+            {'url': '/api/tasks/1/time/status', 'method': 'PATCH', 'body': {'status_id': 3}},
+        ]
+        page.evaluate('''() => {
+            timeTasks[0].time_tracking_status = 'running';
+            window.dispatchEvent(new CustomEvent('armory:kanban', {detail: {type: 'task_time_changed', project_id: 1}}));
+        }''')
+        assert status.is_disabled()
+        for index in range(2):
+            assert timers.nth(index).is_disabled()
+            assert 'task-time-timer-secondary' in timers.nth(index).get_attribute('class')
+        page.evaluate('''() => {
+            timeTasks[0].time_tracking_status = 'completed';
+            window.dispatchEvent(new CustomEvent('armory:kanban', {detail: {type: 'task_time_changed', project_id: 1}}));
+        }''')
+        assert status.is_enabled()
+        assert timers.nth(0).is_enabled()
+        assert timers.nth(1).is_enabled()
+    finally:
+        page.close()
+
+
 @pytest.mark.parametrize("container_id", ["projects-list", "task-time-table"])
 def test_shared_sse_forwards_time_events_without_opening_another_stream(browser, container_id):
     page = browser.new_page()

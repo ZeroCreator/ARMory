@@ -60,6 +60,8 @@ from app.schemas import (
     TaskStatusCreate,
     TaskStatusHistoryOut,
     TaskTimePause,
+    TaskManualTimeStart,
+    TaskTimeStatusUpdate,
     TaskTimeStart,
     TaskTimeStateOut,
     TaskTimeExportRequest,
@@ -757,6 +759,9 @@ async def start_task_time(
 ):
     """Начинает активный интервал агента и закрывает его предыдущую активную задачу."""
     _require_mcp_time_request(request)
+    if data.worker_id.startswith("manual:"):
+        raise HTTPException(status_code=422, detail="Reserved worker identifier")
+    await db.execute(update(Task).where(Task.id == task_id).values(updated_at=Task.updated_at))
     result = await db.execute(
         select(Task)
         .options(selectinload(Task.status))
@@ -788,6 +793,7 @@ async def start_task_time(
 
     previous_task = await db.get(Task, active_session.task_id) if active_session else None
     now = datetime.utcnow()
+    await _close_task_time_sessions(db, task_id=task_id, worker_id=f"manual:task:{task_id}", ended_at=now)
     await _close_task_time_sessions(db, worker_id=data.worker_id, ended_at=now)
     time_session = TaskTimeSession(
         task_id=task_id,
@@ -819,6 +825,8 @@ async def pause_task_time(
 ):
     """Сохраняет паузу или явное завершение последнего интервала агента."""
     _require_mcp_time_request(request)
+    if data.worker_id.startswith("manual:"):
+        raise HTTPException(status_code=422, detail="Reserved worker identifier")
     active_result = await db.execute(
         select(TaskTimeSession)
         .where(
@@ -850,6 +858,63 @@ async def pause_task_time(
         started_at=time_session.started_at,
         ended_at=time_session.ended_at,
     )
+
+
+async def _get_time_control_task(task_id: int, db: AsyncSession) -> Task:
+    """Блокирует запись задачи перед проверкой и изменением учёта времени."""
+    await db.execute(update(Task).where(Task.id == task_id).values(updated_at=Task.updated_at))
+    result = await db.execute(select(Task).options(
+        selectinload(Task.status), selectinload(Task.attachments), selectinload(Task.time_sessions),
+    ).where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@global_router.post("/tasks/{task_id}/time/manual/start", response_model=TaskOut)
+async def start_manual_task_time(task_id: int, data: TaskManualTimeStart, db: AsyncSession = Depends(get_db)):
+    """Запускает ручной таймер выбранного этапа без изменения статуса задачи."""
+    task = await _get_time_control_task(task_id, db)
+    if task.is_closed:
+        raise HTTPException(status_code=409, detail="Closed tasks cannot track time")
+    if task.time_tracking_status == "running":
+        raise HTTPException(status_code=409, detail="ручной таймер не доступен")
+    db.add(TaskTimeSession(task_id=task_id, worker_id=f"manual:task:{task_id}", phase=data.phase))
+    await db.commit()
+    await db.refresh(task, attribute_names=["time_sessions"])
+    broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
+    return task
+
+
+@global_router.post("/tasks/{task_id}/time/manual/pause", response_model=TaskOut)
+async def pause_manual_task_time(task_id: int, db: AsyncSession = Depends(get_db)):
+    """Останавливает ручной таймер, не затрагивая интервалы агента."""
+    task = await _get_time_control_task(task_id, db)
+    if any(session.ended_at is None and session.worker_id != f"manual:task:{task_id}"
+           for session in task.time_sessions):
+        raise HTTPException(status_code=409, detail="ручной таймер не доступен")
+    changed = await _close_task_time_sessions(db, task_id=task_id, worker_id=f"manual:task:{task_id}")
+    await db.commit()
+    await db.refresh(task, attribute_names=["time_sessions"])
+    if changed:
+        broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
+    return task
+
+
+@global_router.patch("/tasks/{task_id}/time/status", response_model=TaskOut)
+async def update_time_task_status(task_id: int, data: TaskTimeStatusUpdate, db: AsyncSession = Depends(get_db)):
+    """Меняет статус из таблицы учёта только после остановки всех таймеров."""
+    task = await _get_time_control_task(task_id, db)
+    if task.time_tracking_status == "running":
+        raise HTTPException(status_code=409, detail="ручной таймер не доступен")
+    await _get_status(task.project_id, data.status_id, db)
+    if task.status_id != data.status_id:
+        await _apply_task_update(task, TaskUpdate(status_id=data.status_id), task.project_id, db)
+        await db.commit()
+        await db.refresh(task, attribute_names=["status", "time_sessions"])
+        broadcast({"type": "task_changed", "project_id": task.project_id, "task_id": task_id, "status_id": task.status_id})
+    return task
 
 
 @router.patch("/tasks/reorder", status_code=204)
