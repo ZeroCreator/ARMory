@@ -119,6 +119,8 @@ function applyTimeFilters() {
     const dueBefore = document.getElementById('time-filter-due-before').value;
     const createdAfter = document.getElementById('time-filter-created-after').value;
     const createdBefore = document.getElementById('time-filter-created-before').value;
+    const workStartedAfter = document.getElementById('time-filter-work-started-after').value;
+    const workStartedBefore = document.getElementById('time-filter-work-started-before').value;
     const filtered = timeTasks.filter(task => {
         if (task.is_closed) return false;
         if (!hasTimeValues(task)) return false;
@@ -130,6 +132,9 @@ function applyTimeFilters() {
         const taskCreated = String(task.created_at || '').slice(0, 10);
         if (createdAfter && taskCreated < createdAfter) return false;
         if (createdBefore && taskCreated > createdBefore) return false;
+        const taskWorkStarted = String(task.work_started_at || '').slice(0, 10);
+        if (workStartedAfter && (!taskWorkStarted || taskWorkStarted < workStartedAfter)) return false;
+        if (workStartedBefore && (!taskWorkStarted || taskWorkStarted > workStartedBefore)) return false;
         const taskDue = String(task.due_date || '').slice(0, 10);
         if (dueBefore && (!taskDue || taskDue > dueBefore)) return false;
         if (search) {
@@ -163,6 +168,8 @@ function resetTimeFilters() {
         'time-filter-due-before',
         'time-filter-created-after',
         'time-filter-created-before',
+        'time-filter-work-started-after',
+        'time-filter-work-started-before',
     ].forEach(id => {
         const field = document.getElementById(id);
         if (field) field.value = '';
@@ -468,13 +475,11 @@ async function saveTaskTimeValues(event) {
 
 function formatEffortTime(seconds) {
     const totalMinutes = Math.floor(Math.max(0, Number(seconds) || 0) / 60);
-    const days = Math.floor(totalMinutes / 1440);
-    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     const parts = [];
-    if (days) parts.push(`${days} д`);
-    if (hours || days) parts.push(`${hours} ч`);
-    if (minutes || (!days && !hours)) parts.push(`${minutes} мин`);
+    if (hours) parts.push(`${hours} ч`);
+    if (minutes || !hours) parts.push(`${minutes} мин`);
     return parts.join(' ');
 }
 

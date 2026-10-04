@@ -306,6 +306,17 @@ class Task(Base):
         latest = max(self.time_sessions, key=lambda session: (session.ended_at, session.started_at, session.id or 0))
         return "completed" if latest.completed else "paused"
 
+    @property
+    def work_started_at(self) -> datetime.datetime | None:
+        work_status_terms = ("в работе", "в процессе", "выполняется", "progress", "doing", "active")
+        entries = [
+            history.entered_at
+            for history in self.status_history
+            if history.status
+            and any(term in history.status.name.strip().casefold() for term in work_status_terms)
+        ]
+        return min(entries, default=None)
+
 
 class TaskStatusHistory(Base):
     __tablename__ = "task_status_history"

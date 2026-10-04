@@ -85,13 +85,21 @@
                 </div>
             </div>
             <div class="row g-3 mt-1 align-items-end">
-                <div class="col-lg-3 col-md-6">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label" for="time-filter-created-after">Создано с</label>
                     <input type="date" class="form-control" id="time-filter-created-after" onchange="applyTimeFilters()">
                 </div>
-                <div class="col-lg-3 col-md-6">
+                <div class="col-lg-2 col-md-4">
                     <label class="form-label" for="time-filter-created-before">Создано до</label>
                     <input type="date" class="form-control" id="time-filter-created-before" onchange="applyTimeFilters()">
+                </div>
+                <div class="col-lg-2 col-md-4">
+                    <label class="form-label" for="time-filter-work-started-after">Взят в работу с</label>
+                    <input type="date" class="form-control" id="time-filter-work-started-after" onchange="applyTimeFilters()">
+                </div>
+                <div class="col-lg-2 col-md-4">
+                    <label class="form-label" for="time-filter-work-started-before">Взят в работу до</label>
+                    <input type="date" class="form-control" id="time-filter-work-started-before" onchange="applyTimeFilters()">
                 </div>
                 <div class="col-auto ms-auto">
                     <button class="btn btn-outline-gray kanban-reset-btn" type="button" onclick="resetTimeFilters()">

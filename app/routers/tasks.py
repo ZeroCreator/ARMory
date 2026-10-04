@@ -2338,16 +2338,13 @@ async def import_global_kanban(
 # ═══════════════════════════════════════════════════
 
 def _format_task_effort(seconds: int) -> str:
-    """Форматирует активное время в днях, часах и минутах."""
+    """Форматирует активное время в часах и минутах."""
     total_minutes = max(0, int(seconds or 0)) // 60
-    days, remainder = divmod(total_minutes, 1440)
-    hours, minutes = divmod(remainder, 60)
+    hours, minutes = divmod(total_minutes, 60)
     parts = []
-    if days:
-        parts.append(f"{days} д")
-    if hours or days:
+    if hours:
         parts.append(f"{hours} ч")
-    if minutes or not (days or hours):
+    if minutes or not hours:
         parts.append(f"{minutes} мин")
     return " ".join(parts)
 

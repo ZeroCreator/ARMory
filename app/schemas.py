@@ -297,6 +297,7 @@ class TaskOut(BaseModel):
     priority: str = "medium"
     is_closed: bool = False
     start_date: Optional[datetime] = None
+    work_started_at: Optional[datetime] = None
     due_date: Optional[datetime] = None
     assignee_email: Optional[str] = None
     assignee_emails: List[str] = []
