@@ -227,6 +227,7 @@ function hasTimeValues(task) {
 
 function getTaskTimeRowClass(task) {
     if (task.time_tracking_status === 'completed') return 'task-time-row-completed';
+    if (task.time_tracking_status === 'paused') return 'task-time-row-paused';
     const statusName = String(task.status?.name || '').trim().toLocaleLowerCase('ru');
     if (task.time_tracking_status === 'running' || statusName === 'в работе') {
         return 'task-time-row-in-work';
