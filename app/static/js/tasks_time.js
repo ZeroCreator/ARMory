@@ -216,10 +216,28 @@ async function exportTaskTimeXlsx() {
 }
 
 function hasTimeValues(task) {
+    const statusName = String(task.status?.name || '').trim().toLocaleLowerCase('ru');
     return task.estimated_minutes != null
         || (task.work_seconds || 0) > 0
         || (task.testing_seconds || 0) > 0
-        || (task.actual_seconds || 0) > 0;
+        || (task.actual_seconds || 0) > 0
+        || task.time_tracking_status != null
+        || ['в работе', 'тестирование'].includes(statusName);
+}
+
+function getTaskTimeRowClass(task) {
+    if (task.time_tracking_status === 'completed') return 'task-time-row-completed';
+    const statusName = String(task.status?.name || '').trim().toLocaleLowerCase('ru');
+    if (task.time_tracking_status === 'running' || statusName === 'в работе') {
+        return 'task-time-row-in-work';
+    }
+    return '';
+}
+
+function getDeviationClass(deviation) {
+    if (deviation > 0) return 'task-time-deviation-over';
+    if (deviation < 0) return 'task-time-deviation-under';
+    return 'text-muted';
 }
 
 function getTimeSortValue(task, key) {
@@ -250,7 +268,11 @@ function getTimeTrackingLabel(status) {
 function renderTimeStatusControl(task) {
     const statuses = timeStatuses[task.project_id] || (task.status ? [{ ...task.status, id: task.status_id }] : []);
     const disabled = task.time_tracking_status === 'running' || pendingTimeControls.has(task.id);
-    return `<select class="form-select form-select-sm task-time-status" aria-label="Статус" ${disabled ? 'disabled' : ''}
+    const statusColor = statuses.find(status => Number(status.id) === Number(task.status_id))?.color;
+    const statusColorStyle = /^#[0-9a-f]{6}$/i.test(statusColor || '')
+        ? `style="--task-time-kanban-status-color: ${statusColor}"`
+        : '';
+    return `<select class="form-select form-select-sm task-time-status" ${statusColorStyle} aria-label="Статус" ${disabled ? 'disabled' : ''}
         onchange="changeTimeTaskStatus(${task.id}, this.value)">${statuses.map(status =>
         `<option value="${status.id}" ${status.id === task.status_id ? 'selected' : ''}>${escapeTimeHtml(status.name)}</option>`
     ).join('')}</select>`;
@@ -335,9 +357,9 @@ function renderTaskTimeTable(tasks) {
         const estimate = task.estimated_minutes == null ? null : task.estimated_minutes * 60;
         const actual = task.actual_seconds || 0;
         const deviation = estimate == null ? null : actual - estimate;
-        const deviationClass = deviation == null ? 'text-muted' : deviation > 0 ? 'text-danger' : deviation < 0 ? 'text-success' : 'text-muted';
+        const deviationClass = getDeviationClass(deviation);
         const projectCell = IS_GLOBAL ? `<td>${escapeTimeHtml(timeProjects[task.project_id] || `Проект #${task.project_id}`)}</td>` : '';
-        return `<tr data-task-id="${task.id}">
+        return `<tr class="${getTaskTimeRowClass(task)}" data-task-id="${task.id}">
             <td>${task.id}</td>
             ${projectCell}
             <td><div class="d-flex align-items-center gap-2">
@@ -355,7 +377,7 @@ function renderTaskTimeTable(tasks) {
     }).join('');
 
     const totalDeviation = actualTotal - plannedTotal;
-    const totalDeviationClass = totalDeviation > 0 ? 'text-danger' : totalDeviation < 0 ? 'text-success' : 'text-muted';
+    const totalDeviationClass = getDeviationClass(totalDeviation);
     foot.innerHTML = `<tr>
         <td colspan="${4 + projectColumnCount}" class="text-end">Итого</td>
         <td>${plannedCount ? formatEffortTime(plannedTotal) : '—'}</td>

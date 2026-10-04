@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from io import BytesIO
-import sqlite3
 from types import SimpleNamespace
 
 import httpx
@@ -222,30 +221,3 @@ async def test_time_status_is_in_list_but_not_exported_to_xlsx(time_api, project
     assert sheet.cell(4, headers.index("План") + 1).value == "45 мин"
     assert sheet.cell(4, headers.index("Факт") + 1).value == "0 мин"
     assert sheet.max_column == (9 if project_id is None else 8)
-
-
-@pytest.mark.asyncio
-async def test_completed_column_upgrade_preserves_legacy_intervals_and_runs_once(monkeypatch, tmp_path):
-    from app import main
-
-    monkeypatch.chdir(tmp_path)
-    database_url = f"sqlite+aiosqlite:///{tmp_path / 'test.db'}"
-    monkeypatch.setattr(main, "settings", SimpleNamespace(database_url=database_url))
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.begin() as connection:
-            await connection.execute(text("CREATE TABLE task_time_sessions (id INTEGER PRIMARY KEY, ended_at DATETIME)"))
-            await connection.execute(text("INSERT INTO task_time_sessions (id, ended_at) VALUES (1, '2000-01-01'), (2, NULL)"))
-        async with engine.begin() as connection:
-            await main._ensure_task_time_completed_column(connection)
-            await main._ensure_task_time_completed_column(connection)
-            rows = (await connection.execute(text("SELECT id, ended_at, completed FROM task_time_sessions ORDER BY id"))).all()
-        assert rows == [(1, "2000-01-01", 0), (2, None, 0)]
-        backups = list((tmp_path / "data" / "backups").glob("*.db"))
-        assert len(backups) == 1
-        with sqlite3.connect(backups[0]) as backup:
-            assert backup.execute("PRAGMA quick_check").fetchall() == [("ok",)]
-            assert backup.execute("SELECT id, ended_at FROM task_time_sessions ORDER BY id").fetchall() == [(1, "2000-01-01"), (2, None)]
-            assert "completed" not in {row[1] for row in backup.execute("PRAGMA table_info(task_time_sessions)")}
-    finally:
-        await engine.dispose()

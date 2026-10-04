@@ -19,8 +19,15 @@
     .task-time-page-title { white-space: nowrap; pointer-events: none; }
     #task-time-table .task-time-title { color: var(--purple-surface2); background: none; border: 0; padding: 0; text-align: left; }
     #task-time-table .task-time-title:hover { color: var(--purple-darker); }
-    #task-time-table .task-time-status { min-width: 9rem; background-color: #f8f9fa; color: #212529; }
+    #task-time-table .task-time-status {
+        min-width: 9rem;
+        background-color: #f8f9fa;
+        background-color: color-mix(in srgb, var(--task-time-kanban-status-color, #f8f9fa) 20%, #f8f9fa);
+        color: #212529;
+    }
     #task-time-table .task-time-status option { background-color: #f8f9fa; color: #212529; }
+    #task-time-table { --bs-table-border-color: #b7b7b7; border: 1px solid #b7b7b7; }
+    #task-time-table > :not(caption) > * > * { border: 1px solid #b7b7b7; }
     #task-time-table .task-time-timer { color: #fff; border: 0; }
     #task-time-table .task-time-timer-success { background: linear-gradient(135deg, #198754, #146c43); }
     #task-time-table .task-time-timer-danger { background: linear-gradient(135deg, #dc3545, #b02a37); }
@@ -29,6 +36,20 @@
     #task-time-table .task-time-effort { display: flex; align-items: center; justify-content: space-between; gap: .5rem; text-align: left; }
     #task-time-table .task-time-effort .task-time-timer-wrapper { flex-shrink: 0; }
     #task-time-table .task-time-timer:disabled { pointer-events: none; opacity: 1; }
+    #task-time-table tbody tr.task-time-row-in-work > * {
+        --bs-table-bg: #fff;
+        --bs-table-bg-state: transparent;
+        background-color: #fff;
+        background-image: linear-gradient(rgba(74, 122, 90, 0.12), rgba(74, 122, 90, 0.12));
+    }
+    #task-time-table tbody tr.task-time-row-completed > * {
+        --bs-table-bg: var(--sand-light);
+        --bs-table-bg-state: transparent;
+        background-color: var(--sand-light);
+        background-image: linear-gradient(rgba(160, 121, 75, 0.08), rgba(160, 121, 75, 0.08));
+    }
+    #task-time-table .task-time-deviation-over { color: #7f1d1d !important; font-weight: 700; }
+    #task-time-table .task-time-deviation-under { color: #14532d !important; font-weight: 700; }
 </style>
 
 <div id="task-time-filters" class="card mb-4 border-0 shadow-sm kanban-filters">
