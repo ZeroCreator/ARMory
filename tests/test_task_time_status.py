@@ -28,6 +28,7 @@ async def time_api(monkeypatch):
         db.add_all([
             TaskStatus(id=1, project_id=1, name="В работе", sort_order=0),
             TaskStatus(id=2, project_id=1, name="Тестирование", sort_order=1),
+            TaskStatus(id=3, project_id=1, name="Деплой", sort_order=2),
         ])
         db.add_all([
             Task(id=1, project_id=1, status_id=2, title="<task-title>", estimated_minutes=30),
@@ -52,6 +53,40 @@ async def time_api(monkeypatch):
     ) as client:
         yield client, sessions, events
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("phase", "source", "target", "expected"), [
+    ("work", 1, 2, "completed"),
+    ("testing", 2, 3, "completed"),
+    ("work", 1, 3, "paused"),
+    ("testing", 2, 1, "paused"),
+    ("testing", 2, 2, "paused"),
+    ("testing", 1, 2, "paused"),
+])
+async def test_manual_time_completion_follows_stage_transitions(time_api, phase, source, target, expected):
+    client, sessions, events = time_api
+    await client.patch("/api/projects/1/tasks/1", json={"status_id": source})
+    await client.post("/api/tasks/1/time/manual/start", json={"phase": phase})
+    async with sessions() as db:
+        interval = (await db.execute(select(TaskTimeSession))).scalar_one()
+        interval.started_at = datetime.utcnow() - timedelta(minutes=2)
+        await db.commit()
+    paused = await client.post("/api/tasks/1/time/manual/pause")
+    assert paused.json()["time_tracking_status"] == "paused"
+    events.clear()
+    changed = await client.patch("/api/tasks/1/time/status", json={"status_id": target})
+    assert changed.status_code == 200
+    assert changed.json()["time_tracking_status"] == expected
+    assert changed.json()["actual_seconds"] == paused.json()["actual_seconds"]
+    assert changed.json()["manual_time_phase"] is None
+    listed = (await client.get("/api/tasks")).json()
+    assert next(task for task in listed if task["id"] == 1)["time_tracking_status"] == expected
+    if source != target:
+        assert events[-1]["type"] == "task_changed"
+    resumed = await client.post("/api/tasks/1/time/manual/start", json={"phase": "testing"})
+    assert resumed.json()["time_tracking_status"] == "running"
+    assert resumed.json()["actual_seconds"] >= paused.json()["actual_seconds"]
 
 
 @pytest.mark.asyncio

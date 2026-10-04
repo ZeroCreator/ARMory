@@ -904,12 +904,22 @@ async def pause_manual_task_time(task_id: int, db: AsyncSession = Depends(get_db
 
 @global_router.patch("/tasks/{task_id}/time/status", response_model=TaskOut)
 async def update_time_task_status(task_id: int, data: TaskTimeStatusUpdate, db: AsyncSession = Depends(get_db)):
-    """Меняет статус из таблицы учёта только после остановки всех таймеров."""
+    """Меняет статус и завершает ручной учёт при переходе к следующему этапу."""
     task = await _get_time_control_task(task_id, db)
     if task.time_tracking_status == "running":
         raise HTTPException(status_code=409, detail="ручной таймер не доступен")
-    await _get_status(task.project_id, data.status_id, db)
+    target_status = await _get_status(task.project_id, data.status_id, db)
     if task.status_id != data.status_id:
+        source_phase = _status_time_phase(task.status.name if task.status else None)
+        completes_phase = (
+            source_phase == "work" and _status_time_phase(target_status.name) == "testing"
+        ) or (
+            source_phase == "testing" and target_status.name.strip().casefold() in {"деплой", "deploy"}
+        )
+        if completes_phase and task.time_sessions:
+            latest = max(task.time_sessions, key=lambda session: (session.ended_at, session.started_at, session.id))
+            if latest.worker_id == f"manual:task:{task_id}" and latest.phase == source_phase:
+                latest.completed = True
         await _apply_task_update(task, TaskUpdate(status_id=data.status_id), task.project_id, db)
         await db.commit()
         await db.refresh(task, attribute_names=["status", "time_sessions"])
