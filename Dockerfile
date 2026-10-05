@@ -46,4 +46,4 @@ RUN mkdir -p /app/data/uploads
 EXPOSE 8088
 
 ENV PORT=8088
-CMD uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8088}
+CMD uv run --no-dev uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8088}
