@@ -114,6 +114,37 @@ async def test_agent_time_phase_is_independent_from_kanban_status(time_api):
 
 
 @pytest.mark.asyncio
+async def test_work_to_testing_status_switch_starts_testing_time_phase(time_api):
+    client, sessions, _ = time_api
+    changed = await client.patch("/api/projects/1/tasks/1", json={"status_id": 1})
+    assert changed.status_code == 200
+
+    started = await client.post(
+        "/api/tasks/1/time/start",
+        json={"worker_id": "<worker-id>", "phase": "work"},
+    )
+    assert started.status_code == 200
+
+    changed = await client.patch("/api/projects/1/tasks/1", json={"status_id": 2})
+    assert changed.status_code == 200
+    assert changed.json()["time_tracking_status"] == "running"
+    assert changed.json()["manual_time_phase"] is None
+
+    async with sessions() as db:
+        intervals = (
+            await db.execute(
+                select(TaskTimeSession)
+                .where(TaskTimeSession.task_id == 1)
+                .order_by(TaskTimeSession.started_at.asc(), TaskTimeSession.id.asc())
+            )
+        ).scalars().all()
+        assert [(interval.phase, interval.ended_at is None) for interval in intervals] == [
+            ("work", False),
+            ("testing", True),
+        ]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("phase", ["work", "testing"])
 async def test_manual_timer_accumulates_selected_phase_and_blocks_status_until_paused(time_api, phase):
     client, sessions, events = time_api

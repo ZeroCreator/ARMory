@@ -178,15 +178,75 @@ async def _apply_task_assignees(task: Task, emails: list[str], db: AsyncSession)
 
 
 async def _record_status_history(
-    db: AsyncSession, task_id: int, status_id: int, entered_at: Optional[datetime] = None
+    db: AsyncSession,
+    task_id: int,
+    status_id: int,
+    entered_at: Optional[datetime] = None,
+    previous_status_id: int | None = None,
 ) -> None:
     """Создать запись о переходе задачи в указанную колонку."""
-    await _close_task_time_sessions(db, task_id=task_id)
+    switched_to_testing = await _switch_task_time_to_testing(
+        db,
+        task_id=task_id,
+        previous_status_id=previous_status_id,
+        status_id=status_id,
+    )
+    if not switched_to_testing:
+        await _close_task_time_sessions(db, task_id=task_id)
     db.add(TaskStatusHistory(
         task_id=task_id,
         status_id=status_id,
         entered_at=entered_at or datetime.utcnow(),
     ))
+
+
+async def _switch_task_time_to_testing(
+    db: AsyncSession,
+    *,
+    task_id: int,
+    previous_status_id: int | None,
+    status_id: int,
+) -> bool:
+    """Перенести активные интервалы задачи из работы в тестирование."""
+    if previous_status_id is None or previous_status_id == status_id:
+        return False
+
+    statuses_result = await db.execute(
+        select(TaskStatus.id, TaskStatus.name).where(
+            TaskStatus.id.in_([previous_status_id, status_id])
+        )
+    )
+    status_names = {status_id: name.strip().casefold() for status_id, name in statuses_result.all()}
+    work_status_names = {"в работе", "в процессе", "выполняется", "in progress", "doing", "active"}
+    testing_status_names = {"тестирование", "testing", "qa"}
+    if (
+        status_names.get(previous_status_id) not in work_status_names
+        or status_names.get(status_id) not in testing_status_names
+    ):
+        return False
+
+    active_result = await db.execute(
+        select(TaskTimeSession).where(
+            TaskTimeSession.task_id == task_id,
+            TaskTimeSession.ended_at.is_(None),
+        )
+    )
+    active_sessions = active_result.scalars().all()
+    if not active_sessions:
+        return False
+
+    now = datetime.utcnow()
+    for session in active_sessions:
+        session.ended_at = now
+    await db.flush()
+    for session in active_sessions:
+        db.add(TaskTimeSession(
+            task_id=task_id,
+            worker_id=session.worker_id,
+            phase="testing",
+            started_at=now,
+        ))
+    return True
 
 
 async def _close_task_time_sessions(
@@ -926,7 +986,12 @@ async def reorder_tasks(
         )
         old_status_id = old_statuses.get(task_id)
         if old_status_id != data.status_id:
-            await _record_status_history(db, task_id, data.status_id)
+            await _record_status_history(
+                db,
+                task_id,
+                data.status_id,
+                previous_status_id=old_status_id,
+            )
 
     await db.commit()
     broadcast({"type": "board_changed", "project_id": project_id})
@@ -982,6 +1047,7 @@ async def _apply_task_update(
     """Применить поля TaskUpdate к одной задаче. Возвращает True, если статус изменился."""
     update_data = data.model_dump(exclude_unset=True)
     status_changed = False
+    previous_status_id = task.status_id
 
     if "status_id" in update_data:
         await _get_status(project_id, update_data["status_id"], db)
@@ -1064,7 +1130,12 @@ async def _apply_task_update(
         task.sort_order = 0
 
     if status_changed:
-        await _record_status_history(db, task.id, task.status_id)
+        await _record_status_history(
+            db,
+            task.id,
+            task.status_id,
+            previous_status_id=previous_status_id,
+        )
 
     task.updated_at = datetime.utcnow()
     return status_changed
@@ -2214,11 +2285,17 @@ async def update_task_status_by_column_name(
         )
         task.sort_order = 0
 
-    status_changed = task.status_id != status.id
+    previous_status_id = task.status_id
+    status_changed = previous_status_id != status.id
     task.status_id = status.id
     task.updated_at = datetime.utcnow()
     if status_changed:
-        await _record_status_history(db, task.id, status.id)
+        await _record_status_history(
+            db,
+            task.id,
+            status.id,
+            previous_status_id=previous_status_id,
+        )
     await db.commit()
     await db.refresh(task, attribute_names=["status", "attachments", "time_sessions"])
     broadcast({"type": "board_changed", "project_id": task.project_id, "global": True})
