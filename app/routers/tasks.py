@@ -185,13 +185,13 @@ async def _record_status_history(
     previous_status_id: int | None = None,
 ) -> None:
     """Создать запись о переходе задачи в указанную колонку."""
-    switched_to_testing = await _switch_task_time_to_testing(
+    completed_time = await _complete_task_time_on_testing(
         db,
         task_id=task_id,
         previous_status_id=previous_status_id,
         status_id=status_id,
     )
-    if not switched_to_testing:
+    if not completed_time:
         await _close_task_time_sessions(db, task_id=task_id)
     db.add(TaskStatusHistory(
         task_id=task_id,
@@ -200,14 +200,14 @@ async def _record_status_history(
     ))
 
 
-async def _switch_task_time_to_testing(
+async def _complete_task_time_on_testing(
     db: AsyncSession,
     *,
     task_id: int,
     previous_status_id: int | None,
     status_id: int,
 ) -> bool:
-    """Перенести активные интервалы задачи из работы в тестирование."""
+    """Завершить учёт времени при переходе задачи из работы в тестирование."""
     if previous_status_id is None or previous_status_id == status_id:
         return False
 
@@ -225,27 +225,20 @@ async def _switch_task_time_to_testing(
     ):
         return False
 
-    active_result = await db.execute(
+    sessions_result = await db.execute(
         select(TaskTimeSession).where(
             TaskTimeSession.task_id == task_id,
-            TaskTimeSession.ended_at.is_(None),
         )
     )
-    active_sessions = active_result.scalars().all()
-    if not active_sessions:
+    sessions = sessions_result.scalars().all()
+    if not sessions:
         return False
 
     now = datetime.utcnow()
-    for session in active_sessions:
-        session.ended_at = now
-    await db.flush()
-    for session in active_sessions:
-        db.add(TaskTimeSession(
-            task_id=task_id,
-            worker_id=session.worker_id,
-            phase="testing",
-            started_at=now,
-        ))
+    for session in sessions:
+        if session.ended_at is None:
+            session.ended_at = now
+        session.completed = True
     return True
 
 
@@ -2415,7 +2408,7 @@ def _format_task_effort(seconds: int) -> str:
 def _format_signed_task_effort(seconds: int) -> str:
     """Форматирует отклонение фактического времени от планового."""
     if seconds == 0:
-        return "0 мин"
+        return "—"
     sign = "+" if seconds > 0 else "−"
     return f"{sign}{_format_task_effort(abs(seconds))}"
 

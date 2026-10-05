@@ -66,7 +66,7 @@ async def time_api(monkeypatch):
     ("testing", 2, 2),
     ("testing", 1, 2),
 ])
-async def test_manual_time_completion_is_independent_from_kanban_status(time_api, phase, source, target):
+async def test_manual_time_completion_follows_work_to_testing_transition(time_api, phase, source, target):
     client, sessions, events = time_api
     await client.patch("/api/projects/1/tasks/1", json={"status_id": source})
     await client.post("/api/tasks/1/time/manual/start", json={"phase": phase})
@@ -79,11 +79,12 @@ async def test_manual_time_completion_is_independent_from_kanban_status(time_api
     events.clear()
     changed = await client.patch("/api/tasks/1/time/status", json={"status_id": target})
     assert changed.status_code == 200
-    assert changed.json()["time_tracking_status"] == "paused"
+    expected_status = "completed" if (source, target) == (1, 2) else "paused"
+    assert changed.json()["time_tracking_status"] == expected_status
     assert changed.json()["actual_seconds"] == paused.json()["actual_seconds"]
     assert changed.json()["manual_time_phase"] is None
     listed = (await client.get("/api/tasks")).json()
-    assert next(task for task in listed if task["id"] == 1)["time_tracking_status"] == "paused"
+    assert next(task for task in listed if task["id"] == 1)["time_tracking_status"] == expected_status
     if source != target:
         assert events[-1]["type"] == "task_changed"
     resumed = await client.post("/api/tasks/1/time/manual/start", json={"phase": "testing"})
@@ -114,7 +115,8 @@ async def test_agent_time_phase_is_independent_from_kanban_status(time_api):
 
 
 @pytest.mark.asyncio
-async def test_work_to_testing_status_switch_starts_testing_time_phase(time_api):
+@pytest.mark.parametrize("pause_before_transition", [False, True])
+async def test_work_to_testing_status_switch_completes_time_phase(time_api, pause_before_transition):
     client, sessions, _ = time_api
     changed = await client.patch("/api/projects/1/tasks/1", json={"status_id": 1})
     assert changed.status_code == 200
@@ -125,9 +127,17 @@ async def test_work_to_testing_status_switch_starts_testing_time_phase(time_api)
     )
     assert started.status_code == 200
 
+    if pause_before_transition:
+        paused = await client.post(
+            "/api/tasks/1/time/pause",
+            json={"worker_id": "<worker-id>"},
+        )
+        assert paused.status_code == 200
+        assert paused.json()["time_tracking_status"] == "paused"
+
     changed = await client.patch("/api/projects/1/tasks/1", json={"status_id": 2})
     assert changed.status_code == 200
-    assert changed.json()["time_tracking_status"] == "running"
+    assert changed.json()["time_tracking_status"] == "completed"
     assert changed.json()["manual_time_phase"] is None
 
     async with sessions() as db:
@@ -138,9 +148,11 @@ async def test_work_to_testing_status_switch_starts_testing_time_phase(time_api)
                 .order_by(TaskTimeSession.started_at.asc(), TaskTimeSession.id.asc())
             )
         ).scalars().all()
-        assert [(interval.phase, interval.ended_at is None) for interval in intervals] == [
-            ("work", False),
-            ("testing", True),
+        assert [
+            (interval.phase, interval.ended_at is None, interval.completed)
+            for interval in intervals
+        ] == [
+            ("work", False, True),
         ]
 
 
@@ -282,6 +294,11 @@ async def test_time_status_is_in_list_but_not_exported_to_xlsx(time_api, project
 @pytest.mark.asyncio
 async def test_time_deviation_uses_zero_for_missing_plan_and_skips_unstarted_plan(time_api):
     client, _, _ = time_api
+    updated = await client.patch(
+        "/api/projects/1/tasks/2",
+        json={"actual_seconds": 15 * 60},
+    )
+    assert updated.status_code == 200
     exported = await client.post(
         "/api/tasks/time/export/xlsx",
         json={"task_ids": [1, 2, 3, 4], "project_id": 1},
@@ -293,6 +310,7 @@ async def test_time_deviation_uses_zero_for_missing_plan_and_skips_unstarted_pla
     rows = {sheet.cell(row, 1).value: row for row in range(2, sheet.max_row)}
 
     assert sheet.cell(rows[1], deviation_column).value == "−30 мин"
+    assert sheet.cell(rows[2], deviation_column).value == "—"
     assert sheet.cell(rows[3], deviation_column).value == "+2 мин"
     assert sheet.cell(rows[4], deviation_column).value == "—"
-    assert sheet.cell(sheet.max_row, deviation_column).value == "−43 мин"
+    assert sheet.cell(sheet.max_row, deviation_column).value == "−28 мин"

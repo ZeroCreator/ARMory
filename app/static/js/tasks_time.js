@@ -241,6 +241,10 @@ function getDeviationClass(deviation) {
     return 'text-muted';
 }
 
+function formatTaskTimeDeviation(deviation) {
+    return deviation == null || deviation === 0 ? '—' : formatSignedEffortTime(deviation);
+}
+
 function getTaskTimeDeviation(task) {
     const statusName = String(task.status?.name || '').trim().toLocaleLowerCase('ru');
     if (task.estimated_minutes != null && statusName === 'к выполнению') return null;
@@ -382,7 +386,7 @@ function renderTaskTimeTable(tasks) {
             <td class="text-nowrap"><div class="task-time-effort"><span>${formatEffortTime(task.work_seconds || 0)}</span>${renderTimeTimerControl(task, 'work')}</div></td>
             <td class="text-nowrap"><div class="task-time-effort"><span>${formatEffortTime(task.testing_seconds || 0)}</span>${renderTimeTimerControl(task, 'testing')}</div></td>
             <td class="text-nowrap fw-semibold">${formatEffortTime(actual)}</td>
-            <td class="text-nowrap ${deviationClass}">${deviation == null ? '—' : formatSignedEffortTime(deviation)}</td>
+            <td class="text-nowrap ${deviationClass}">${formatTaskTimeDeviation(deviation)}</td>
         </tr>`;
     }).join('');
 
@@ -393,7 +397,7 @@ function renderTaskTimeTable(tasks) {
         <td>${formatEffortTime(workTotal)}</td>
         <td>${formatEffortTime(testingTotal)}</td>
         <td>${formatEffortTime(actualTotal)}</td>
-        <td class="${totalDeviationClass}">${formatSignedEffortTime(deviationTotal)}</td>
+        <td class="${totalDeviationClass}">${formatTaskTimeDeviation(deviationTotal)}</td>
     </tr>`;
 }
 

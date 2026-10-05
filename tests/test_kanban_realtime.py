@@ -191,6 +191,28 @@ def test_time_status_column_updates_via_shared_events_and_keeps_totals_aligned(b
         page.close()
 
 
+def test_zero_time_deviation_is_displayed_as_dash(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = false; const PROJECT_ID = 1;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => renderTaskTimeTable([{
+            id: 1, project_id: 1, title: '<task-title>', status_id: 2,
+            status: {name: 'Тестирование'}, estimated_minutes: 30,
+            actual_seconds: 30 * 60, work_seconds: 30 * 60,
+            testing_seconds: 0, time_tracking_status: 'completed',
+        }])''')
+        assert page.locator('#task-time-table-body td').last.inner_text() == '—'
+        assert page.locator('#task-time-table-foot td').last.inner_text() == '—'
+    finally:
+        page.close()
+
+
 @pytest.mark.parametrize("phase", ["work", "testing"])
 def test_time_controls_start_stop_and_lock_on_agent_events(browser, phase):
     page = browser.new_page()
