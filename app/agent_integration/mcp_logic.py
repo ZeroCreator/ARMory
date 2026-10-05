@@ -30,16 +30,6 @@ def _start_task_time(task_id: int, phase: Literal["work", "testing"], ctx: Conte
     )
 
 
-def _status_time_phase(status_name: str | None) -> Literal["work", "testing"] | None:
-    """Определяет этап учёта времени по названию статуса задачи."""
-    normalized = (status_name or "").strip().casefold()
-    if any(term in normalized for term in ("тест", "testing", "test")):
-        return "testing"
-    if any(term in normalized for term in ("в работе", "в процессе", "выполняется", "progress", "doing", "active")):
-        return "work"
-    return None
-
-
 def _base_url(override: str | None = None) -> str:
     settings = get_settings()
     url = override or settings.armory_base_url
@@ -476,7 +466,6 @@ def register_tools(server: FastMCP) -> None:
     @_register_blocking_tool(server)
     def update_task(
         task_id: int,
-        ctx: Context,
         project_id: int | None = None,
         status_name: str | None = None,
         status_id: int | None = None,
@@ -492,7 +481,7 @@ def register_tools(server: FastMCP) -> None:
         result: str | None = None,
         input_paths: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Изменяет поля и исполнителей, добавляет input_paths во вложения; запускает таймер при смене рабочей стадии."""
+        """Изменяет поля и исполнителей, добавляет input_paths во вложения."""
         task: dict[str, Any] | None = None
         if project_id is None or status_name is not None or status_id is not None:
             task = _api_request("GET", f"/api/tasks/{task_id}")
@@ -552,15 +541,6 @@ def register_tools(server: FastMCP) -> None:
         if _error(updated):
             return updated
         updated = _add_input_paths(updated, input_paths)
-        status_changed = task is not None and updated.get("status_id") != task.get("status_id")
-        phase = _status_time_phase((updated.get("status") or {}).get("name")) if status_changed else None
-        if phase and not updated.get("is_closed"):
-            time_state = _start_task_time(task_id, phase, ctx)
-            if _error(time_state):
-                result = _with_task_link(updated)
-                result["time_tracking_error"] = time_state
-                return result
-            updated["time_tracking_status"] = time_state.get("time_tracking_status", "running")
         return _with_task_link(updated)
 
     @_register_blocking_tool(server)
@@ -686,7 +666,7 @@ def register_tools(server: FastMCP) -> None:
 
     @_register_blocking_tool(server)
     def start_task_time(task_id: int, phase: Literal["work", "testing"], ctx: Context) -> dict[str, Any]:
-        """Запускает или возобновляет работу либо тестирование агента в соответствующей колонке задачи."""
+        """Запускает или возобновляет фазу учёта времени независимо от колонки Kanban."""
         result = _start_task_time(task_id, phase, ctx)
         return result if _error(result) else {"time_tracking": result}
 

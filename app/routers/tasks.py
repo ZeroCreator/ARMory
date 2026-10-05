@@ -206,16 +206,6 @@ async def _close_task_time_sessions(
     return result.rowcount or 0
 
 
-def _status_time_phase(status_name: str | None) -> str | None:
-    """Определяет этап учёта времени по названию статуса задачи."""
-    normalized = (status_name or "").strip().casefold()
-    if any(term in normalized for term in ("тест", "testing", "test")):
-        return "testing"
-    if any(term in normalized for term in ("в работе", "в процессе", "выполняется", "progress", "doing", "active")):
-        return "work"
-    return None
-
-
 def _require_mcp_time_request(request: Request) -> None:
     """Разрешает управление временем только сервисному MCP-клиенту."""
     settings = get_settings()
@@ -764,7 +754,6 @@ async def start_task_time(
     await db.execute(update(Task).where(Task.id == task_id).values(updated_at=Task.updated_at))
     result = await db.execute(
         select(Task)
-        .options(selectinload(Task.status))
         .where(Task.id == task_id)
     )
     task = result.scalar_one_or_none()
@@ -772,9 +761,6 @@ async def start_task_time(
         raise HTTPException(status_code=404, detail="Task not found")
     if task.is_closed:
         raise HTTPException(status_code=409, detail="Closed tasks cannot track time")
-    if _status_time_phase(task.status.name if task.status else None) != data.phase:
-        raise HTTPException(status_code=409, detail="The requested phase does not match the task status")
-
     active_result = await db.execute(
         select(TaskTimeSession).where(
             TaskTimeSession.worker_id == data.worker_id,
@@ -904,22 +890,12 @@ async def pause_manual_task_time(task_id: int, db: AsyncSession = Depends(get_db
 
 @global_router.patch("/tasks/{task_id}/time/status", response_model=TaskOut)
 async def update_time_task_status(task_id: int, data: TaskTimeStatusUpdate, db: AsyncSession = Depends(get_db)):
-    """Меняет статус и завершает ручной учёт при переходе к следующему этапу."""
+    """Меняет колонку Kanban независимо от этапа и состояния учёта времени."""
     task = await _get_time_control_task(task_id, db)
     if task.time_tracking_status == "running":
         raise HTTPException(status_code=409, detail="ручной таймер не доступен")
-    target_status = await _get_status(task.project_id, data.status_id, db)
+    await _get_status(task.project_id, data.status_id, db)
     if task.status_id != data.status_id:
-        source_phase = _status_time_phase(task.status.name if task.status else None)
-        completes_phase = (
-            source_phase == "work" and _status_time_phase(target_status.name) == "testing"
-        ) or (
-            source_phase == "testing" and target_status.name.strip().casefold() in {"деплой", "deploy"}
-        )
-        if completes_phase and task.time_sessions:
-            latest = max(task.time_sessions, key=lambda session: (session.ended_at, session.started_at, session.id))
-            if latest.worker_id == f"manual:task:{task_id}" and latest.phase == source_phase:
-                latest.completed = True
         await _apply_task_update(task, TaskUpdate(status_id=data.status_id), task.project_id, db)
         await db.commit()
         await db.refresh(task, attribute_names=["status", "time_sessions"])

@@ -55,15 +55,15 @@ async def time_api(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("phase", "source", "target", "expected"), [
-    ("work", 1, 2, "completed"),
-    ("testing", 2, 3, "completed"),
-    ("work", 1, 3, "paused"),
-    ("testing", 2, 1, "paused"),
-    ("testing", 2, 2, "paused"),
-    ("testing", 1, 2, "paused"),
+@pytest.mark.parametrize(("phase", "source", "target"), [
+    ("work", 1, 2),
+    ("testing", 2, 3),
+    ("work", 1, 3),
+    ("testing", 2, 1),
+    ("testing", 2, 2),
+    ("testing", 1, 2),
 ])
-async def test_manual_time_completion_follows_stage_transitions(time_api, phase, source, target, expected):
+async def test_manual_time_completion_is_independent_from_kanban_status(time_api, phase, source, target):
     client, sessions, events = time_api
     await client.patch("/api/projects/1/tasks/1", json={"status_id": source})
     await client.post("/api/tasks/1/time/manual/start", json={"phase": phase})
@@ -76,16 +76,38 @@ async def test_manual_time_completion_follows_stage_transitions(time_api, phase,
     events.clear()
     changed = await client.patch("/api/tasks/1/time/status", json={"status_id": target})
     assert changed.status_code == 200
-    assert changed.json()["time_tracking_status"] == expected
+    assert changed.json()["time_tracking_status"] == "paused"
     assert changed.json()["actual_seconds"] == paused.json()["actual_seconds"]
     assert changed.json()["manual_time_phase"] is None
     listed = (await client.get("/api/tasks")).json()
-    assert next(task for task in listed if task["id"] == 1)["time_tracking_status"] == expected
+    assert next(task for task in listed if task["id"] == 1)["time_tracking_status"] == "paused"
     if source != target:
         assert events[-1]["type"] == "task_changed"
     resumed = await client.post("/api/tasks/1/time/manual/start", json={"phase": "testing"})
     assert resumed.json()["time_tracking_status"] == "running"
     assert resumed.json()["actual_seconds"] >= paused.json()["actual_seconds"]
+
+
+@pytest.mark.asyncio
+async def test_agent_time_phase_is_independent_from_kanban_status(time_api):
+    client, _, _ = time_api
+    await client.patch("/api/projects/1/tasks/1", json={"status_id": 1})
+
+    testing = await client.post(
+        "/api/tasks/1/time/start",
+        json={"worker_id": "<testing-worker>", "phase": "testing"},
+    )
+    work = await client.post(
+        "/api/tasks/2/time/start",
+        json={"worker_id": "<work-worker>", "phase": "work"},
+    )
+
+    assert testing.status_code == 200
+    assert testing.json()["phase"] == "testing"
+    assert work.status_code == 200
+    assert work.json()["phase"] == "work"
+    assert (await client.get("/api/tasks/1")).json()["status_id"] == 1
+    assert (await client.get("/api/tasks/2")).json()["status_id"] == 2
 
 
 @pytest.mark.asyncio

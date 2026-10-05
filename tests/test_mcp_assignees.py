@@ -162,7 +162,7 @@ def test_update_input_paths_preserves_attachments_and_reports_retryable_errors(m
     mcp_logic.register_tools(server)
     tool = server._tool_manager.get_tool("update_task")
     paths = ["<project-directory>", "<project-directory>/file with spaces.txt", failing_path, " "]
-    result = asyncio.run(tool.fn(task_id=3, ctx=make_context(None), input_paths=paths))
+    result = asyncio.run(tool.fn(task_id=3, input_paths=paths))
 
     assert result["task_id"] == 3
     assert result["attachments"] == [existing, {"id": 5, **saved[0]}]
@@ -171,9 +171,45 @@ def test_update_input_paths_preserves_attachments_and_reports_retryable_errors(m
     assert task["attachments"] == [existing]
 
     task["attachments"] = result["attachments"]
-    repeated = asyncio.run(tool.fn(task_id=3, project_id=1, ctx=make_context(None), input_paths=paths))
+    repeated = asyncio.run(tool.fn(task_id=3, project_id=1, input_paths=paths))
     assert repeated["attachments"] == result["attachments"]
     assert len(saved) == 1
+
+
+def test_update_task_status_does_not_start_time_phase(monkeypatch):
+    requests = []
+    task = {
+        "id": 3,
+        "project_id": 1,
+        "status_id": 1,
+        "status": {"name": "В работе"},
+        "attachments": [],
+    }
+    updated = {
+        "id": 3,
+        "project_id": 1,
+        "status_id": 2,
+        "status": {"name": "Тестирование"},
+        "attachments": [],
+    }
+
+    def api_request(method, path, json_body=None):
+        requests.append((method, path, json_body))
+        return task if method == "GET" else updated
+
+    monkeypatch.setattr(mcp_logic, "_api_request", api_request)
+    monkeypatch.setattr(mcp_logic, "_task_link", lambda project_id, task_id: "<task-link>")
+    server = FastMCP("<test-server>")
+    mcp_logic.register_tools(server)
+    tool = server._tool_manager.get_tool("update_task")
+
+    result = asyncio.run(tool.fn(task_id=3, status_id=2))
+
+    assert result["status_id"] == 2
+    assert requests == [
+        ("GET", "/api/tasks/3", None),
+        ("PATCH", "/api/projects/1/tasks/3", {"status_id": 2}),
+    ]
 
 
 @pytest.mark.parametrize(
