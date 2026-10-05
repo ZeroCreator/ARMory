@@ -2343,6 +2343,17 @@ def _format_signed_task_effort(seconds: int) -> str:
     return f"{sign}{_format_task_effort(abs(seconds))}"
 
 
+def _get_task_time_deviation(task: Task) -> int | None:
+    if (
+        task.estimated_minutes is not None
+        and task.status
+        and task.status.name.strip().casefold() == "к выполнению"
+    ):
+        return None
+    estimate_seconds = (task.estimated_minutes or 0) * 60
+    return task.actual_seconds - estimate_seconds
+
+
 @global_router.post("/tasks/time/export/xlsx")
 async def export_task_time_xlsx(
     data: TaskTimeExportRequest,
@@ -2402,12 +2413,13 @@ async def export_task_time_xlsx(
     work_total = 0
     testing_total = 0
     actual_total = 0
+    deviation_total = 0
     for task in tasks:
         estimate = task.estimated_minutes * 60 if task.estimated_minutes is not None else None
         work_seconds = task.work_seconds
         testing_seconds = task.testing_seconds
         actual_seconds = task.actual_seconds
-        deviation = actual_seconds - estimate if estimate is not None else None
+        deviation = _get_task_time_deviation(task)
         row = [task.id]
         if include_project:
             row.append(task.project.name if task.project else "")
@@ -2438,6 +2450,7 @@ async def export_task_time_xlsx(
         work_total += work_seconds
         testing_total += testing_seconds
         actual_total += actual_seconds
+        deviation_total += deviation or 0
 
     total_row = worksheet.max_row + 1
     label_end = 3 + int(include_project)
@@ -2450,19 +2463,17 @@ async def export_task_time_xlsx(
         headers.index("В работе") + 1: _format_task_effort(work_total),
         headers.index("Тестирование") + 1: _format_task_effort(testing_total),
         headers.index("Факт") + 1: _format_task_effort(actual_total),
-        headers.index("Отклонение") + 1: _format_signed_task_effort(actual_total - planned_total) if planned_count == len(tasks) else "—",
+        headers.index("Отклонение") + 1: _format_signed_task_effort(deviation_total),
     }.items():
         cell = worksheet.cell(total_row, column, value)
         if isinstance(value, str):
             cell.data_type = "s"
         cell.font = Font(bold=True)
-    if planned_count == len(tasks):
-        deviation_total = actual_total - planned_total
-        if deviation_total != 0:
-            worksheet.cell(total_row, headers.index("Отклонение") + 1).font = Font(
-                bold=True,
-                color="C92A2A" if deviation_total > 0 else "2B8A3E",
-            )
+    if deviation_total != 0:
+        worksheet.cell(total_row, headers.index("Отклонение") + 1).font = Font(
+            bold=True,
+            color="C92A2A" if deviation_total > 0 else "2B8A3E",
+        )
     for column in range(1, len(headers) + 1):
         worksheet.cell(total_row, column).fill = total_fill
 
@@ -2785,6 +2796,7 @@ async def export_gantt_xlsx(
                 if deploy_date:
                     deploy_date_str = deploy_date.strftime("%d.%m.%Y")
 
+            deviation = _get_task_time_deviation(t)
             ws_tasks.append([
                 t.id,
                 t.project.name if t.project else "",
@@ -2797,7 +2809,7 @@ async def export_gantt_xlsx(
                 _format_task_effort(t.work_seconds),
                 _format_task_effort(t.testing_seconds),
                 _format_task_effort(t.actual_seconds),
-                _format_signed_task_effort(t.actual_seconds - t.estimated_minutes * 60) if t.estimated_minutes is not None else "",
+                _format_signed_task_effort(deviation) if deviation is not None else "",
                 t.start_date.strftime("%d.%m.%Y %H:%M") if t.start_date else "",
                 t.due_date.strftime("%d.%m.%Y %H:%M") if t.due_date else "",
                 testing_date_str,

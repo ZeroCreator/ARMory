@@ -241,6 +241,13 @@ function getDeviationClass(deviation) {
     return 'text-muted';
 }
 
+function getTaskTimeDeviation(task) {
+    const statusName = String(task.status?.name || '').trim().toLocaleLowerCase('ru');
+    if (task.estimated_minutes != null && statusName === 'к выполнению') return null;
+    const estimate = (task.estimated_minutes || 0) * 60;
+    return (task.actual_seconds || 0) - estimate;
+}
+
 function getTimeSortValue(task, key) {
     if (key === 'created_at') {
         const createdAt = Date.parse(task.created_at || '');
@@ -344,6 +351,7 @@ function renderTaskTimeTable(tasks) {
     let workTotal = 0;
     let testingTotal = 0;
     let actualTotal = 0;
+    let deviationTotal = 0;
     tasks.forEach(task => {
         if (task.estimated_minutes != null) {
             plannedTotal += task.estimated_minutes * 60;
@@ -352,12 +360,13 @@ function renderTaskTimeTable(tasks) {
         workTotal += task.work_seconds || 0;
         testingTotal += task.testing_seconds || 0;
         actualTotal += task.actual_seconds || 0;
+        deviationTotal += getTaskTimeDeviation(task) ?? 0;
     });
 
     body.innerHTML = tasks.map(task => {
         const estimate = task.estimated_minutes == null ? null : task.estimated_minutes * 60;
         const actual = task.actual_seconds || 0;
-        const deviation = estimate == null ? null : actual - estimate;
+        const deviation = getTaskTimeDeviation(task);
         const deviationClass = getDeviationClass(deviation);
         const projectCell = IS_GLOBAL ? `<td>${escapeTimeHtml(timeProjects[task.project_id] || `Проект #${task.project_id}`)}</td>` : '';
         return `<tr class="${getTaskTimeRowClass(task)}" data-task-id="${task.id}">
@@ -377,15 +386,14 @@ function renderTaskTimeTable(tasks) {
         </tr>`;
     }).join('');
 
-    const totalDeviation = actualTotal - plannedTotal;
-    const totalDeviationClass = getDeviationClass(totalDeviation);
+    const totalDeviationClass = getDeviationClass(deviationTotal);
     foot.innerHTML = `<tr>
         <td colspan="${4 + projectColumnCount}" class="text-end">Итого</td>
         <td>${plannedCount ? formatEffortTime(plannedTotal) : '—'}</td>
         <td>${formatEffortTime(workTotal)}</td>
         <td>${formatEffortTime(testingTotal)}</td>
         <td>${formatEffortTime(actualTotal)}</td>
-        <td class="${totalDeviationClass}">${plannedCount === tasks.length ? formatSignedEffortTime(totalDeviation) : '—'}</td>
+        <td class="${totalDeviationClass}">${formatSignedEffortTime(deviationTotal)}</td>
     </tr>`;
 }
 

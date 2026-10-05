@@ -25,6 +25,7 @@ async def time_api(monkeypatch):
     async with sessions() as db:
         db.add(Project(id=1, name="<project-name>"))
         db.add_all([
+            TaskStatus(id=4, project_id=1, name="К выполнению", sort_order=0),
             TaskStatus(id=1, project_id=1, name="В работе", sort_order=0),
             TaskStatus(id=2, project_id=1, name="Тестирование", sort_order=1),
             TaskStatus(id=3, project_id=1, name="Деплой", sort_order=2),
@@ -32,6 +33,8 @@ async def time_api(monkeypatch):
         db.add_all([
             Task(id=1, project_id=1, status_id=2, title="<task-title>", estimated_minutes=30),
             Task(id=2, project_id=1, status_id=2, title="<other-task-title>", estimated_minutes=15),
+            Task(id=3, project_id=1, status_id=2, title="<task-without-plan>", manual_actual_seconds=120),
+            Task(id=4, project_id=1, status_id=4, title="<unstarted-task>", estimated_minutes=20),
         ])
         await db.commit()
 
@@ -243,3 +246,22 @@ async def test_time_status_is_in_list_but_not_exported_to_xlsx(time_api, project
     assert sheet.cell(4, headers.index("План") + 1).value == "45 мин"
     assert sheet.cell(4, headers.index("Факт") + 1).value == "0 мин"
     assert sheet.max_column == (9 if project_id is None else 8)
+
+
+@pytest.mark.asyncio
+async def test_time_deviation_uses_zero_for_missing_plan_and_skips_unstarted_plan(time_api):
+    client, _, _ = time_api
+    exported = await client.post(
+        "/api/tasks/time/export/xlsx",
+        json={"task_ids": [1, 2, 3, 4], "project_id": 1},
+    )
+    assert exported.status_code == 200
+    sheet = load_workbook(BytesIO(exported.content)).active
+    headers = [cell.value for cell in sheet[1]]
+    deviation_column = headers.index("Отклонение") + 1
+    rows = {sheet.cell(row, 1).value: row for row in range(2, sheet.max_row)}
+
+    assert sheet.cell(rows[1], deviation_column).value == "−30 мин"
+    assert sheet.cell(rows[3], deviation_column).value == "+2 мин"
+    assert sheet.cell(rows[4], deviation_column).value == "—"
+    assert sheet.cell(sheet.max_row, deviation_column).value == "−43 мин"
