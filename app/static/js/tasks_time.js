@@ -10,6 +10,87 @@ let timeSort = { key: 'created_at', direction: 'desc' };
 let editingTimeTaskId = null;
 let contextTimeTaskId = null;
 let timeTaskSelectionInitialized = false;
+let taskTimeAuthRedirecting = false;
+
+class TaskTimeAuthenticationError extends Error {
+    constructor() {
+        super('Authentication required');
+        this.name = 'TaskTimeAuthenticationError';
+    }
+}
+
+function taskTimeResponseContentType(response) {
+    return (response.headers?.get?.('content-type') || '').toLocaleLowerCase();
+}
+
+function isOAuth2ProxyResponse(response) {
+    if (!response.redirected || !response.url) return false;
+    try {
+        return new URL(response.url, window.location.origin).pathname.startsWith('/oauth2/');
+    } catch (error) {
+        return false;
+    }
+}
+
+function isTaskTimeAuthenticationResponse(response) {
+    return response.status === 401
+        || isOAuth2ProxyResponse(response)
+        || taskTimeResponseContentType(response).includes('text/html');
+}
+
+function navigateToTaskTimeLogin(url) {
+    window.location.assign(url);
+}
+
+function redirectToTaskTimeLogin(response) {
+    if (taskTimeAuthRedirecting) return;
+    taskTimeAuthRedirecting = true;
+
+    const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const isGatewayResponse = isOAuth2ProxyResponse(response);
+    const loginPath = isGatewayResponse ? '/oauth2/start' : '/auth/login';
+    const targetParameter = isGatewayResponse ? 'rd' : 'next';
+    navigateToTaskTimeLogin(`${loginPath}?${targetParameter}=${encodeURIComponent(target)}`);
+}
+
+async function getTaskTimeResponseError(response) {
+    const contentType = taskTimeResponseContentType(response);
+    if (contentType.includes('json') && typeof response.json === 'function') {
+        try {
+            const body = await response.json();
+            if (typeof body === 'string') return body;
+            if (body?.detail) return body.detail;
+            if (body?.error) return body.error;
+        } catch (error) {
+            // Ответ с ошибкой может быть невалидным JSON.
+        }
+    }
+
+    if (typeof response.text === 'function') {
+        const text = (await response.text()).trim();
+        if (text && !/<(?:!doctype|html|head|body)\b/i.test(text)) return text;
+    }
+    return `HTTP ${response.status}`;
+}
+
+async function ensureTaskTimeResponse(response) {
+    if (isTaskTimeAuthenticationResponse(response)) {
+        redirectToTaskTimeLogin(response);
+        throw new TaskTimeAuthenticationError();
+    }
+    if (response.ok) return response;
+    throw new Error(await getTaskTimeResponseError(response));
+}
+
+async function fetchTaskTimeResponse(url, options = {}) {
+    const response = await fetch(url, { credentials: 'same-origin', ...options });
+    return ensureTaskTimeResponse(response);
+}
+
+async function fetchTaskTimeJson(url, options = {}) {
+    const response = await fetchTaskTimeResponse(url, options);
+    return response.json();
+}
 
 window.addEventListener('armory:kanban', event => {
     const data = event.detail;
@@ -39,26 +120,22 @@ async function loadTaskTimeData() {
         const taskUrl = IS_GLOBAL ? '/api/tasks' : `/api/projects/${PROJECT_ID}/tasks`;
         const filterUrl = IS_GLOBAL ? '/api/kanban/filters' : `/api/projects/${PROJECT_ID}/kanban/filters`;
         const [tasksResponse, projectsResponse, filterResponse] = await Promise.all([
-            fetch(taskUrl, { credentials: 'same-origin' }),
-            fetch('/api/projects', { credentials: 'same-origin' }),
-            fetch(filterUrl, { credentials: 'same-origin' }),
+            fetchTaskTimeJson(taskUrl),
+            fetchTaskTimeJson('/api/projects'),
+            fetchTaskTimeJson(filterUrl),
         ]);
-        if (!tasksResponse.ok) throw new Error(await tasksResponse.text());
-        if (!projectsResponse.ok) throw new Error(await projectsResponse.text());
-        if (!filterResponse.ok) throw new Error(await filterResponse.text());
-        timeTasks = await tasksResponse.json();
+        timeTasks = tasksResponse;
         const availableTaskIds = new Set(timeTasks.map(task => Number(task.id)));
         selectedTimeTaskIds.forEach(taskId => {
             if (!availableTaskIds.has(taskId)) selectedTimeTaskIds.delete(taskId);
         });
         const statusEntries = await Promise.all([...new Set(timeTasks.map(task => task.project_id))].map(async projectId => {
-            const response = await fetch(`/api/projects/${projectId}/task-statuses`, { credentials: 'same-origin' });
-            if (!response.ok) throw new Error(await response.text());
-            return [projectId, await response.json()];
+            const statuses = await fetchTaskTimeJson(`/api/projects/${projectId}/task-statuses`);
+            return [projectId, statuses];
         }));
         timeStatuses = Object.fromEntries(statusEntries);
-        const projects = await projectsResponse.json();
-        timeFilterOptions = await filterResponse.json();
+        const projects = projectsResponse;
+        timeFilterOptions = filterResponse;
         timeProjects = Object.fromEntries(projects.map(project => [project.id, project.name]));
         allTasks = timeTasks;
         projectsMap = timeProjects;
@@ -67,10 +144,12 @@ async function loadTaskTimeData() {
         populateTimeFilters();
         applyTimeFilters();
     } catch (error) {
+        if (error instanceof TaskTimeAuthenticationError) return;
         displayedTimeTasks = [];
         const exportButton = document.getElementById('task-time-export-xlsx');
         if (exportButton) exportButton.disabled = true;
-        tableBody.innerHTML = `<tr><td colspan="${IS_GLOBAL ? 11 : 10}" class="text-center text-danger py-4">${escapeTimeHtml(error.message)}</td></tr>`;
+        const message = error instanceof Error ? error.message : String(error);
+        tableBody.innerHTML = `<tr><td colspan="${IS_GLOBAL ? 11 : 10}" class="text-center text-danger py-4">${escapeTimeHtml(message)}</td></tr>`;
     }
 }
 
@@ -235,24 +314,14 @@ function toggleAllTimeTaskSelection(selected) {
 async function exportTaskTimeXlsx() {
     if (!displayedTimeTasks.length) return;
     try {
-        const response = await fetch('/api/tasks/time/export/xlsx', {
+        const response = await fetchTaskTimeResponse('/api/tasks/time/export/xlsx', {
             method: 'POST',
-            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 task_ids: displayedTimeTasks.map(task => task.id),
                 project_id: PROJECT_ID,
             }),
         });
-        if (!response.ok) {
-            let detail = `Ошибка ${response.status}`;
-            try {
-                const error = await response.json();
-                if (error.detail) detail = error.detail;
-            } catch (error) {}
-            if (typeof showToast === 'function') showToast(detail, 'danger');
-            return;
-        }
         const blob = await response.blob();
         const disposition = response.headers.get('content-disposition');
         const filename = disposition?.match(/filename="?([^";]+)"?/i)?.[1] || 'task_time.xlsx';
@@ -265,6 +334,7 @@ async function exportTaskTimeXlsx() {
         link.remove();
         URL.revokeObjectURL(downloadUrl);
     } catch (error) {
+        if (error instanceof TaskTimeAuthenticationError) return;
         console.error('Не удалось выгрузить таблицу учёта времени:', error);
         if (typeof showToast === 'function') showToast(`Ошибка выгрузки: ${error.message}`, 'danger');
     }
@@ -405,16 +475,14 @@ async function sendTimeTaskControl(taskId, action, method, payload) {
     pendingTimeControls.add(taskId);
     renderTaskTimeTable(displayedTimeTasks);
     try {
-        const response = await fetch(`/api/tasks/${taskId}/time/${action}`, {
+        await fetchTaskTimeResponse(`/api/tasks/${taskId}/time/${action}`, {
             method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
             body: payload === undefined ? undefined : JSON.stringify(payload),
         });
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || response.statusText);
-        }
     } catch (error) {
-        if (typeof showToast === 'function') showToast(error.message, 'danger');
+        if (!(error instanceof TaskTimeAuthenticationError) && typeof showToast === 'function') {
+            showToast(error.message, 'danger');
+        }
     } finally {
         pendingTimeControls.delete(taskId);
         await loadTaskTimeData();
@@ -582,16 +650,16 @@ async function saveTaskTimeValues(event) {
     const submitButton = form.querySelector('[type="submit"]');
     submitButton.disabled = true;
     try {
-        const response = await fetch(`/api/projects/${task.project_id}/tasks/${task.id}`, {
+        await fetchTaskTimeResponse(`/api/projects/${task.project_id}/tasks/${task.id}`, {
             method: 'PATCH',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
-        if (!response.ok) throw new Error(await response.text());
         bootstrap.Modal.getInstance(document.getElementById('task-time-edit-modal'))?.hide();
         await loadTaskTimeData();
     } catch (error) {
+        if (error instanceof TaskTimeAuthenticationError) return;
         console.error('Не удалось сохранить время задачи:', error);
     } finally {
         submitButton.disabled = false;
