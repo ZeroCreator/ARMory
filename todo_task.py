@@ -14,7 +14,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
 # Загружаем .env до импорта app-модулей, чтобы настройки подхватились.
@@ -22,7 +22,7 @@ load_dotenv()
 
 from app.config import get_settings
 from app.database import AsyncSessionLocal
-from app.models import Assignee, Project, Task, TaskStatus
+from app.models import Assignee, Project, Task, TaskAssignee, TaskStatus
 from app.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -141,6 +141,11 @@ def _load_config() -> dict | None:
         return None
 
 
+def _filter_values(value) -> list[str]:
+    values = value if isinstance(value, list) else [value]
+    return [part.strip() for item in values for part in str(item or "").split(",") if part.strip()]
+
+
 async def _fetch_tasks(config: dict):
     async with AsyncSessionLocal() as db:
         projects_result = await db.execute(select(Project))
@@ -155,23 +160,30 @@ async def _fetch_tasks(config: dict):
         if not config.get("is_global", False) and config.get("project_id"):
             query = query.where(Task.project_id == int(config["project_id"]))
 
-        if filters.get("project_id"):
-            query = query.where(Task.project_id == int(filters["project_id"]))
-        if filters.get("status"):
-            query = query.where(Task.status.has(TaskStatus.name == filters["status"]))
-        if filters.get("priority"):
-            query = query.where(Task.priority == filters["priority"])
-        if filters.get("assignee"):
-            query = query.where(Task.assignee_email == filters["assignee"])
-        if filters.get("list_name"):
-            query = query.where(Task.list_name == filters["list_name"])
-        if filters.get("closed") not in (None, ""):
-            query = query.where(Task.is_closed == bool(int(filters["closed"])))
-        if filters.get("tags"):
-            for tag in filters["tags"].split(","):
-                tag = tag.strip().lower()
-                if tag:
-                    query = query.where(Task.tags.ilike(f"%{tag}%"))
+        project_values = _filter_values(filters.get("project_id"))
+        if project_values:
+            query = query.where(Task.project_id.in_([int(value) for value in project_values]))
+        status_values = _filter_values(filters.get("status"))
+        if status_values:
+            query = query.where(Task.status.has(TaskStatus.name.in_(status_values)))
+        priority_values = _filter_values(filters.get("priority"))
+        if priority_values:
+            query = query.where(Task.priority.in_(priority_values))
+        assignee_values = _filter_values(filters.get("assignee"))
+        if assignee_values:
+            query = query.where(or_(
+                Task.assignee_email.in_(assignee_values),
+                Task.assignees.any(TaskAssignee.assignee_email.in_(assignee_values)),
+            ))
+        list_values = _filter_values(filters.get("list_name"))
+        if list_values:
+            query = query.where(Task.list_name.in_(list_values))
+        closed_values = set(_filter_values(filters.get("closed")))
+        if len(closed_values) == 1 and closed_values & {"0", "1"}:
+            query = query.where(Task.is_closed == (next(iter(closed_values)) == "1"))
+        tag_values = _filter_values(filters.get("tags"))
+        if tag_values:
+            query = query.where(or_(*[Task.tags.ilike(f"%{tag.lower()}%") for tag in tag_values]))
         if filters.get("search"):
             search = f"%{filters['search'].lower()}%"
             query = query.where((Task.title.ilike(search)) | (Task.description.ilike(search)))

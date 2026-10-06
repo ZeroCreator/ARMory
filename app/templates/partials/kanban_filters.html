@@ -2,32 +2,32 @@
     {% if show_project_filter|default(true) %}
     <div class="mb-3">
         <label class="form-label" for="filter-project">Проект</label>
-        <select class="form-select" id="filter-project" onchange="applyFilters()">
+        <select class="form-select" id="filter-project" data-multi-filter onchange="applyFilters()">
             <option value="">Все проекты</option>
         </select>
     </div>
     {% endif %}
     <div class="mb-3">
         <label class="form-label" for="filter-priority">Приоритет</label>
-        <select class="form-select" id="filter-priority" onchange="applyFilters()">
+        <select class="form-select" id="filter-priority" data-multi-filter onchange="applyFilters()">
             <option value="">Все</option>
         </select>
     </div>
     <div class="mb-3">
         <label class="form-label" for="filter-assignee">Ответственный</label>
-        <select class="form-select" id="filter-assignee" onchange="applyFilters()">
+        <select class="form-select" id="filter-assignee" data-multi-filter onchange="applyFilters()">
             <option value="">Все</option>
         </select>
     </div>
     <div class="mb-3">
         <label class="form-label" for="filter-list">Список</label>
-        <select class="form-select" id="filter-list" onchange="applyFilters()">
+        <select class="form-select" id="filter-list" data-multi-filter onchange="applyFilters()">
             <option value="">Все</option>
         </select>
     </div>
     <div class="mb-3">
         <label class="form-label" for="filter-tag">Тег</label>
-        <select class="form-select" id="filter-tag" onchange="applyFilters()">
+        <select class="form-select" id="filter-tag" data-multi-filter onchange="applyFilters()">
             <option value="">Все</option>
         </select>
     </div>

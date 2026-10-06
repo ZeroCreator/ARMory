@@ -63,30 +63,30 @@
                 {% if not project_id %}
                 <div class="col-md-3">
                     <label class="form-label">Проект</label>
-                    <select class="form-select" id="filter-project" onchange="applyFilters()"></select>
+                    <select class="form-select" id="filter-project" data-multi-filter onchange="applyFilters()"></select>
                 </div>
                 {% endif %}
                 <div class="col-md-3">
                     <label class="form-label">Статус</label>
-                    <select class="form-select" id="filter-status" onchange="applyFilters()"></select>
+                    <select class="form-select" id="filter-status" data-multi-filter onchange="applyFilters()"></select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Приоритет</label>
-                    <select class="form-select" id="filter-priority" onchange="applyFilters()"></select>
+                    <select class="form-select" id="filter-priority" data-multi-filter onchange="applyFilters()"></select>
                 </div>
             </div>
             <div class="row g-3 mt-1 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label">Ответственный</label>
-                    <select class="form-select" id="filter-assignee" onchange="applyFilters()"></select>
+                    <select class="form-select" id="filter-assignee" data-multi-filter onchange="applyFilters()"></select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Список</label>
-                    <select class="form-select" id="filter-list" onchange="applyFilters()"></select>
+                    <select class="form-select" id="filter-list" data-multi-filter onchange="applyFilters()"></select>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Состояние</label>
-                    <select class="form-select" id="filter-closed" onchange="applyFilters()">
+                    <select class="form-select" id="filter-closed" data-multi-filter onchange="applyFilters()">
                         <option value="">Все</option>
                         <option value="0">Открытые</option>
                         <option value="1">Закрытые</option>
@@ -94,8 +94,7 @@
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Теги</label>
-                    <input type="text" class="form-control" id="filter-tags" list="filter-tags-options" placeholder="через запятую" oninput="applyFilters()">
-                    <datalist id="filter-tags-options"></datalist>
+                    <select class="form-select" id="filter-tags" data-multi-filter onchange="applyFilters()"></select>
                 </div>
                 <div class="col-auto ms-auto">
                     <label class="form-label">&nbsp;</label>
@@ -709,6 +708,6 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tag_filter.js?v=2"></script>
-<script src="/static/js/tasks_list.js?v=53"></script>
+<script src="/static/js/tag_filter.js?v=3"></script>
+<script src="/static/js/tasks_list.js?v=55"></script>
 {% endblock %}

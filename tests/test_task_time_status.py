@@ -314,3 +314,42 @@ async def test_time_deviation_uses_zero_for_missing_plan_and_skips_unstarted_pla
     assert sheet.cell(rows[3], deviation_column).value == "+2 мин"
     assert sheet.cell(rows[4], deviation_column).value == "—"
     assert sheet.cell(sheet.max_row, deviation_column).value == "−28 мин"
+
+
+@pytest.mark.asyncio
+async def test_kanban_filters_accept_multiple_values(time_api):
+    client, sessions, _ = time_api
+    async with sessions() as db:
+        task_one = (await db.execute(select(Task).where(Task.id == 1))).scalar_one()
+        task_two = (await db.execute(select(Task).where(Task.id == 2))).scalar_one()
+        task_one.priority = "low"
+        task_one.tags = "alpha"
+        task_two.priority = "high"
+        task_two.tags = "beta"
+        await db.commit()
+
+    params = [
+        ("priority", "low"),
+        ("priority", "high"),
+        ("tags", "alpha"),
+        ("tags", "beta"),
+    ]
+    project_board = await client.get("/api/projects/1/tasks/board", params=params)
+    assert project_board.status_code == 200
+    assert {task["id"] for task in project_board.json()["tasks"]} == {1, 2}
+
+    global_board = await client.get(
+        "/api/kanban",
+        params=[("project_id", "1"), ("project_id", "999"), *params],
+    )
+    assert global_board.status_code == 200
+    assert {task["id"] for task in global_board.json()["tasks"]} == {1, 2}
+
+    gantt_export = await client.get("/api/gantt/export/xlsx", params=params + [("project_id", "1")])
+    assert gantt_export.status_code == 200
+    sheet = load_workbook(BytesIO(gantt_export.content))["Задачи"]
+    title_column = [cell.value for cell in sheet[1]].index("Название") + 1
+    assert {sheet.cell(row, title_column).value for row in range(2, sheet.max_row + 1)} == {
+        "<task-title>",
+        "<other-task-title>",
+    }

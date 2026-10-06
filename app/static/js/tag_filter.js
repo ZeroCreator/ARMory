@@ -1,10 +1,9 @@
 const tagFilterInputState = new WeakMap();
 
 function taskMatchesTagFilter(taskTags, filterValue) {
-    const terms = String(filterValue || '')
-        .toLocaleLowerCase('ru')
-        .split(',')
-        .map(tag => tag.trim())
+    const values = Array.isArray(filterValue) ? filterValue : [filterValue];
+    const terms = values.flatMap(value => String(value || '').split(','))
+        .map(tag => tag.trim().toLocaleLowerCase('ru'))
         .filter(Boolean);
     if (!terms.length) return true;
 
@@ -23,6 +22,10 @@ function populateTagFilterOptions(target, values) {
         .sort((left, right) => left.localeCompare(right, 'ru'));
 
     if (element.tagName === 'SELECT') {
+        if (typeof setFilterOptions === 'function' && element.hasAttribute('data-multi-filter')) {
+            setFilterOptions(element, tags.map(tag => ({ value: tag, label: tag })), element.options[0]?.textContent || 'Все');
+            return;
+        }
         const currentValue = element.value;
         const defaultLabel = element.options[0]?.textContent || 'Все';
         const defaultOption = document.createElement('option');

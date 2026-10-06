@@ -36,6 +36,9 @@
     #task-time-table .task-time-effort { display: flex; align-items: center; justify-content: space-between; gap: .5rem; text-align: left; }
     #task-time-table .task-time-effort .task-time-timer-wrapper { flex-shrink: 0; }
     #task-time-table .task-time-timer:disabled { pointer-events: none; opacity: 1; }
+    #task-time-table .task-time-select-column,
+    #task-time-table .task-time-select-cell { width: 2.5rem; text-align: center; }
+    #task-time-table .task-time-row-selector { cursor: pointer; }
     #task-time-table tbody tr.task-time-row-in-work > * {
         --bs-table-bg: #fff;
         --bs-table-bg-state: transparent;
@@ -80,31 +83,30 @@
                 {% if not project_id %}
                 <div class="col-lg-3 col-md-6">
                     <label class="form-label" for="time-filter-project">Проект</label>
-                    <select class="form-select" id="time-filter-project" onchange="applyTimeFilters()"></select>
+                    <select class="form-select" id="time-filter-project" data-multi-filter onchange="applyTimeFilters()"></select>
                 </div>
                 {% endif %}
                 <div class="col-lg-3 col-md-6">
                     <label class="form-label" for="time-filter-status">Статус</label>
-                    <select class="form-select" id="time-filter-status" onchange="applyTimeFilters()"></select>
+                    <select class="form-select" id="time-filter-status" data-multi-filter onchange="applyTimeFilters()"></select>
                 </div>
                 <div class="col-lg-3 col-md-6">
                     <label class="form-label" for="time-filter-priority">Приоритет</label>
-                    <select class="form-select" id="time-filter-priority" onchange="applyTimeFilters()"></select>
+                    <select class="form-select" id="time-filter-priority" data-multi-filter onchange="applyTimeFilters()"></select>
                 </div>
             </div>
             <div class="row g-3 mt-1 align-items-end">
                 <div class="col-lg-3 col-md-6">
                     <label class="form-label" for="time-filter-assignee">Ответственный</label>
-                    <select class="form-select" id="time-filter-assignee" onchange="applyTimeFilters()"></select>
+                    <select class="form-select" id="time-filter-assignee" data-multi-filter onchange="applyTimeFilters()"></select>
                 </div>
                 <div class="col-lg-3 col-md-6">
                     <label class="form-label" for="time-filter-list">Список</label>
-                    <select class="form-select" id="time-filter-list" onchange="applyTimeFilters()"></select>
+                    <select class="form-select" id="time-filter-list" data-multi-filter onchange="applyTimeFilters()"></select>
                 </div>
                 <div class="col-lg-3 col-md-6">
                     <label class="form-label" for="time-filter-tags">Теги</label>
-                    <input type="text" class="form-control" id="time-filter-tags" list="time-filter-tag-options" placeholder="через запятую" oninput="applyTimeFilters()">
-                    <datalist id="time-filter-tag-options"></datalist>
+                    <select class="form-select" id="time-filter-tags" data-multi-filter onchange="applyTimeFilters()"></select>
                 </div>
                 <div class="col-lg-3 col-md-6">
                     <label class="form-label" for="time-filter-due-before">Дедлайн до</label>
@@ -128,6 +130,12 @@
                     <label class="form-label" for="time-filter-work-started-before">Взят в работу до</label>
                     <input type="date" class="form-control" id="time-filter-work-started-before" onchange="applyTimeFilters()">
                 </div>
+                <div class="col-lg-2 col-md-4">
+                    <div class="form-check pb-1">
+                        <input class="form-check-input" type="checkbox" id="time-filter-selected-only" onchange="applyTimeFilters()">
+                        <label class="form-check-label" for="time-filter-selected-only">Только выбранные</label>
+                    </div>
+                </div>
                 <div class="col-auto ms-auto">
                     <button class="btn btn-outline-gray kanban-reset-btn" type="button" onclick="resetTimeFilters()">
                         <i class="bi bi-x-lg"></i>
@@ -143,6 +151,11 @@
     <table class="table table-sm table-hover table-bordered align-middle" id="task-time-table">
         <thead class="table-light">
             <tr>
+                <th class="task-time-select-column">
+                    <input class="form-check-input" type="checkbox" id="time-task-select-all" checked
+                        title="Выбрать все на странице" aria-label="Выбрать все на странице"
+                        onchange="toggleAllTimeTaskSelection(this.checked)">
+                </th>
                 <th role="button" onclick="sortTaskTime('id')">#</th>
                 {% if not project_id %}<th role="button" onclick="sortTaskTime('project')">Проект</th>{% endif %}
                 <th role="button" onclick="sortTaskTime('title')">Задача</th>
@@ -156,7 +169,7 @@
             </tr>
         </thead>
         <tbody id="task-time-table-body">
-            <tr><td colspan="{% if project_id %}9{% else %}10{% endif %}" class="text-center text-muted py-4">Загрузка...</td></tr>
+            <tr><td colspan="{% if project_id %}10{% else %}11{% endif %}" class="text-center text-muted py-4">Загрузка...</td></tr>
         </tbody>
         <tfoot class="table-light fw-semibold" id="task-time-table-foot"></tfoot>
     </table>
@@ -214,7 +227,7 @@
     const PROJECT_ID = {{ project_id | tojson }};
     const IS_GLOBAL = PROJECT_ID === null;
 </script>
-<script src="/static/js/tag_filter.js?v=2"></script>
-<script src="/static/js/tasks_list.js?v=53"></script>
-<script src="/static/js/tasks_time.js?v=18"></script>
+<script src="/static/js/tag_filter.js?v=3"></script>
+<script src="/static/js/tasks_list.js?v=54"></script>
+<script src="/static/js/tasks_time.js?v=21"></script>
 {% endblock %}

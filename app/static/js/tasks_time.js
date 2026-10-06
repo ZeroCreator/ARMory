@@ -3,10 +3,13 @@ let displayedTimeTasks = [];
 let timeProjects = {};
 let timeFilterOptions = {};
 let timeStatuses = {};
+const selectedTimeTaskIds = new Set();
+const knownTimeTaskIds = new Set();
 const pendingTimeControls = new Set();
 let timeSort = { key: 'created_at', direction: 'desc' };
 let editingTimeTaskId = null;
 let contextTimeTaskId = null;
+let timeTaskSelectionInitialized = false;
 
 window.addEventListener('armory:kanban', event => {
     const data = event.detail;
@@ -44,6 +47,10 @@ async function loadTaskTimeData() {
         if (!projectsResponse.ok) throw new Error(await projectsResponse.text());
         if (!filterResponse.ok) throw new Error(await filterResponse.text());
         timeTasks = await tasksResponse.json();
+        const availableTaskIds = new Set(timeTasks.map(task => Number(task.id)));
+        selectedTimeTaskIds.forEach(taskId => {
+            if (!availableTaskIds.has(taskId)) selectedTimeTaskIds.delete(taskId);
+        });
         const statusEntries = await Promise.all([...new Set(timeTasks.map(task => task.project_id))].map(async projectId => {
             const response = await fetch(`/api/projects/${projectId}/task-statuses`, { credentials: 'same-origin' });
             if (!response.ok) throw new Error(await response.text());
@@ -63,7 +70,7 @@ async function loadTaskTimeData() {
         displayedTimeTasks = [];
         const exportButton = document.getElementById('task-time-export-xlsx');
         if (exportButton) exportButton.disabled = true;
-        tableBody.innerHTML = `<tr><td colspan="${IS_GLOBAL ? 10 : 9}" class="text-center text-danger py-4">${escapeTimeHtml(error.message)}</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="${IS_GLOBAL ? 11 : 10}" class="text-center text-danger py-4">${escapeTimeHtml(error.message)}</td></tr>`;
     }
 }
 
@@ -101,6 +108,10 @@ function populateTimeFilters() {
 }
 
 function populateTimeSelect(select, options, defaultLabel = 'Все') {
+    if (typeof setFilterOptions === 'function') {
+        setFilterOptions(select, options, defaultLabel);
+        return;
+    }
     const previousValue = select.value;
     select.innerHTML = `<option value="">${escapeTimeHtml(defaultLabel)}</option>` + options.map(option =>
         `<option value="${escapeTimeHtml(String(option.value))}">${escapeTimeHtml(String(option.label))}</option>`
@@ -110,25 +121,26 @@ function populateTimeSelect(select, options, defaultLabel = 'Все') {
 
 function applyTimeFilters() {
     const search = document.getElementById('time-filter-search').value.trim().toLocaleLowerCase('ru');
-    const status = document.getElementById('time-filter-status').value;
-    const project = document.getElementById('time-filter-project')?.value || '';
-    const priority = document.getElementById('time-filter-priority').value;
-    const assignee = document.getElementById('time-filter-assignee').value;
-    const listName = document.getElementById('time-filter-list').value;
-    const tags = document.getElementById('time-filter-tags').value.trim();
+    const statuses = getFilterValues('time-filter-status');
+    const projects = getFilterValues('time-filter-project');
+    const priorities = getFilterValues('time-filter-priority');
+    const assignees = getFilterValues('time-filter-assignee');
+    const listNames = getFilterValues('time-filter-list');
+    const tags = getFilterValues('time-filter-tags');
     const dueBefore = document.getElementById('time-filter-due-before').value;
     const createdAfter = document.getElementById('time-filter-created-after').value;
     const createdBefore = document.getElementById('time-filter-created-before').value;
     const workStartedAfter = document.getElementById('time-filter-work-started-after').value;
     const workStartedBefore = document.getElementById('time-filter-work-started-before').value;
+    const selectedOnly = document.getElementById('time-filter-selected-only')?.checked || false;
     const filtered = timeTasks.filter(task => {
         if (task.is_closed) return false;
         if (!hasTimeValues(task)) return false;
-        if (status && task.status?.name !== status) return false;
-        if (project && String(task.project_id) !== project) return false;
-        if (priority && task.priority !== priority) return false;
-        if (assignee && !(task.assignee_emails || [task.assignee_email]).includes(assignee)) return false;
-        if (listName && task.list_name !== listName) return false;
+        if (statuses.length && !statuses.includes(task.status?.name)) return false;
+        if (projects.length && !projects.includes(String(task.project_id))) return false;
+        if (priorities.length && !priorities.includes(task.priority)) return false;
+        if (assignees.length && !(task.assignee_emails || [task.assignee_email]).some(email => assignees.includes(email))) return false;
+        if (listNames.length && !listNames.includes(task.list_name)) return false;
         const taskCreated = String(task.created_at || '').slice(0, 10);
         if (createdAfter && taskCreated < createdAfter) return false;
         if (createdBefore && taskCreated > createdBefore) return false;
@@ -137,6 +149,7 @@ function applyTimeFilters() {
         if (workStartedBefore && (!taskWorkStarted || taskWorkStarted > workStartedBefore)) return false;
         const taskDue = String(task.due_date || '').slice(0, 10);
         if (dueBefore && (!taskDue || taskDue > dueBefore)) return false;
+        if (selectedOnly && !selectedTimeTaskIds.has(Number(task.id))) return false;
         if (search) {
             const haystack = `${task.title || ''} ${task.description || ''} ${timeProjects[task.project_id] || ''} ${task.tags || ''} ${task.list_name || ''}`.toLocaleLowerCase('ru');
             if (!haystack.includes(search)) return false;
@@ -171,8 +184,50 @@ function resetTimeFilters() {
         'time-filter-work-started-after',
         'time-filter-work-started-before',
     ].forEach(id => {
-        const field = document.getElementById(id);
-        if (field) field.value = '';
+        clearFilterValues(id);
+    });
+    const selectedOnly = document.getElementById('time-filter-selected-only');
+    if (selectedOnly) selectedOnly.checked = false;
+    applyTimeFilters();
+}
+
+function syncTimeTaskSelection(tasks) {
+    const sourceTasks = timeTasks.length ? timeTasks : tasks;
+    const availableTaskIds = new Set(sourceTasks.map(task => Number(task.id)));
+    if (!timeTaskSelectionInitialized) {
+        availableTaskIds.forEach(taskId => selectedTimeTaskIds.add(taskId));
+        timeTaskSelectionInitialized = true;
+    } else {
+        availableTaskIds.forEach(taskId => {
+            if (!knownTimeTaskIds.has(taskId)) selectedTimeTaskIds.add(taskId);
+        });
+    }
+    selectedTimeTaskIds.forEach(taskId => {
+        if (!availableTaskIds.has(taskId)) selectedTimeTaskIds.delete(taskId);
+    });
+    knownTimeTaskIds.forEach(taskId => {
+        if (!availableTaskIds.has(taskId)) knownTimeTaskIds.delete(taskId);
+    });
+    availableTaskIds.forEach(taskId => knownTimeTaskIds.add(taskId));
+}
+
+function updateTimeTaskSelectionControl() {
+    const selectAll = document.getElementById('time-task-select-all');
+    if (!selectAll) return;
+    const sourceTasks = timeTasks.length ? timeTasks : displayedTimeTasks;
+    const taskIds = sourceTasks.map(task => Number(task.id));
+    const selectedCount = taskIds.filter(taskId => selectedTimeTaskIds.has(taskId)).length;
+    selectAll.checked = taskIds.length > 0 && selectedCount === taskIds.length;
+    selectAll.indeterminate = selectedCount > 0 && selectedCount < taskIds.length;
+}
+
+function toggleAllTimeTaskSelection(selected) {
+    const sourceTasks = timeTasks.length ? timeTasks : displayedTimeTasks;
+    syncTimeTaskSelection(sourceTasks);
+    sourceTasks.forEach(task => {
+        const taskId = Number(task.id);
+        if (selected) selectedTimeTaskIds.add(taskId);
+        else selectedTimeTaskIds.delete(taskId);
     });
     applyTimeFilters();
 }
@@ -273,6 +328,14 @@ function sortTaskTime(key) {
     applyTimeFilters();
 }
 
+function toggleTimeTaskSelection(taskId, selected) {
+    const normalizedTaskId = Number(taskId);
+    if (selected) selectedTimeTaskIds.add(normalizedTaskId);
+    else selectedTimeTaskIds.delete(normalizedTaskId);
+    if (document.getElementById('time-filter-selected-only')?.checked) applyTimeFilters();
+    else updateTimeTaskSelectionControl();
+}
+
 function getTimeTrackingLabel(status) {
     return ({ running: 'В работе', completed: 'Завершено', paused: 'Остановлено' })[status] || '—';
 }
@@ -341,12 +404,14 @@ function renderTaskTimeTable(tasks) {
     hideTaskTimeContextMenu();
     const body = document.getElementById('task-time-table-body');
     const foot = document.getElementById('task-time-table-foot');
+    syncTimeTaskSelection(tasks);
     document.getElementById('task-time-export-xlsx').disabled = !tasks.length;
     const projectColumnCount = IS_GLOBAL ? 1 : 0;
-    const columnCount = 9 + projectColumnCount;
+    const columnCount = 10 + projectColumnCount;
     if (!tasks.length) {
         body.innerHTML = `<tr><td colspan="${columnCount}" class="text-center text-muted py-4">Нет задач</td></tr>`;
         foot.innerHTML = '';
+        updateTimeTaskSelectionControl();
         return;
     }
 
@@ -374,6 +439,9 @@ function renderTaskTimeTable(tasks) {
         const deviationClass = getDeviationClass(deviation);
         const projectCell = IS_GLOBAL ? `<td>${escapeTimeHtml(timeProjects[task.project_id] || `Проект #${task.project_id}`)}</td>` : '';
         return `<tr class="${getTaskTimeRowClass(task)}" data-task-id="${task.id}">
+            <td class="task-time-select-cell"><input class="form-check-input task-time-row-selector" type="checkbox"
+                data-task-id="${task.id}" ${selectedTimeTaskIds.has(Number(task.id)) ? 'checked' : ''}
+                aria-label="Выбрать задачу" onchange="toggleTimeTaskSelection(${task.id}, this.checked)"></td>
             <td>${task.id}</td>
             ${projectCell}
             <td><div class="d-flex align-items-center gap-2">
@@ -392,13 +460,14 @@ function renderTaskTimeTable(tasks) {
 
     const totalDeviationClass = getDeviationClass(deviationTotal);
     foot.innerHTML = `<tr>
-        <td colspan="${4 + projectColumnCount}" class="text-end">Итого</td>
+        <td colspan="${5 + projectColumnCount}" class="text-end">Итого</td>
         <td>${plannedCount ? formatEffortTime(plannedTotal) : '—'}</td>
         <td>${formatEffortTime(workTotal)}</td>
         <td>${formatEffortTime(testingTotal)}</td>
         <td>${formatEffortTime(actualTotal)}</td>
         <td class="${totalDeviationClass}">${formatTaskTimeDeviation(deviationTotal)}</td>
     </tr>`;
+    updateTimeTaskSelectionControl();
 }
 
 function showTaskTimeContextMenu(event) {

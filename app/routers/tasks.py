@@ -80,6 +80,13 @@ class CurrentUserOut(BaseModel):
     email: Optional[str] = None
 
 
+def _normalize_filter_values(values: Optional[list[str]]) -> list[str]:
+    normalized = []
+    for value in values or []:
+        normalized.extend(part.strip() for part in str(value).split(",") if part.strip())
+    return list(dict.fromkeys(normalized))
+
+
 @global_router.get("/me", response_model=CurrentUserOut)
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
     """Возвращает email авторизованного или настроенного локального исполнителя."""
@@ -403,10 +410,10 @@ async def list_tasks(project_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/tasks/board", response_model=KanbanBoardOut)
 async def get_kanban_board(
     project_id: int,
-    priority: Optional[str] = None,
-    assignee_email: Optional[str] = None,
-    list_name: Optional[str] = None,
-    tags: Optional[str] = None,
+    priority: Optional[list[str]] = Query(default=None),
+    assignee_email: Optional[list[str]] = Query(default=None),
+    list_name: Optional[list[str]] = Query(default=None),
+    tags: Optional[list[str]] = Query(default=None),
     created_after: Optional[datetime] = None,
     created_before: Optional[datetime] = None,
     due_after: Optional[datetime] = None,
@@ -426,22 +433,33 @@ async def get_kanban_board(
         .options(selectinload(Task.status), selectinload(Task.attachments), selectinload(Task.time_sessions))
         .where(Task.project_id == project_id)
     )
-    if priority is not None:
-        tasks_query = tasks_query.where(Task.priority == priority)
-    if assignee_email is not None:
-        search = f"%{assignee_email}%"
+    priority_values = _normalize_filter_values(priority)
+    assignee_values = _normalize_filter_values(assignee_email)
+    list_values = _normalize_filter_values(list_name)
+    tag_values = _normalize_filter_values(tags)
+
+    if priority_values:
+        tasks_query = tasks_query.where(Task.priority.in_(priority_values))
+    if assignee_values:
         tasks_query = tasks_query.outerjoin(
             TaskAssignee, Task.id == TaskAssignee.task_id
         ).where(
             or_(
-                Task.assignee_email.ilike(search),
-                TaskAssignee.assignee_email.ilike(search),
+                *[
+                    or_(
+                        Task.assignee_email.ilike(f"%{value}%"),
+                        TaskAssignee.assignee_email.ilike(f"%{value}%"),
+                    )
+                    for value in assignee_values
+                ]
             )
         ).distinct()
-    if list_name is not None:
-        tasks_query = tasks_query.where(Task.list_name == list_name)
-    if tags is not None:
-        tasks_query = tasks_query.where(Task.tags.ilike(f"%{tags}%"))
+    if list_values:
+        tasks_query = tasks_query.where(Task.list_name.in_(list_values))
+    if tag_values:
+        tasks_query = tasks_query.where(
+            or_(*[Task.tags.ilike(f"%{value}%") for value in tag_values])
+        )
     if created_after is not None:
         tasks_query = tasks_query.where(Task.created_at >= created_after)
     if created_before is not None:
@@ -1967,11 +1985,11 @@ async def import_project_kanban(
 
 @global_router.get("/kanban", response_model=KanbanGlobalOut)
 async def global_kanban(
-    project_id: Optional[int] = None,
-    priority: Optional[str] = None,
-    assignee_email: Optional[str] = None,
-    list_name: Optional[str] = None,
-    tags: Optional[str] = None,
+    project_id: Optional[list[int]] = Query(default=None),
+    priority: Optional[list[str]] = Query(default=None),
+    assignee_email: Optional[list[str]] = Query(default=None),
+    list_name: Optional[list[str]] = Query(default=None),
+    tags: Optional[list[str]] = Query(default=None),
     created_after: Optional[datetime] = None,
     created_before: Optional[datetime] = None,
     due_after: Optional[datetime] = None,
@@ -1985,24 +2003,36 @@ async def global_kanban(
         selectinload(Task.time_sessions),
     )
 
-    if project_id is not None:
-        query = query.where(Task.project_id == project_id)
-    if priority is not None:
-        query = query.where(Task.priority == priority)
-    if assignee_email is not None:
-        search = f"%{assignee_email}%"
+    project_ids = set(project_id or [])
+    priority_values = _normalize_filter_values(priority)
+    assignee_values = _normalize_filter_values(assignee_email)
+    list_values = _normalize_filter_values(list_name)
+    tag_values = _normalize_filter_values(tags)
+
+    if project_ids:
+        query = query.where(Task.project_id.in_(project_ids))
+    if priority_values:
+        query = query.where(Task.priority.in_(priority_values))
+    if assignee_values:
         query = query.outerjoin(
             TaskAssignee, Task.id == TaskAssignee.task_id
         ).where(
             or_(
-                Task.assignee_email.ilike(search),
-                TaskAssignee.assignee_email.ilike(search),
+                *[
+                    or_(
+                        Task.assignee_email.ilike(f"%{value}%"),
+                        TaskAssignee.assignee_email.ilike(f"%{value}%"),
+                    )
+                    for value in assignee_values
+                ]
             )
         ).distinct()
-    if list_name is not None:
-        query = query.where(Task.list_name == list_name)
-    if tags is not None:
-        query = query.where(Task.tags.ilike(f"%{tags}%"))
+    if list_values:
+        query = query.where(Task.list_name.in_(list_values))
+    if tag_values:
+        query = query.where(
+            or_(*[Task.tags.ilike(f"%{value}%") for value in tag_values])
+        )
     if created_after is not None:
         query = query.where(Task.created_at >= created_after)
     if created_before is not None:
@@ -2017,8 +2047,8 @@ async def global_kanban(
 
     # Колонки — уникальные названия статусов с приоритетным цветом (самый частый)
     color_query = select(TaskStatus.name, TaskStatus.color, func.count(TaskStatus.id).label("cnt"))
-    if project_id is not None:
-        color_query = color_query.where(TaskStatus.project_id == project_id)
+    if project_ids:
+        color_query = color_query.where(TaskStatus.project_id.in_(project_ids))
     color_query = color_query.group_by(TaskStatus.name, TaskStatus.color)
     color_result = await db.execute(color_query)
 
@@ -2029,8 +2059,8 @@ async def global_kanban(
 
     # Порядок колонок определяется минимальным sort_order среди статусов с таким именем
     order_query = select(TaskStatus.name, func.min(TaskStatus.sort_order).label("min_order"))
-    if project_id is not None:
-        order_query = order_query.where(TaskStatus.project_id == project_id)
+    if project_ids:
+        order_query = order_query.where(TaskStatus.project_id.in_(project_ids))
     order_query = order_query.group_by(TaskStatus.name)
     order_result = await db.execute(order_query)
     column_order = {name: min_order for name, min_order in order_result.fetchall()}
@@ -2566,14 +2596,14 @@ async def export_task_time_xlsx(
 
 @global_router.get("/gantt/export/xlsx")
 async def export_gantt_xlsx(
-    project_id: Optional[int] = None,
+    project_id: Optional[list[int]] = Query(default=None),
     search: Optional[str] = None,
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    assignee_email: Optional[str] = None,
-    list_name: Optional[str] = None,
-    closed: Optional[int] = None,
-    tags: Optional[str] = None,
+    status: Optional[list[str]] = Query(default=None),
+    priority: Optional[list[str]] = Query(default=None),
+    assignee_email: Optional[list[str]] = Query(default=None),
+    list_name: Optional[list[str]] = Query(default=None),
+    closed: Optional[list[int]] = Query(default=None),
+    tags: Optional[list[str]] = Query(default=None),
     hide_no_deadline: bool = False,
     status_overlay: bool = False,
     sort_by: Optional[str] = None,
@@ -2589,38 +2619,52 @@ async def export_gantt_xlsx(
             selectinload(Task.time_sessions),
         )
 
-        if project_id is not None:
-            await _get_project(project_id, db)
-            query = query.where(Task.project_id == project_id)
-        if priority is not None:
-            query = query.where(Task.priority == priority)
-        if assignee_email is not None:
-            search = f"%{assignee_email}%"
+        project_ids = set(project_id or [])
+        status_values = _normalize_filter_values(status)
+        priority_values = _normalize_filter_values(priority)
+        assignee_values = _normalize_filter_values(assignee_email)
+        list_values = _normalize_filter_values(list_name)
+        tag_values = _normalize_filter_values(tags)
+
+        if project_ids:
+            for selected_project_id in project_ids:
+                await _get_project(selected_project_id, db)
+            query = query.where(Task.project_id.in_(project_ids))
+        if priority_values:
+            query = query.where(Task.priority.in_(priority_values))
+        if assignee_values:
             query = query.outerjoin(
                 TaskAssignee, Task.id == TaskAssignee.task_id
             ).where(
                 or_(
-                    Task.assignee_email.ilike(search),
-                    TaskAssignee.assignee_email.ilike(search),
+                    *[
+                        or_(
+                            Task.assignee_email.ilike(f"%{value}%"),
+                            TaskAssignee.assignee_email.ilike(f"%{value}%"),
+                        )
+                        for value in assignee_values
+                    ]
                 )
             ).distinct()
-        if list_name is not None:
-            query = query.where(Task.list_name.ilike(f"%{list_name}%"))
-        if closed is not None:
-            query = query.where(Task.is_closed == bool(closed))
-        if status is not None:
-            query = query.join(TaskStatus, Task.status_id == TaskStatus.id)
-            query = query.where(TaskStatus.name.ilike(f"%{status}%"))
+        if list_values:
+            query = query.where(Task.list_name.in_(list_values))
+        closed_values = {int(value) for value in (closed or []) if int(value) in (0, 1)}
+        if len(closed_values) == 1:
+            query = query.where(Task.is_closed == bool(next(iter(closed_values))))
+        if status_values:
+            query = query.where(Task.status.has(
+                or_(*[TaskStatus.name.ilike(f"%{value}%") for value in status_values])
+            ))
         if search is not None:
             search_lower = f"%{search.lower()}%"
             query = query.where(
                 func.lower(Task.title).ilike(search_lower)
                 | func.lower(Task.description).ilike(search_lower)
             )
-        if tags is not None:
-            tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
-            for tag in tag_list:
-                query = query.where(func.lower(Task.tags).ilike(f"%{tag}%"))
+        if tag_values:
+            query = query.where(
+                or_(*[func.lower(Task.tags).ilike(f"%{value.lower()}%") for value in tag_values])
+            )
         if hide_no_deadline:
             query = query.where(Task.due_date.isnot(None))
 

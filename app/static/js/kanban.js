@@ -288,27 +288,29 @@ function renderAssigneeName(email) {
 function populateSelect(id, items, valueKey, labelKey) {
     const select = document.getElementById(id);
     if (!select) return;
+    const options = labelKey
+        ? items.map(item => ({ value: item[valueKey], label: item[labelKey] }))
+        : items.map(item => ({ value: item.value, label: item.label }));
+    const resolvedDefaultText = select.options[0]?.text || (labelKey ? 'Все' : valueKey || 'Все');
+    if (typeof setFilterOptions === 'function') {
+        setFilterOptions(select, options, resolvedDefaultText);
+        return;
+    }
     const currentValue = select.value;
-    const defaultText = select.options[0]?.text || 'Все';
-    select.innerHTML = `<option value="">${defaultText}</option>` +
-        items.map(item => `<option value="${escapeHtml(String(item[valueKey]))}">${escapeHtml(String(item[labelKey]))}</option>`).join('');
+    select.innerHTML = `<option value="">${resolvedDefaultText}</option>` +
+        options.map(item => `<option value="${escapeHtml(String(item.value))}">${escapeHtml(String(item.label))}</option>`).join('');
     select.value = currentValue;
 }
 
 function buildQueryString() {
     const params = new URLSearchParams();
-    const priority = document.getElementById('filter-priority')?.value;
-    const assignee = document.getElementById('filter-assignee')?.value;
-    const listName = document.getElementById('filter-list')?.value;
-    const tag = document.getElementById('filter-tag')?.value;
+    appendFilterValues(params, 'priority', 'filter-priority');
+    appendFilterValues(params, 'assignee_email', 'filter-assignee');
+    appendFilterValues(params, 'list_name', 'filter-list');
+    appendFilterValues(params, 'tags', 'filter-tag');
     const dueBefore = document.getElementById('filter-due-before')?.value;
     const createdAfter = document.getElementById('filter-created-after')?.value;
     const createdBefore = document.getElementById('filter-created-before')?.value;
-
-    if (priority) params.append('priority', priority);
-    if (assignee) params.append('assignee_email', assignee);
-    if (listName) params.append('list_name', listName);
-    if (tag) params.append('tags', tag);
     if (dueBefore) params.append('due_before', new Date(dueBefore).toISOString());
     if (createdAfter) params.append('created_after', new Date(createdAfter).toISOString());
     if (createdBefore) params.append('created_before', new Date(createdBefore).toISOString());
@@ -824,9 +826,11 @@ function renderTaskAttachments(attachments) {
         let link = '';
         let actionBtn = '';
         if (a.attachment_type === 'link' || a.attachment_type === 'git') {
-            link = `<a href="${escapeHtml(a.url || '#')}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
+            const url = escapeHtml(a.url || '#');
+            link = `<a href="${url}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
             actionBtn = `
-                <a href="${escapeHtml(a.url || '#')}" target="_blank" class="btn btn-sm btn-outline-brown" title="Открыть" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right"></i></a>
+                <a href="${url}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-brown" title="Предпросмотр" onclick="event.stopPropagation()"><i class="bi bi-eye"></i></a>
+                <a href="${url}" class="btn btn-sm btn-outline-success" title="Скачать" download onclick="event.stopPropagation()"><i class="bi bi-download"></i></a>
                 <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); copyTaskAttachmentById(${a.id})" title="Копировать ссылку"><i class="bi bi-link-45deg"></i></button>
             `;
         } else if (a.attachment_type === 'file') {
@@ -1500,10 +1504,8 @@ function applyFilters() {
 
 function resetFilters() {
     document.getElementById('filter-text-search').value = '';
-    document.getElementById('filter-priority').value = '';
-    document.getElementById('filter-assignee').value = '';
-    document.getElementById('filter-list').value = '';
-    document.getElementById('filter-tag').value = '';
+    ['filter-priority', 'filter-assignee', 'filter-list', 'filter-tag']
+        .forEach(id => clearFilterValues(id));
     document.getElementById('filter-due-before').value = '';
     document.getElementById('filter-created-after').value = '';
     document.getElementById('filter-created-before').value = '';

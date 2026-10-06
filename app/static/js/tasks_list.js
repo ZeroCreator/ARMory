@@ -188,8 +188,12 @@ async function loadFilters() {
 function populateSelect(id, items, defaultLabel = 'Все') {
     const select = document.getElementById(id);
     if (!select) return;
-    const currentValue = select.value;
     const defaultText = select.options[0]?.text || defaultLabel;
+    if (typeof setFilterOptions === 'function') {
+        setFilterOptions(select, items, defaultText);
+        return;
+    }
+    const currentValue = select.value;
     select.innerHTML = `<option value="">${defaultText}</option>` +
         items.map(item => `<option value="${escapeHtml(String(item.value))}">${escapeHtml(String(item.label))}</option>`).join('');
     select.value = currentValue;
@@ -283,25 +287,25 @@ function applyFilters() {
         return;
     }
     const search = document.getElementById('filter-search')?.value.toLowerCase().trim() || '';
-    const projectId = document.getElementById('filter-project')?.value || '';
-    const status = document.getElementById('filter-status')?.value || '';
-    const priority = document.getElementById('filter-priority')?.value || '';
-    const assignee = document.getElementById('filter-assignee')?.value || '';
-    const listName = document.getElementById('filter-list')?.value || '';
-    const closed = document.getElementById('filter-closed')?.value;
-    const tags = document.getElementById('filter-tags')?.value.trim() || '';
+    const projectIds = getFilterValues('filter-project');
+    const statuses = getFilterValues('filter-status');
+    const priorities = getFilterValues('filter-priority');
+    const assignees = getFilterValues('filter-assignee');
+    const listNames = getFilterValues('filter-list');
+    const closedValues = getFilterValues('filter-closed');
+    const tags = getFilterValues('filter-tags');
 
     filteredTasks = allTasks.filter(t => {
         if (search) {
             const hay = `${t.title || ''} ${t.description || ''}`.toLowerCase();
             if (!hay.includes(search)) return false;
         }
-        if (projectId && String(t.project_id) !== projectId) return false;
-        if (status && t.status?.name !== status) return false;
-        if (priority && t.priority !== priority) return false;
-        if (assignee && !(t.assignee_emails || [t.assignee_email]).includes(assignee)) return false;
-        if (listName && t.list_name !== listName) return false;
-        if (closed !== '' && closed !== null && String(Number(t.is_closed)) !== closed) return false;
+        if (projectIds.length && !projectIds.includes(String(t.project_id))) return false;
+        if (statuses.length && !statuses.includes(t.status?.name)) return false;
+        if (priorities.length && !priorities.includes(t.priority)) return false;
+        if (assignees.length && !(t.assignee_emails || [t.assignee_email]).some(email => assignees.includes(email))) return false;
+        if (listNames.length && !listNames.includes(t.list_name)) return false;
+        if (closedValues.length && !closedValues.includes(String(Number(t.is_closed)))) return false;
         if (!taskMatchesTagFilter(t.tags, tags)) return false;
         return true;
     });
@@ -312,13 +316,8 @@ function applyFilters() {
 
 function resetFilters() {
     document.getElementById('filter-search').value = '';
-    if (document.getElementById('filter-project')) document.getElementById('filter-project').value = '';
-    document.getElementById('filter-status').value = '';
-    document.getElementById('filter-priority').value = '';
-    document.getElementById('filter-assignee').value = '';
-    document.getElementById('filter-list').value = '';
-    document.getElementById('filter-closed').value = '';
-    document.getElementById('filter-tags').value = '';
+    ['filter-project', 'filter-status', 'filter-priority', 'filter-assignee', 'filter-list', 'filter-closed', 'filter-tags']
+        .forEach(id => clearFilterValues(id));
     applyFilters();
 }
 
@@ -794,9 +793,11 @@ function renderTaskAttachments(attachments) {
         let link = '';
         let actionBtn = '';
         if (a.attachment_type === 'link' || a.attachment_type === 'git') {
-            link = `<a href="${escapeHtml(a.url || '#')}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
+            const url = escapeHtml(a.url || '#');
+            link = `<a href="${url}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
             actionBtn = `
-                <a href="${escapeHtml(a.url || '#')}" target="_blank" class="btn btn-sm btn-outline-brown" title="Открыть" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right"></i></a>
+                <a href="${url}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-brown" title="Предпросмотр" onclick="event.stopPropagation()"><i class="bi bi-eye"></i></a>
+                <a href="${url}" class="btn btn-sm btn-outline-success" title="Скачать" download onclick="event.stopPropagation()"><i class="bi bi-download"></i></a>
                 <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); copyTaskAttachmentById(${a.id})" title="Копировать ссылку"><i class="bi bi-link-45deg"></i></button>
             `;
         } else if (a.attachment_type === 'file') {
@@ -1448,23 +1449,23 @@ function openSaveListModal() {
     if (!container) return;
 
     const filterValues = {
-        project: document.getElementById('filter-project')?.value || '',
-        status: document.getElementById('filter-status')?.value || '',
-        priority: document.getElementById('filter-priority')?.value || '',
-        assignee: document.getElementById('filter-assignee')?.value || '',
-        list: document.getElementById('filter-list')?.value || '',
-        closed: document.getElementById('filter-closed')?.value || '',
-        tags: document.getElementById('filter-tags')?.value.trim() || '',
+        project: getFilterValues('filter-project'),
+        status: getFilterValues('filter-status'),
+        priority: getFilterValues('filter-priority'),
+        assignee: getFilterValues('filter-assignee'),
+        list: getFilterValues('filter-list'),
+        closed: getFilterValues('filter-closed'),
+        tags: getFilterValues('filter-tags'),
     };
 
     const skipKeys = new Set();
-    if (filterValues.project) skipKeys.add('project_name');
-    if (filterValues.status) skipKeys.add('status_name');
-    if (filterValues.priority) skipKeys.add('priority');
-    if (filterValues.assignee) skipKeys.add('assignee_name');
-    if (filterValues.list) skipKeys.add('list_name');
-    if (filterValues.closed !== '') skipKeys.add('is_closed');
-    if (filterValues.tags) skipKeys.add('tags');
+    if (filterValues.project.length) skipKeys.add('project_name');
+    if (filterValues.status.length) skipKeys.add('status_name');
+    if (filterValues.priority.length) skipKeys.add('priority');
+    if (filterValues.assignee.length) skipKeys.add('assignee_name');
+    if (filterValues.list.length) skipKeys.add('list_name');
+    if (filterValues.closed.length) skipKeys.add('is_closed');
+    if (filterValues.tags.length) skipKeys.add('tags');
 
     container.innerHTML = SAVE_LIST_COLUMNS
         .filter(col => !col.globalOnly || IS_GLOBAL)
@@ -1604,13 +1605,13 @@ async function saveListForTelegram() {
         project_id: PROJECT_ID || null,
         filters: {
             search: document.getElementById('filter-search')?.value || '',
-            status: document.getElementById('filter-status')?.value || '',
-            priority: document.getElementById('filter-priority')?.value || '',
-            assignee: document.getElementById('filter-assignee')?.value || '',
-            list_name: document.getElementById('filter-list')?.value || '',
-            closed: document.getElementById('filter-closed')?.value || '',
-            tags: document.getElementById('filter-tags')?.value || '',
-            project_id: document.getElementById('filter-project')?.value || '',
+            status: getFilterValues('filter-status'),
+            priority: getFilterValues('filter-priority'),
+            assignee: getFilterValues('filter-assignee'),
+            list_name: getFilterValues('filter-list'),
+            closed: getFilterValues('filter-closed'),
+            tags: getFilterValues('filter-tags'),
+            project_id: getFilterValues('filter-project'),
         },
         format,
         columns: selectedKeys,
@@ -2311,32 +2312,18 @@ async function exportGanttXlsx() {
     if (!IS_GLOBAL) {
         params.set('project_id', PROJECT_ID);
     } else {
-        const projectEl = document.getElementById('filter-project');
-        if (projectEl?.value) params.set('project_id', projectEl.value);
+        appendFilterValues(params, 'project_id', 'filter-project');
     }
 
     const search = document.getElementById('filter-search')?.value;
     if (search) params.set('search', search);
 
-    const status = document.getElementById('filter-status')?.value;
-    if (status) params.set('status', status);
-
-    const priority = document.getElementById('filter-priority')?.value;
-    if (priority) params.set('priority', priority);
-
-    const assignee = document.getElementById('filter-assignee')?.value;
-    if (assignee) params.set('assignee_email', assignee);
-
-    const listName = document.getElementById('filter-list')?.value;
-    if (listName) params.set('list_name', listName);
-
-    const closed = document.getElementById('filter-closed')?.value;
-    if (closed !== '' && closed !== null && closed !== undefined) {
-        params.set('closed', closed);
-    }
-
-    const tags = document.getElementById('filter-tags')?.value;
-    if (tags) params.set('tags', tags);
+    appendFilterValues(params, 'status', 'filter-status');
+    appendFilterValues(params, 'priority', 'filter-priority');
+    appendFilterValues(params, 'assignee_email', 'filter-assignee');
+    appendFilterValues(params, 'list_name', 'filter-list');
+    appendFilterValues(params, 'closed', 'filter-closed');
+    appendFilterValues(params, 'tags', 'filter-tags');
 
     if (ganttHideNoDeadline) {
         params.set('hide_no_deadline', '1');

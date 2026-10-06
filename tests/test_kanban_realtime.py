@@ -166,8 +166,8 @@ def test_time_status_column_updates_via_shared_events_and_keeps_totals_aligned(b
             };
             renderTaskTimeTable([window.nextTimeTask]);
         }''')
-        expected_columns = 10 if is_global else 9
-        status_index = 4 if is_global else 3
+        expected_columns = 11 if is_global else 10
+        status_index = 5 if is_global else 4
         assert page.locator('#task-time-table-body td').count() == expected_columns
         assert page.locator('#task-time-table-body td').nth(status_index).inner_text() == 'В работе'
         for status, label in [('paused', 'Остановлено'), ('completed', 'Завершено'), ('running', 'В работе')]:
@@ -209,6 +209,61 @@ def test_zero_time_deviation_is_displayed_as_dash(browser):
         }])''')
         assert page.locator('#task-time-table-body td').last.inner_text() == '—'
         assert page.locator('#task-time-table-foot td').last.inner_text() == '—'
+    finally:
+        page.close()
+
+
+def test_time_task_selection_filter_hides_unselected_rows(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <input id="time-filter-search" value="">
+            <select id="time-filter-project"><option value="">Все</option></select>
+            <select id="time-filter-status"><option value="">Все</option></select>
+            <select id="time-filter-priority"><option value="">Все</option></select>
+            <select id="time-filter-assignee"><option value="">Все</option></select>
+            <select id="time-filter-list"><option value="">Все</option></select>
+            <select id="time-filter-tags"><option value="">Все</option></select>
+            <input id="time-filter-due-before" value="">
+            <input id="time-filter-created-after" value="">
+            <input id="time-filter-created-before" value="">
+            <input id="time-filter-work-started-after" value="">
+            <input id="time-filter-work-started-before" value="">
+            <input id="time-filter-selected-only" type="checkbox" onchange="applyTimeFilters()">
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table>
+                <thead><tr><th><input id="time-task-select-all" type="checkbox" checked onchange="toggleAllTimeTaskSelection(this.checked)"></th></tr></thead>
+                <tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot>
+            </table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = false; const PROJECT_ID = 1;")
+        page.add_script_tag(path=str(STATIC_ROOT / "multi_filter.js"))
+        page.add_script_tag(path=str(STATIC_ROOT / "tag_filter.js"))
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            timeProjects = {1: 'Проект'};
+            timeTasks = [
+                {id: 1, project_id: 1, title: 'Первая', status_id: 1, status: {name: 'В работе'}, estimated_minutes: 30},
+                {id: 2, project_id: 1, title: 'Вторая', status_id: 1, status: {name: 'В работе'}, estimated_minutes: 45},
+            ];
+            timeStatuses = {1: [{id: 1, name: 'В работе'}]};
+            applyTimeFilters();
+        }''')
+        assert page.locator('.task-time-row-selector').count() == 2
+        assert page.locator('.task-time-row-selector:checked').count() == 2
+        assert page.locator('#time-task-select-all').is_checked()
+        page.locator('#time-task-select-all').uncheck()
+        assert page.locator('.task-time-row-selector:checked').count() == 0
+        assert not page.locator('#time-task-select-all').is_checked()
+        page.locator('#time-task-select-all').check()
+        assert page.locator('.task-time-row-selector:checked').count() == 2
+        page.locator('.task-time-row-selector[data-task-id="1"]').uncheck()
+        page.locator('#time-filter-selected-only').check()
+        assert page.locator('#task-time-table-body tr[data-task-id]').count() == 1
+        assert page.locator('#task-time-table-body tr[data-task-id="2"]').count() == 1
+        page.locator('#time-filter-selected-only').uncheck()
+        assert page.locator('#task-time-table-body tr[data-task-id]').count() == 2
     finally:
         page.close()
 
