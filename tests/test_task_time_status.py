@@ -200,6 +200,49 @@ async def test_manual_timer_accumulates_selected_phase_and_blocks_status_until_p
 
 
 @pytest.mark.asyncio
+async def test_time_tracking_status_can_be_changed_manually_without_changing_kanban_status(time_api):
+    client, sessions, events = time_api
+    paused = await client.patch(
+        "/api/tasks/4/time/tracking-status",
+        json={"time_tracking_status": "paused"},
+    )
+    assert paused.status_code == 200
+    assert paused.json()["time_tracking_status"] == "paused"
+    assert paused.json()["status_id"] == 4
+
+    async with sessions() as db:
+        session = (await db.execute(select(TaskTimeSession))).scalar_one()
+        assert session.phase == "work"
+        assert session.ended_at is not None
+        assert session.completed is False
+
+    completed = await client.patch(
+        "/api/tasks/4/time/tracking-status",
+        json={"time_tracking_status": "completed"},
+    )
+    assert completed.status_code == 200
+    assert completed.json()["time_tracking_status"] == "completed"
+    assert completed.json()["status_id"] == 4
+
+    running = await client.patch(
+        "/api/tasks/4/time/tracking-status",
+        json={"time_tracking_status": "running"},
+    )
+    assert running.status_code == 200
+    assert running.json()["time_tracking_status"] == "running"
+    assert running.json()["manual_time_phase"] == "work"
+    assert running.json()["status_id"] == 4
+
+    paused_again = await client.patch(
+        "/api/tasks/4/time/tracking-status",
+        json={"time_tracking_status": "paused"},
+    )
+    assert paused_again.status_code == 200
+    assert paused_again.json()["time_tracking_status"] == "paused"
+    assert all(event["type"] == "task_time_changed" for event in events)
+
+
+@pytest.mark.asyncio
 async def test_agent_takes_over_manual_timer_and_cannot_be_stopped_from_manual_controls(time_api):
     client, sessions, _ = time_api
     await client.post("/api/tasks/1/time/manual/start", json={"phase": "work"})

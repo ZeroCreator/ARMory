@@ -340,6 +340,16 @@ function getTimeTrackingLabel(status) {
     return ({ running: 'В работе', completed: 'Завершено', paused: 'Остановлено' })[status] || '—';
 }
 
+function renderTimeTrackingStatusControl(task) {
+    const currentStatus = task.time_tracking_status || '';
+    const disabled = pendingTimeControls.has(task.id);
+    const options = ['running', 'paused', 'completed'].map(status =>
+        `<option value="${status}" ${status === currentStatus ? 'selected' : ''}>${escapeTimeHtml(getTimeTrackingLabel(status))}</option>`
+    ).join('');
+    return `<select class="form-select form-select-sm task-time-tracking-status" aria-label="Статус времени" ${disabled ? 'disabled' : ''}
+        onchange="changeTimeTrackingStatus(${task.id}, this.value)">${currentStatus ? '' : '<option value="" selected>—</option>'}${options}</select>`;
+}
+
 function renderTimeStatusControl(task) {
     const statuses = timeStatuses[task.project_id] || (task.status ? [{ ...task.status, id: task.status_id }] : []);
     const disabled = task.time_tracking_status === 'running' || pendingTimeControls.has(task.id);
@@ -351,6 +361,11 @@ function renderTimeStatusControl(task) {
         onchange="changeTimeTaskStatus(${task.id}, this.value)">${statuses.map(status =>
         `<option value="${status.id}" ${status.id === task.status_id ? 'selected' : ''}>${escapeTimeHtml(status.name)}</option>`
     ).join('')}</select>`;
+}
+
+async function changeTimeTrackingStatus(taskId, status) {
+    if (!status) return;
+    await sendTimeTaskControl(taskId, 'tracking-status', 'PATCH', { time_tracking_status: status });
 }
 
 function renderTimeTimerControl(task, phase) {
@@ -455,7 +470,7 @@ function renderTaskTimeTable(tasks) {
                 <button class="btn btn-sm btn-outline-primary flex-shrink-0" type="button" title="Редактировать задачу" aria-label="Редактировать задачу" onclick="openTaskViewModal(${task.id})"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>
             </div></td>
             <td>${renderTimeStatusControl(task)}</td>
-            <td class="text-nowrap">${getTimeTrackingLabel(task.time_tracking_status)}</td>
+            <td>${renderTimeTrackingStatusControl(task)}</td>
             <td class="text-nowrap">${estimate == null ? '—' : formatEffortTime(estimate)}</td>
             <td class="text-nowrap ${getTaskTimeEffortCellClass(task, 'work')}"><div class="task-time-effort"><span>${formatEffortTime(task.work_seconds || 0)}</span>${renderTimeTimerControl(task, 'work')}</div></td>
             <td class="text-nowrap ${getTaskTimeEffortCellClass(task, 'testing')}"><div class="task-time-effort"><span>${formatEffortTime(task.testing_seconds || 0)}</span>${renderTimeTimerControl(task, 'testing')}</div></td>

@@ -169,7 +169,8 @@ def test_time_status_column_updates_via_shared_events_and_keeps_totals_aligned(b
         expected_columns = 11 if is_global else 10
         status_index = 5 if is_global else 4
         assert page.locator('#task-time-table-body td').count() == expected_columns
-        assert page.locator('#task-time-table-body td').nth(status_index).inner_text() == 'В работе'
+        tracking_status = page.locator('#task-time-table-body td').nth(status_index).locator('.task-time-tracking-status')
+        assert tracking_status.input_value() == 'running'
         for status, label in [('paused', 'Остановлено'), ('completed', 'Завершено'), ('running', 'В работе')]:
             page.evaluate('''status => {
                 window.nextTimeTask.time_tracking_status = status;
@@ -177,7 +178,8 @@ def test_time_status_column_updates_via_shared_events_and_keeps_totals_aligned(b
                     detail: {type: 'task_time_changed', project_id: 1, task_id: 1},
                 }));
             }''', status)
-            assert page.locator('#task-time-table-body td').nth(status_index).inner_text() == label
+            assert page.locator('#task-time-table-body td').nth(status_index).locator('.task-time-tracking-status').input_value() == status
+            assert page.locator('#task-time-table-body td').nth(status_index).locator('option:checked').inner_text() == label
             assert page.locator('#task-time-table-body td').nth(status_index - 1).inner_text() == 'Тестирование'
         assert page.locator('#task-time-table-foot td').first.get_attribute('colspan') == str(status_index + 1)
         assert page.locator('#task-time-table-foot td').nth(1).inner_text() == '30 мин'
@@ -309,7 +311,10 @@ def test_time_controls_start_stop_and_lock_on_agent_events(browser, phase):
         assert status.locator('option').count() == 3
         assert status.is_enabled()
         assert status.evaluate("element => getComputedStyle(element).color") == 'rgb(33, 37, 41)'
-        assert status.evaluate("element => getComputedStyle(element).backgroundColor") == 'rgb(248, 249, 250)'
+        assert status.evaluate("element => getComputedStyle(element).backgroundColor") in {
+            'rgb(248, 249, 250)',
+            'color(srgb 0.972549 0.976471 0.980392)',
+        }
         for cell in page.locator('.task-time-effort').all():
             geometry = cell.evaluate('''element => {
                 const cell = element.getBoundingClientRect();
@@ -353,6 +358,54 @@ def test_time_controls_start_stop_and_lock_on_agent_events(browser, phase):
         assert status.is_enabled()
         assert timers.nth(0).is_enabled()
         assert timers.nth(1).is_enabled()
+    finally:
+        page.close()
+
+
+def test_time_tracking_status_control_switches_manually(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button><div id="task-time-context-menu"></div>
+            <table id="task-time-table"><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        template = (STATIC_ROOT.parents[1] / "templates" / "tasks_time.html").read_text()
+        page.add_style_tag(content=template.split('<style>', 1)[1].split('</style>', 1)[0])
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            timeStatuses = {1: [{id: 1, name: 'В работе'}]};
+            timeTasks = [{
+                id: 1, project_id: 1, title: '<task-title>', status_id: 1,
+                status: {name: 'В работе'}, time_tracking_status: 'paused', work_seconds: 60,
+            }];
+            displayedTimeTasks = timeTasks;
+            window.controlRequests = [];
+            window.fetch = async (url, options) => {
+                const body = options.body ? JSON.parse(options.body) : null;
+                controlRequests.push({url, method: options.method, body});
+                if (url.endsWith('/tracking-status')) {
+                    timeTasks[0].time_tracking_status = body.time_tracking_status;
+                    timeTasks[0].manual_time_phase = body.time_tracking_status === 'running' ? 'work' : null;
+                }
+                return {ok: true};
+            };
+            loadTaskTimeData = async () => renderTaskTimeTable(timeTasks);
+            renderTaskTimeTable(timeTasks);
+        }''')
+        control = page.locator('.task-time-tracking-status')
+        assert control.locator('option').count() == 3
+        assert control.locator('option').all_text_contents() == ['В работе', 'Остановлено', 'Завершено']
+        assert control.input_value() == 'paused'
+        control.select_option('running')
+        page.wait_for_function("timeTasks[0].time_tracking_status === 'running'")
+        assert page.locator('.task-time-tracking-status').input_value() == 'running'
+        page.locator('.task-time-tracking-status').select_option('completed')
+        page.wait_for_function("timeTasks[0].time_tracking_status === 'completed'")
+        assert page.evaluate('controlRequests') == [
+            {'url': '/api/tasks/1/time/tracking-status', 'method': 'PATCH', 'body': {'time_tracking_status': 'running'}},
+            {'url': '/api/tasks/1/time/tracking-status', 'method': 'PATCH', 'body': {'time_tracking_status': 'completed'}},
+        ]
     finally:
         page.close()
 

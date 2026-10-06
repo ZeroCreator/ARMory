@@ -62,6 +62,7 @@ from app.schemas import (
     TaskTimePause,
     TaskManualTimeStart,
     TaskTimeStatusUpdate,
+    TaskTimeTrackingStatusUpdate,
     TaskTimeStart,
     TaskTimeStateOut,
     TaskTimeExportRequest,
@@ -264,6 +265,24 @@ async def _close_task_time_sessions(
         query = query.where(TaskTimeSession.worker_id == worker_id)
     result = await db.execute(query.values(ended_at=ended_at or datetime.utcnow()))
     return result.rowcount or 0
+
+
+def _default_task_time_phase(task: Task) -> str:
+    """Определяет этап для запуска времени из общего статуса учёта."""
+    active_phase = task.active_time_phase
+    if active_phase in {"work", "testing"}:
+        return active_phase
+
+    if task.time_sessions:
+        latest_session = max(
+            task.time_sessions,
+            key=lambda session: (session.started_at, session.id or 0),
+        )
+        if latest_session.phase in {"work", "testing"}:
+            return latest_session.phase
+
+    status_name = task.status.name.strip().casefold() if task.status else ""
+    return "testing" if status_name in {"тестирование", "testing", "qa"} else "work"
 
 
 def _require_mcp_time_request(request: Request) -> None:
@@ -979,6 +998,56 @@ async def pause_manual_task_time(task_id: int, db: AsyncSession = Depends(get_db
     await db.refresh(task, attribute_names=["time_sessions"])
     if changed:
         broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
+    return task
+
+
+@global_router.patch("/tasks/{task_id}/time/tracking-status", response_model=TaskOut)
+async def update_time_tracking_status(
+    task_id: int,
+    data: TaskTimeTrackingStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Вручную меняет статус учёта времени и сохраняет его в интервалах задачи."""
+    task = await _get_time_control_task(task_id, db)
+    if data.time_tracking_status == task.time_tracking_status:
+        return task
+    if data.time_tracking_status == "running":
+        if task.is_closed:
+            raise HTTPException(status_code=409, detail="Closed tasks cannot track time")
+        phase = data.phase or _default_task_time_phase(task)
+        db.add(TaskTimeSession(
+            task_id=task_id,
+            worker_id=f"manual:task:{task_id}",
+            phase=phase,
+        ))
+    else:
+        now = datetime.utcnow()
+        active_sessions = [session for session in task.time_sessions if session.ended_at is None]
+        if active_sessions:
+            for session in active_sessions:
+                session.ended_at = now
+                session.completed = data.time_tracking_status == "completed"
+        else:
+            latest_session = max(
+                task.time_sessions,
+                key=lambda session: (session.ended_at, session.started_at, session.id or 0),
+                default=None,
+            )
+            if latest_session is not None:
+                latest_session.completed = data.time_tracking_status == "completed"
+            else:
+                db.add(TaskTimeSession(
+                    task_id=task_id,
+                    worker_id=f"manual:task:{task_id}",
+                    phase=data.phase or _default_task_time_phase(task),
+                    started_at=now,
+                    ended_at=now,
+                    completed=data.time_tracking_status == "completed",
+                ))
+
+    await db.commit()
+    await db.refresh(task, attribute_names=["status", "time_sessions"])
+    broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
     return task
 
 

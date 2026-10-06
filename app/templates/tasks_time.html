@@ -19,13 +19,15 @@
     .task-time-page-title { white-space: nowrap; pointer-events: none; }
     #task-time-table .task-time-title { color: var(--purple-surface2); background: none; border: 0; padding: 0; text-align: left; }
     #task-time-table .task-time-title:hover { color: var(--purple-darker); }
-    #task-time-table .task-time-status {
+    #task-time-table .task-time-status,
+    #task-time-table .task-time-tracking-status {
         min-width: 9rem;
         background-color: #f8f9fa;
         background-color: color-mix(in srgb, var(--task-time-kanban-status-color, #f8f9fa) 20%, #f8f9fa);
         color: #212529;
     }
-    #task-time-table .task-time-status option { background-color: #f8f9fa; color: #212529; }
+    #task-time-table .task-time-status option,
+    #task-time-table .task-time-tracking-status option { background-color: #f8f9fa; color: #212529; }
     #task-time-table { --bs-table-border-color: #b7b7b7; border: 1px solid #b7b7b7; }
     #task-time-table > :not(caption) > * > * { border: 1px solid #b7b7b7; }
     #task-time-table .task-time-timer { color: #fff; border: 0; }
@@ -243,5 +245,5 @@
 </script>
 <script src="/static/js/tag_filter.js?v=3"></script>
 <script src="/static/js/tasks_list.js?v=54"></script>
-<script src="/static/js/tasks_time.js?v=22"></script>
+<script src="/static/js/tasks_time.js?v=23"></script>
 {% endblock %}

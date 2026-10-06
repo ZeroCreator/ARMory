@@ -532,6 +532,11 @@ class TaskTimeStatusUpdate(BaseModel):
     status_id: int = Field(gt=0)
 
 
+class TaskTimeTrackingStatusUpdate(BaseModel):
+    time_tracking_status: Literal["running", "completed", "paused"]
+    phase: Optional[Literal["work", "testing"]] = None
+
+
 class TaskTimeStart(BaseModel):
     worker_id: str = Field(min_length=1, max_length=128)
     phase: Literal["work", "testing"]
