@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import mimetypes
 from functools import wraps
+from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 import httpx
@@ -76,28 +79,88 @@ def _error(result: Any) -> bool:
     return isinstance(result, dict) and "error" in result
 
 
+def _input_path_file_name(path: str) -> str:
+    parsed = urlsplit(path)
+    if parsed.scheme in {"http", "https"}:
+        name = Path(unquote(parsed.path)).name
+    else:
+        name = Path(path).name
+    return name or "attachment"
+
+
+def _upload_task_file(project_id: int, task_id: int, input_path: str) -> dict[str, Any]:
+    """Загружает локальный файл или файл по URL во вложение задачи."""
+    settings = get_settings()
+    headers: dict[str, str] = {}
+    mcp_api_key = getattr(settings, "mcp_api_key", None)
+    if mcp_api_key:
+        headers["Authorization"] = f"Bearer {mcp_api_key}"
+
+    parsed = urlsplit(input_path)
+    file_name = _input_path_file_name(input_path)
+    content_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+    upload_url = f"{_base_url()}/api/projects/{project_id}/tasks/{task_id}/attachments/upload"
+
+    try:
+        with httpx.Client(timeout=30.0, trust_env=False) as client:
+            if parsed.scheme in {"http", "https"}:
+                source_response = client.get(input_path)
+                source_response.raise_for_status()
+                file_content = source_response.content
+                response = client.post(
+                    upload_url,
+                    data={"title": file_name},
+                    files={"file": (file_name, file_content, content_type)},
+                    headers=headers,
+                )
+            else:
+                source_path = Path(input_path)
+                if not source_path.is_file():
+                    return {"error": "Attachment file was not found", "path": input_path}
+                with source_path.open("rb") as source_file:
+                    response = client.post(
+                        upload_url,
+                        data={"title": file_name},
+                        files={"file": (file_name, source_file, content_type)},
+                        headers=headers,
+                    )
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json()
+        except ValueError:
+            detail = exc.response.text
+        return {"error": f"HTTP {exc.response.status_code}", "detail": detail, "path": input_path}
+    except (httpx.HTTPError, OSError, ValueError) as exc:
+        return {"error": str(exc), "path": input_path}
+
+
 def _add_input_paths(task: dict[str, Any], input_paths: list[str] | None) -> dict[str, Any]:
-    """Сохраняет вводные как ссылки без чтения файлов и повторного добавления путей."""
+    """Загружает указанные документы во вложения и не дублирует уже загруженные файлы."""
     if not input_paths:
         return task
     result = dict(task)
     attachments = list(task.get("attachments") or [])
     result["attachments"] = attachments
-    known_paths = {attachment.get("url") for attachment in attachments}
+    known_file_names = {
+        attachment.get("title")
+        for attachment in attachments
+        if attachment.get("attachment_type") == "file" and attachment.get("file_path")
+    }
     errors = []
     for path in dict.fromkeys(input_paths):
-        if not path.strip() or path in known_paths:
+        if not path.strip():
             continue
-        attachment = _api_request(
-            "POST",
-            f"/api/projects/{task['project_id']}/tasks/{task['id']}/attachments",
-            {"attachment_type": "link", "title": path, "url": path},
-        )
+        file_name = _input_path_file_name(path)
+        if file_name in known_file_names:
+            continue
+        attachment = _upload_task_file(task["project_id"], task["id"], path)
         if _error(attachment):
             errors.append({"path": path, "error": attachment})
         else:
             attachments.append(attachment)
-            known_paths.add(path)
+            known_file_names.add(file_name)
     if errors:
         result["input_paths_errors"] = errors
     return result
@@ -383,7 +446,7 @@ def register_tools(server: FastMCP) -> None:
         assignee_names: list[str] | None = None,
         input_paths: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Создаёт задачу с оценкой и исполнителями; input_paths сохраняет пути из промпта во вложениях."""
+        """Создаёт задачу с оценкой и исполнителями; input_paths загружает документы во вложения."""
         if estimated_minutes < 1:
             return {"error": "estimated_minutes must be greater than zero"}
 
@@ -481,7 +544,7 @@ def register_tools(server: FastMCP) -> None:
         result: str | None = None,
         input_paths: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Изменяет поля и исполнителей, добавляет input_paths во вложения."""
+        """Изменяет поля и исполнителей, загружает input_paths во вложения."""
         task: dict[str, Any] | None = None
         if project_id is None or status_name is not None or status_id is not None:
             task = _api_request("GET", f"/api/tasks/{task_id}")

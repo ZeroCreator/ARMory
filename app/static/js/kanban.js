@@ -824,22 +824,18 @@ function renderTaskAttachments(attachments) {
         const icon = getCategoryIcon(cat);
         const display = escapeHtml(a.title || a.url || a.file_path || 'Вложение');
         let link = '';
-        let actionBtn = '';
+        const actionBtn = renderTaskAttachmentActions(a);
         if (a.attachment_type === 'link' || a.attachment_type === 'git') {
-            const url = escapeHtml(a.url || '#');
-            link = `<a href="${url}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
-            actionBtn = `
-                <a href="${url}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-brown" title="Предпросмотр" onclick="event.stopPropagation()"><i class="bi bi-eye"></i></a>
-                <a href="${url}" class="btn btn-sm btn-outline-success" title="Скачать" download onclick="event.stopPropagation()"><i class="bi bi-download"></i></a>
-                <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); copyTaskAttachmentById(${a.id})" title="Копировать ссылку"><i class="bi bi-link-45deg"></i></button>
-            `;
+            if (a.url) {
+                const url = escapeHtml(a.url);
+                link = `<a href="${url}" target="_blank" rel="noopener" class="text-decoration-none">${display}</a>`;
+            } else {
+                link = `<span>${display}</span>`;
+            }
         } else if (a.attachment_type === 'file') {
-            link = `<span class="text-decoration-none" style="cursor:pointer" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})">${display}</span>`;
-            actionBtn = `
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); openTaskAttachmentInAlexandrite(${a.id})" title="Открыть в Alexandrite"><i class="bi bi-gem"></i></button>
-                <button type="button" class="btn btn-sm btn-outline-brown" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})" title="Предпросмотр"><i class="bi bi-eye"></i></button>
-                <a href="/uploads/${encodeURIComponent(a.file_path || '')}" class="btn btn-sm btn-outline-success" title="Скачать" download onclick="event.stopPropagation()"><i class="bi bi-download"></i></a>
-            `;
+            link = a.file_path
+                ? `<span class="text-decoration-none" style="cursor:pointer" onclick="event.stopPropagation(); openTaskAttachmentPreview(${a.id})">${display}</span>`
+                : `<span>${display}</span>`;
         } else {
             link = `<span>${display}</span>`;
         }
@@ -939,6 +935,7 @@ function showAttachmentForm(type) {
     const urlInput = document.getElementById('attachment-form-url');
     const fileWrap = document.getElementById('attachment-form-file-wrap');
     const fileInput = document.getElementById('attachment-form-file');
+    const submitButton = document.getElementById('attachment-form-submit-btn');
 
     if (!form || !typeInput) return;
 
@@ -950,9 +947,11 @@ function showAttachmentForm(type) {
     if (type === 'file') {
         urlWrap.style.display = 'none';
         fileWrap.style.display = 'block';
+        submitButton.style.display = 'none';
     } else {
         urlWrap.style.display = 'block';
         fileWrap.style.display = 'none';
+        submitButton.style.display = 'inline-block';
         urlInput.placeholder = type === 'git' ? 'URL репозитория' : 'URL';
     }
     form.style.display = 'block';
@@ -972,6 +971,7 @@ async function submitAttachmentForm() {
     const title = document.getElementById('attachment-form-title').value.trim() || null;
     const url = document.getElementById('attachment-form-url').value.trim();
 
+    if (type === 'file') return;
     if (type !== 'file' && !url) {
         showToast('Введите URL', 'warning');
         return;
@@ -1007,6 +1007,8 @@ async function submitAttachmentFile(input) {
 
     const formData = new FormData();
     formData.append('file', file);
+    const title = document.getElementById('attachment-form-title').value.trim();
+    if (title) formData.append('title', title);
 
     try {
         await api(`${API_BASE}/projects/${projectId}/tasks/${currentTaskId}/attachments/upload`, {

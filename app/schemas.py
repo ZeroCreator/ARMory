@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from datetime import datetime
 from typing import List, Literal, Optional
 from app.models import DocType
@@ -275,11 +275,38 @@ class TaskAttachmentOut(BaseModel):
     created_at: datetime
 
 
+def _validate_task_attachment_payload(
+    attachment_type: str,
+    url: Optional[str],
+    file_path: Optional[str],
+) -> None:
+    """Проверяет, что поля вложения соответствуют его типу."""
+    if attachment_type not in {"file", "link", "git"}:
+        raise ValueError("Attachment type must be file, link, or git")
+    if attachment_type == "file":
+        if not file_path:
+            raise ValueError("File attachments require an uploaded file")
+        if file_path.casefold().startswith(("http://", "https://")):
+            raise ValueError("File attachments require a stored file path")
+        if url:
+            raise ValueError("File attachments cannot contain a URL")
+        return
+    if not url:
+        raise ValueError("Link attachments require a URL")
+    if file_path:
+        raise ValueError("Link attachments cannot contain a file")
+
+
 class TaskAttachmentCreate(BaseModel):
-    attachment_type: str
+    attachment_type: Literal["file", "link", "git"]
     title: Optional[str] = None
     url: Optional[str] = None
     file_path: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_payload(self):
+        _validate_task_attachment_payload(self.attachment_type, self.url, self.file_path)
+        return self
 
 
 class TaskAttachmentUpdate(BaseModel):
@@ -374,10 +401,15 @@ class TaskBulkCreate(BaseModel):
 
 
 class TaskBulkAttachment(BaseModel):
-    attachment_type: str
+    attachment_type: Literal["file", "link", "git"]
     title: Optional[str] = None
     url: Optional[str] = None
     file_path: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_payload(self):
+        _validate_task_attachment_payload(self.attachment_type, self.url, self.file_path)
+        return self
 
 
 class TaskBulkRequest(BaseModel):
@@ -460,10 +492,15 @@ class TaskListTelegramConfig(BaseModel):
 
 
 class KanbanAttachmentExport(BaseModel):
-    attachment_type: str
+    attachment_type: Literal["file", "link", "git"]
     title: Optional[str] = None
     url: Optional[str] = None
     file_path: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_payload(self):
+        _validate_task_attachment_payload(self.attachment_type, self.url, self.file_path)
+        return self
 
 
 class KanbanTaskExport(BaseModel):

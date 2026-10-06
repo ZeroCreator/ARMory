@@ -392,3 +392,25 @@ def test_shared_sse_forwards_time_events_without_opening_another_stream(browser,
         assert page.evaluate('window.lastTimeEvent') == {'type': 'task_time_changed', 'project_id': 1, 'task_id': 2}
     finally:
         page.close()
+
+
+def test_task_attachment_actions_match_attachment_type(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('<div></div>')
+        page.add_script_tag(path=str(STATIC_ROOT / "app.js"))
+        actions = page.evaluate('''() => ({
+            link: renderTaskAttachmentActions({id: 1, attachment_type: 'link', url: 'https://<your-domain>/document'}),
+            git: renderTaskAttachmentActions({id: 2, attachment_type: 'git', url: 'https://<your-domain>/repository'}),
+            file: renderTaskAttachmentActions({id: 3, attachment_type: 'file', file_path: 'tasks/document.md'}),
+        })''')
+
+        for attachment_type in ("link", "git"):
+            assert 'Копировать ссылку' in actions[attachment_type]
+            assert 'Предпросмотр' not in actions[attachment_type]
+            assert 'Скачать' not in actions[attachment_type]
+        assert 'Предпросмотр' in actions["file"]
+        assert 'Скачать' in actions["file"]
+        assert 'download' in actions["file"]
+    finally:
+        page.close()

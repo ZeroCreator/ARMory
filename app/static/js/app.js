@@ -1899,6 +1899,24 @@ function getTaskAttachmentDownloadUrl(attachment) {
     return getTaskAttachmentFileUrl(attachment);
 }
 
+function renderTaskAttachmentActions(attachment) {
+    if (attachment.attachment_type === 'link' || attachment.attachment_type === 'git') {
+        if (!attachment.url) return '';
+        const url = escapeHtml(attachment.url);
+        return `
+            <a href="${url}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-brown" title="Открыть" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right"></i></a>
+            <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); copyTaskAttachmentById(${attachment.id})" title="Копировать ссылку"><i class="bi bi-link-45deg"></i></button>
+        `;
+    }
+    if (attachment.attachment_type !== 'file' || !attachment.file_path) return '';
+    const fileUrl = escapeHtml(getTaskAttachmentDownloadUrl(attachment));
+    return `
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); openTaskAttachmentInAlexandrite(${attachment.id})" title="Открыть в Alexandrite"><i class="bi bi-gem"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-brown" onclick="event.stopPropagation(); openTaskAttachmentPreview(${attachment.id})" title="Предпросмотр"><i class="bi bi-eye"></i></button>
+        <a href="${fileUrl}" class="btn btn-sm btn-outline-success" title="Скачать" download onclick="event.stopPropagation()"><i class="bi bi-download"></i></a>
+    `;
+}
+
 async function openTaskAttachmentPreview(attachmentId) {
     const attachment = window.kanbanAttachments?.[attachmentId];
     if (!attachment) return;

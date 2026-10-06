@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -93,6 +94,18 @@ def test_create_task_over_http_assigns_local_user_only_in_local_mode(settings, m
     created_payload = {}
     saved_attachments = []
 
+    def upload_task_file(project_id, task_id, input_path):
+        file_name = Path(input_path).name or "attachment"
+        attachment = {
+            "id": len(saved_attachments) + 1,
+            "task_id": task_id,
+            "attachment_type": "file",
+            "title": file_name,
+            "file_path": f"tasks/{file_name}",
+        }
+        saved_attachments.append((project_id, task_id, input_path))
+        return attachment
+
     def api_request(method, path, json_body=None):
         if method == "GET" and path == "/api/assignees":
             return directory
@@ -105,12 +118,10 @@ def test_create_task_over_http_assigns_local_user_only_in_local_mode(settings, m
         if method == "POST" and path == "/api/projects/1/tasks":
             created_payload.update(json_body)
             return {"id": 3, "project_id": 1, **json_body}
-        if method == "POST" and path == "/api/projects/1/tasks/3/attachments":
-            saved_attachments.append(json_body)
-            return {"id": len(saved_attachments), **json_body}
         pytest.fail(f"Unexpected API request: {method} {path}")
 
     monkeypatch.setattr(mcp_logic, "_api_request", api_request)
+    monkeypatch.setattr(mcp_logic, "_upload_task_file", upload_task_file)
     server = FastMCP("<test-server>")
     mcp_logic.register_tools(server)
     tool = server._tool_manager.get_tool("create_task")
@@ -134,7 +145,7 @@ def test_create_task_over_http_assigns_local_user_only_in_local_mode(settings, m
     assert result["assignee_names"] == expected_names
     assert result["assignee_prompt_required"] is False
     assert saved_attachments == [
-        {"attachment_type": "link", "title": path, "url": path}
+        (1, 3, path)
         for path in dict.fromkeys(input_paths or [])
     ]
     if input_paths:
@@ -147,17 +158,27 @@ def test_update_input_paths_preserves_attachments_and_reports_retryable_errors(m
     saved = []
     failing_path = "<project-directory>/unavailable.txt"
 
+    def upload_task_file(project_id, task_id, input_path):
+        if input_path == failing_path:
+            return {"error": "HTTP 503"}
+        file_name = Path(input_path).name or "attachment"
+        attachment = {
+            "id": len(saved) + 5,
+            "task_id": task_id,
+            "attachment_type": "file",
+            "title": file_name,
+            "file_path": f"tasks/{file_name}",
+        }
+        saved.append((project_id, task_id, input_path))
+        return attachment
+
     def api_request(method, path, json_body=None):
         if method == "GET" and path == "/api/tasks/3":
             return task
-        if method == "POST" and path == "/api/projects/1/tasks/3/attachments":
-            if json_body["url"] == failing_path:
-                return {"error": "HTTP 503"}
-            saved.append(json_body)
-            return {"id": 5, **json_body}
         pytest.fail(f"Unexpected API request: {method} {path}")
 
     monkeypatch.setattr(mcp_logic, "_api_request", api_request)
+    monkeypatch.setattr(mcp_logic, "_upload_task_file", upload_task_file)
     server = FastMCP("<test-server>")
     mcp_logic.register_tools(server)
     tool = server._tool_manager.get_tool("update_task")
@@ -165,15 +186,29 @@ def test_update_input_paths_preserves_attachments_and_reports_retryable_errors(m
     result = asyncio.run(tool.fn(task_id=3, input_paths=paths))
 
     assert result["task_id"] == 3
-    assert result["attachments"] == [existing, {"id": 5, **saved[0]}]
+    expected_base_file = {
+        "id": 5,
+        "task_id": 3,
+        "attachment_type": "file",
+        "title": "<project-directory>",
+        "file_path": "tasks/<project-directory>",
+    }
+    expected_file = {
+        "id": 6,
+        "task_id": 3,
+        "attachment_type": "file",
+        "title": "file with spaces.txt",
+        "file_path": "tasks/file with spaces.txt",
+    }
+    assert result["attachments"] == [existing, expected_base_file, expected_file]
     assert result["input_paths_errors"] == [{"path": failing_path, "error": {"error": "HTTP 503"}}]
-    assert len(saved) == 1
+    assert len(saved) == 2
     assert task["attachments"] == [existing]
 
     task["attachments"] = result["attachments"]
     repeated = asyncio.run(tool.fn(task_id=3, project_id=1, input_paths=paths))
     assert repeated["attachments"] == result["attachments"]
-    assert len(saved) == 1
+    assert len(saved) == 2
 
 
 def test_update_task_status_does_not_start_time_phase(monkeypatch):
@@ -217,7 +252,7 @@ def test_update_task_status_does_not_start_time_phase(monkeypatch):
     [
         ("POST", "/api/projects/1/tasks/3/attachments", True),
         ("DELETE", "/api/projects/1/tasks/3/attachments/4", False),
-        ("POST", "/api/projects/1/tasks/3/attachments/upload", False),
+        ("POST", "/api/projects/1/tasks/3/attachments/upload", True),
         ("POST", "/api/projects/1/tasks/3/attachments/4/open", False),
     ],
 )

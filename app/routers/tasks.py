@@ -1712,7 +1712,10 @@ async def update_task_attachment(
 
     if attachment.attachment_type in ("link", "git"):
         if url is not None:
-            attachment.url = url.strip() or None
+            normalized_url = url.strip()
+            if not normalized_url:
+                raise HTTPException(status_code=400, detail="Link attachments require a URL")
+            attachment.url = normalized_url
     elif file and file.filename:
         uploads_dir = _task_uploads_dir()
         ext = Path(file.filename).suffix
