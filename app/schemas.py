@@ -315,6 +315,7 @@ class TaskOut(BaseModel):
     actual_seconds: int = 0
     time_tracking_status: Optional[Literal["running", "completed", "paused"]] = None
     manual_time_phase: Optional[Literal["work", "testing"]] = None
+    active_time_phase: Optional[Literal["work", "testing"]] = None
 
 
 class TaskCreate(BaseModel):

@@ -297,6 +297,15 @@ class Task(Base):
                      if session.ended_at is None and session.worker_id == f"manual:task:{self.id}"), None)
 
     @property
+    def active_time_phase(self) -> str | None:
+        """Возвращает этап последнего активного интервала учёта времени."""
+        active_sessions = [session for session in self.time_sessions if session.ended_at is None]
+        if not active_sessions:
+            return None
+        latest = max(active_sessions, key=lambda session: (session.started_at, session.id or 0))
+        return latest.phase
+
+    @property
     def time_tracking_status(self) -> str | None:
         """Возвращает состояние учёта времени независимо от колонки Kanban."""
         if any(session.ended_at is None for session in self.time_sessions):

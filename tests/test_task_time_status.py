@@ -110,8 +110,12 @@ async def test_agent_time_phase_is_independent_from_kanban_status(time_api):
     assert testing.json()["phase"] == "testing"
     assert work.status_code == 200
     assert work.json()["phase"] == "work"
-    assert (await client.get("/api/tasks/1")).json()["status_id"] == 1
-    assert (await client.get("/api/tasks/2")).json()["status_id"] == 2
+    task_one = (await client.get("/api/tasks/1")).json()
+    task_two = (await client.get("/api/tasks/2")).json()
+    assert task_one["status_id"] == 1
+    assert task_one["active_time_phase"] == "testing"
+    assert task_two["status_id"] == 2
+    assert task_two["active_time_phase"] == "work"
 
 
 @pytest.mark.asyncio
@@ -157,14 +161,20 @@ async def test_work_to_testing_status_switch_completes_time_phase(time_api, paus
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("phase", ["work", "testing"])
-async def test_manual_timer_accumulates_selected_phase_and_blocks_status_until_paused(time_api, phase):
+@pytest.mark.parametrize(("phase", "expected_status_id"), [("work", 1), ("testing", 2)])
+async def test_manual_timer_accumulates_selected_phase_and_blocks_status_until_paused(
+    time_api,
+    phase,
+    expected_status_id,
+):
     client, sessions, events = time_api
     client.headers.pop("Authorization")
     started = await client.post("/api/tasks/1/time/manual/start", json={"phase": phase})
     assert started.status_code == 200
     assert started.json()["manual_time_phase"] == phase
-    assert started.json()["status_id"] == 2
+    assert started.json()["active_time_phase"] == phase
+    assert started.json()["status_id"] == expected_status_id
+    assert events[-1]["type"] == ("task_changed" if phase == "work" else "task_time_changed")
     async with sessions() as db:
         interval = (await db.execute(select(TaskTimeSession))).scalar_one()
         interval.started_at = datetime.utcnow() - timedelta(minutes=3)
@@ -182,7 +192,8 @@ async def test_manual_timer_accumulates_selected_phase_and_blocks_status_until_p
     assert changed.status_code == 200
     assert changed.json()["time_tracking_status"] == "paused"
     assert changed.json()["status_id"] == 1
-    assert events[-1]["type"] == "task_changed"
+    if phase == "testing":
+        assert events[-1]["type"] == "task_changed"
     resumed = await client.post("/api/tasks/1/time/manual/start", json={"phase": phase})
     assert resumed.json()[f"{phase}_seconds"] >= 180
     assert (await client.get("/api/tasks")).json()[0]["manual_time_phase"] == phase

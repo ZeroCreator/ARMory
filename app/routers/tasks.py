@@ -931,16 +931,39 @@ async def _get_time_control_task(task_id: int, db: AsyncSession) -> Task:
 
 @global_router.post("/tasks/{task_id}/time/manual/start", response_model=TaskOut)
 async def start_manual_task_time(task_id: int, data: TaskManualTimeStart, db: AsyncSession = Depends(get_db)):
-    """Запускает ручной таймер выбранного этапа без изменения статуса задачи."""
+    """Запускает ручной таймер и переводит задачу в работу для соответствующей фазы."""
     task = await _get_time_control_task(task_id, db)
     if task.is_closed:
         raise HTTPException(status_code=409, detail="Closed tasks cannot track time")
     if task.time_tracking_status == "running":
         raise HTTPException(status_code=409, detail="ручной таймер не доступен")
+
+    status_changed = False
+    if data.phase == "work":
+        statuses_result = await db.execute(
+            select(TaskStatus).where(TaskStatus.project_id == task.project_id)
+        )
+        work_status_names = {"в работе", "в процессе", "выполняется", "in progress", "doing", "active"}
+        work_status = next(
+            (
+                status for status in statuses_result.scalars().all()
+                if status.name.strip().casefold() in work_status_names
+            ),
+            None,
+        )
+        if work_status and task.status_id != work_status.id:
+            await _apply_task_update(task, TaskUpdate(status_id=work_status.id), task.project_id, db)
+            status_changed = True
+
     db.add(TaskTimeSession(task_id=task_id, worker_id=f"manual:task:{task_id}", phase=data.phase))
     await db.commit()
-    await db.refresh(task, attribute_names=["time_sessions"])
-    broadcast({"type": "task_time_changed", "project_id": task.project_id, "task_id": task_id})
+    await db.refresh(task, attribute_names=["status", "time_sessions"])
+    broadcast({
+        "type": "task_changed" if status_changed else "task_time_changed",
+        "project_id": task.project_id,
+        "task_id": task_id,
+        "status_id": task.status_id,
+    })
     return task
 
 

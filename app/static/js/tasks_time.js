@@ -365,6 +365,12 @@ function renderTimeTimerControl(task, phase) {
         onclick="controlTimeTaskTimer(${task.id}, '${phase}')"><i class="bi bi-clock" aria-hidden="true"></i></button></span>`;
 }
 
+function getTaskTimeEffortCellClass(task, phase) {
+    const activePhase = task.active_time_phase || task.manual_time_phase;
+    if (task.time_tracking_status !== 'running' || activePhase !== phase) return '';
+    return `task-time-effort-cell-active task-time-effort-cell-${phase}`;
+}
+
 async function changeTimeTaskStatus(taskId, statusId) {
     const task = timeTasks.find(item => item.id === taskId);
     if (!task || task.time_tracking_status === 'running') return;
@@ -451,8 +457,8 @@ function renderTaskTimeTable(tasks) {
             <td>${renderTimeStatusControl(task)}</td>
             <td class="text-nowrap">${getTimeTrackingLabel(task.time_tracking_status)}</td>
             <td class="text-nowrap">${estimate == null ? '—' : formatEffortTime(estimate)}</td>
-            <td class="text-nowrap"><div class="task-time-effort"><span>${formatEffortTime(task.work_seconds || 0)}</span>${renderTimeTimerControl(task, 'work')}</div></td>
-            <td class="text-nowrap"><div class="task-time-effort"><span>${formatEffortTime(task.testing_seconds || 0)}</span>${renderTimeTimerControl(task, 'testing')}</div></td>
+            <td class="text-nowrap ${getTaskTimeEffortCellClass(task, 'work')}"><div class="task-time-effort"><span>${formatEffortTime(task.work_seconds || 0)}</span>${renderTimeTimerControl(task, 'work')}</div></td>
+            <td class="text-nowrap ${getTaskTimeEffortCellClass(task, 'testing')}"><div class="task-time-effort"><span>${formatEffortTime(task.testing_seconds || 0)}</span>${renderTimeTimerControl(task, 'testing')}</div></td>
             <td class="text-nowrap fw-semibold">${formatEffortTime(actual)}</td>
             <td class="text-nowrap ${deviationClass}">${formatTaskTimeDeviation(deviation)}</td>
         </tr>`;

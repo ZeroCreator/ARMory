@@ -57,6 +57,20 @@
         background-color: #fff;
         background-image: linear-gradient(rgba(220, 53, 69, 0.08), rgba(220, 53, 69, 0.08));
     }
+    #task-time-table tbody td.task-time-effort-cell-active {
+        background-color: #fff;
+        background-image: linear-gradient(var(--task-time-active-cell-background), var(--task-time-active-cell-background));
+        box-shadow: inset 0 0 0 2px var(--task-time-active-cell-color);
+        font-weight: 700;
+    }
+    #task-time-table tbody td.task-time-effort-cell-work {
+        --task-time-active-cell-color: #198754;
+        --task-time-active-cell-background: rgba(25, 135, 84, 0.14);
+    }
+    #task-time-table tbody td.task-time-effort-cell-testing {
+        --task-time-active-cell-color: #6f42c1;
+        --task-time-active-cell-background: rgba(111, 66, 193, 0.14);
+    }
     #task-time-table .task-time-deviation-over { color: #7f1d1d !important; font-weight: 700; }
     #task-time-table .task-time-deviation-under { color: #14532d !important; font-weight: 700; }
 </style>
@@ -229,5 +243,5 @@
 </script>
 <script src="/static/js/tag_filter.js?v=3"></script>
 <script src="/static/js/tasks_list.js?v=54"></script>
-<script src="/static/js/tasks_time.js?v=21"></script>
+<script src="/static/js/tasks_time.js?v=22"></script>
 {% endblock %}
