@@ -11,6 +11,9 @@ let editingTimeTaskId = null;
 let contextTimeTaskId = null;
 let timeTaskSelectionInitialized = false;
 let taskTimeAuthRedirecting = false;
+let taskTimeLoadPromise = null;
+let taskTimeReloadQueued = false;
+let taskTimeDataLoaded = false;
 
 class TaskTimeAuthenticationError extends Error {
     constructor() {
@@ -23,19 +26,43 @@ function taskTimeResponseContentType(response) {
     return (response.headers?.get?.('content-type') || '').toLocaleLowerCase();
 }
 
-function isOAuth2ProxyResponse(response) {
-    if (!response.redirected || !response.url) return false;
+function taskTimeResponsePath(response) {
+    if (!response.url) return '';
     try {
-        return new URL(response.url, window.location.origin).pathname.startsWith('/oauth2/');
+        return new URL(response.url, window.location.origin).pathname;
     } catch (error) {
-        return false;
+        return '';
     }
 }
 
-function isTaskTimeAuthenticationResponse(response) {
-    return response.status === 401
+function isOAuth2ProxyResponse(response) {
+    return taskTimeResponsePath(response).startsWith('/oauth2/');
+}
+
+function isKnownTaskTimeLoginPage(text) {
+    return /<form\b[^>]+action=["'][^"']*\/(?:oauth2\/start|auth\/login)\b/i.test(text)
+        || /<title>\s*(?:sign\s*in|вход\b)[^<]*<\/title>/i.test(text);
+}
+
+async function isTaskTimeAuthenticationResponse(response) {
+    const responsePath = taskTimeResponsePath(response);
+    if (response.status === 401
         || isOAuth2ProxyResponse(response)
-        || taskTimeResponseContentType(response).includes('text/html');
+        || responsePath === '/auth/login'
+        || responsePath === '/auth/set-password') {
+        return true;
+    }
+
+    if (!taskTimeResponseContentType(response).includes('text/html')
+        || typeof response.clone !== 'function') {
+        return false;
+    }
+
+    try {
+        return isKnownTaskTimeLoginPage(await response.clone().text());
+    } catch (error) {
+        return false;
+    }
 }
 
 function navigateToTaskTimeLogin(url) {
@@ -47,10 +74,7 @@ function redirectToTaskTimeLogin(response) {
     taskTimeAuthRedirecting = true;
 
     const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    const isGatewayResponse = isOAuth2ProxyResponse(response);
-    const loginPath = isGatewayResponse ? '/oauth2/start' : '/auth/login';
-    const targetParameter = isGatewayResponse ? 'rd' : 'next';
-    navigateToTaskTimeLogin(`${loginPath}?${targetParameter}=${encodeURIComponent(target)}`);
+    navigateToTaskTimeLogin(target);
 }
 
 async function getTaskTimeResponseError(response) {
@@ -74,7 +98,7 @@ async function getTaskTimeResponseError(response) {
 }
 
 async function ensureTaskTimeResponse(response) {
-    if (isTaskTimeAuthenticationResponse(response)) {
+    if (await isTaskTimeAuthenticationResponse(response)) {
         redirectToTaskTimeLogin(response);
         throw new TaskTimeAuthenticationError();
     }
@@ -95,9 +119,11 @@ async function fetchTaskTimeJson(url, options = {}) {
 window.addEventListener('armory:kanban', event => {
     const data = event.detail;
     if (!IS_GLOBAL && data.project_id != null && data.project_id !== PROJECT_ID) return;
-    if (['task_changed', 'task_time_changed', 'board_changed'].includes(data.type)) loadTaskTimeData();
+    if (['task_changed', 'task_time_changed', 'board_changed'].includes(data.type)) loadTaskTimeData(true);
 });
-window.addEventListener('armory:events-connected', () => loadTaskTimeData());
+window.addEventListener('armory:events-connected', () => {
+    if (taskTimeDataLoaded) loadTaskTimeData(true);
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('task-time-edit-form').addEventListener('submit', saveTaskTimeValues);
@@ -114,7 +140,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.setInterval(loadTaskTimeData, 60000);
 });
 
-async function loadTaskTimeData() {
+async function loadTaskTimeData(force = false) {
+    if (taskTimeAuthRedirecting) return;
+    if (taskTimeLoadPromise) {
+        if (force) taskTimeReloadQueued = true;
+        return taskTimeLoadPromise;
+    }
+
+    taskTimeLoadPromise = loadTaskTimeDataNow();
+    try {
+        return await taskTimeLoadPromise;
+    } finally {
+        taskTimeLoadPromise = null;
+        if (taskTimeReloadQueued && !taskTimeAuthRedirecting) {
+            taskTimeReloadQueued = false;
+            window.setTimeout(() => loadTaskTimeData(), 0);
+        } else {
+            taskTimeReloadQueued = false;
+        }
+    }
+}
+
+async function loadTaskTimeDataNow() {
     const tableBody = document.getElementById('task-time-table-body');
     try {
         const taskUrl = IS_GLOBAL ? '/api/tasks' : `/api/projects/${PROJECT_ID}/tasks`;
@@ -143,6 +190,7 @@ async function loadTaskTimeData() {
         assigneesMap = Object.fromEntries((timeFilterOptions.assignees || []).map(assignee => [assignee.email, assignee.name]));
         populateTimeFilters();
         applyTimeFilters();
+        taskTimeDataLoaded = true;
     } catch (error) {
         if (error instanceof TaskTimeAuthenticationError) return;
         displayedTimeTasks = [];
@@ -485,7 +533,7 @@ async function sendTimeTaskControl(taskId, action, method, payload) {
         }
     } finally {
         pendingTimeControls.delete(taskId);
-        await loadTaskTimeData();
+        await loadTaskTimeData(true);
     }
 }
 
@@ -657,7 +705,7 @@ async function saveTaskTimeValues(event) {
             body: JSON.stringify(payload),
         });
         bootstrap.Modal.getInstance(document.getElementById('task-time-edit-modal'))?.hide();
-        await loadTaskTimeData();
+        await loadTaskTimeData(true);
     } catch (error) {
         if (error instanceof TaskTimeAuthenticationError) return;
         console.error('Не удалось сохранить время задачи:', error);

@@ -159,6 +159,7 @@ def test_time_status_column_updates_via_shared_events_and_keeps_totals_aligned(b
                 window.timeReloads++;
                 renderTaskTimeTable([window.nextTimeTask]);
             };
+            taskTimeDataLoaded = true;
             window.nextTimeTask = {
                 id: 1, project_id: 1, title: '<task-title>', status: {name: 'Тестирование'},
                 estimated_minutes: 30, testing_seconds: 120, actual_seconds: 120,
@@ -237,9 +238,105 @@ def test_time_page_redirects_to_login_instead_of_rendering_auth_html(browser):
             await loadTaskTimeData();
         }''')
         assert page.evaluate("window.loginRedirects.length") == 1
-        assert page.evaluate("window.loginRedirects[0]").startswith('/auth/login?next=')
+        assert page.evaluate("window.loginRedirects[0]") == page.evaluate(
+            "`${window.location.pathname}${window.location.search}${window.location.hash}`"
+        )
         assert 'Sign In' not in page.locator('#task-time-table-body').inner_text()
         assert page.locator('#task-time-table-body').inner_text() == 'Загрузка...'
+    finally:
+        page.close()
+
+
+def test_time_page_does_not_redirect_for_arbitrary_html_response(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body">
+                <tr><td>Загрузка...</td></tr>
+            </tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''async () => {
+            window.loginRedirects = [];
+            navigateToTaskTimeLogin = url => window.loginRedirects.push(url);
+            window.fetch = async () => new Response(
+                '<!doctype html><html><head><title>Temporary error</title></head></html>',
+                {status: 200, headers: {'content-type': 'text/html; charset=utf-8'}},
+            );
+            await loadTaskTimeData();
+        }''')
+        assert page.evaluate("window.loginRedirects.length") == 0
+        assert page.locator('#task-time-table-body').inner_text() != 'Загрузка...'
+    finally:
+        page.close()
+
+
+def test_time_page_reloads_protected_url_for_api_unauthorized_response(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body">
+                <tr><td>Загрузка...</td></tr>
+            </tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''async () => {
+            window.loginRedirects = [];
+            navigateToTaskTimeLogin = url => window.loginRedirects.push(url);
+            window.fetch = async () => new Response(
+                JSON.stringify({detail: 'Authentication required'}),
+                {status: 401, headers: {'content-type': 'application/json'}},
+            );
+            await loadTaskTimeData();
+        }''')
+        assert page.evaluate("window.loginRedirects.length") == 1
+        assert page.evaluate("window.loginRedirects[0]") == page.evaluate(
+            "`${window.location.pathname}${window.location.search}${window.location.hash}`"
+        )
+    finally:
+        page.close()
+
+
+def test_time_page_coalesces_parallel_data_loads(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            populateTimeFilters = () => {};
+            applyTimeFilters = () => {};
+            window.fetchCalls = 0;
+            window.pendingFetches = [];
+            window.fetch = url => {
+                window.fetchCalls++;
+                return new Promise(resolve => window.pendingFetches.push({url, resolve}));
+            };
+            window.finishFetches = () => {
+                for (const request of window.pendingFetches.splice(0)) {
+                    request.resolve(new Response('[]', {
+                        status: 200,
+                        headers: {'content-type': 'application/json'},
+                    }));
+                }
+            };
+            window.firstLoad = loadTaskTimeData();
+            window.secondLoad = loadTaskTimeData();
+        }''')
+        page.wait_for_function('window.fetchCalls === 3')
+        page.evaluate('window.finishFetches()')
+        page.evaluate('Promise.all([window.firstLoad, window.secondLoad])')
+        assert page.evaluate('window.fetchCalls') == 3
     finally:
         page.close()
 
