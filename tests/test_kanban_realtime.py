@@ -216,6 +216,51 @@ def test_zero_time_deviation_is_displayed_as_dash(browser):
         page.close()
 
 
+def test_task_time_uses_common_pagination_with_thirty_tasks_per_page(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+            <nav id="task-time-pagination"></nav>
+        ''')
+        page.add_script_tag(content='''
+            const IS_GLOBAL = false;
+            const PROJECT_ID = 1;
+            window.paginationCalls = [];
+            function renderPagination(containerId, currentPage, totalPages, onPageChange) {
+                window.paginationCalls.push({containerId, currentPage, totalPages});
+                window.changeTaskTimePage = onPageChange;
+            }
+        ''')
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            const tasks = Array.from({length: 61}, (_, index) => ({
+                id: index + 1,
+                project_id: 1,
+                title: `Задача ${index + 1}`,
+                status_id: 2,
+                status: {name: 'Тестирование'},
+                estimated_minutes: 30,
+            }));
+            timeTasks = tasks;
+            displayedTimeTasks = tasks;
+            renderTaskTimeTable(tasks);
+        }''')
+        assert page.locator('#task-time-table-body tr[data-task-id]').count() == 30
+        assert page.evaluate('window.paginationCalls[0]') == {
+            'containerId': 'task-time-pagination',
+            'currentPage': 1,
+            'totalPages': 3,
+        }
+        page.evaluate('window.changeTaskTimePage(2)')
+        assert page.locator('#task-time-table-body tr[data-task-id="31"]').count() == 1
+        assert page.locator('#task-time-table-body tr[data-task-id]').count() == 30
+    finally:
+        page.close()
+
+
 def test_time_page_redirects_to_login_instead_of_rendering_auth_html(browser):
     page = browser.new_page()
     try:

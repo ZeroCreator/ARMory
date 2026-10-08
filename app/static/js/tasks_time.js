@@ -14,6 +14,8 @@ let taskTimeAuthRedirecting = false;
 let taskTimeLoadPromise = null;
 let taskTimeReloadQueued = false;
 let taskTimeDataLoaded = false;
+let currentTimePage = 1;
+const TIME_TASKS_PER_PAGE = 30;
 const taskTimeGetRetryDelays = [250, 1000];
 const taskTimeRequestTimeout = 15000;
 
@@ -220,7 +222,7 @@ async function loadTaskTimeDataNow() {
     filterOptions = timeFilterOptions;
     assigneesMap = Object.fromEntries((timeFilterOptions.assignees || []).map(assignee => [assignee.email, assignee.name]));
     populateTimeFilters();
-    applyTimeFilters();
+    applyTimeFilters(false);
 
     const projectIds = [...new Set(timeTasks.map(task => task.project_id))];
     const metadataResults = await Promise.allSettled([
@@ -249,7 +251,7 @@ async function loadTaskTimeDataNow() {
         console.error('Не удалось обновить дополнительные данные учета времени:', metadataFailures.map(result => result.reason));
     }
     populateTimeFilters();
-    applyTimeFilters();
+    applyTimeFilters(false);
 }
 
 function populateTimeFilters() {
@@ -297,7 +299,8 @@ function populateTimeSelect(select, options, defaultLabel = 'Все') {
     select.value = previousValue;
 }
 
-function applyTimeFilters() {
+function applyTimeFilters(resetPage = true) {
+    if (resetPage) currentTimePage = 1;
     const search = document.getElementById('time-filter-search').value.trim().toLocaleLowerCase('ru');
     const statuses = getFilterValues('time-filter-status');
     const projects = getFilterValues('time-filter-project');
@@ -389,18 +392,17 @@ function syncTimeTaskSelection(tasks) {
     availableTaskIds.forEach(taskId => knownTimeTaskIds.add(taskId));
 }
 
-function updateTimeTaskSelectionControl() {
+function updateTimeTaskSelectionControl(tasks = getCurrentTimeTaskPage()) {
     const selectAll = document.getElementById('time-task-select-all');
     if (!selectAll) return;
-    const sourceTasks = timeTasks.length ? timeTasks : displayedTimeTasks;
-    const taskIds = sourceTasks.map(task => Number(task.id));
+    const taskIds = tasks.map(task => Number(task.id));
     const selectedCount = taskIds.filter(taskId => selectedTimeTaskIds.has(taskId)).length;
     selectAll.checked = taskIds.length > 0 && selectedCount === taskIds.length;
     selectAll.indeterminate = selectedCount > 0 && selectedCount < taskIds.length;
 }
 
 function toggleAllTimeTaskSelection(selected) {
-    const sourceTasks = timeTasks.length ? timeTasks : displayedTimeTasks;
+    const sourceTasks = getCurrentTimeTaskPage();
     syncTimeTaskSelection(sourceTasks);
     sourceTasks.forEach(task => {
         const taskId = Number(task.id);
@@ -588,6 +590,32 @@ async function sendTimeTaskControl(taskId, action, method, payload) {
     }
 }
 
+function getCurrentTimeTaskPage() {
+    const totalPages = Math.max(1, Math.ceil(displayedTimeTasks.length / TIME_TASKS_PER_PAGE));
+    currentTimePage = Math.min(Math.max(currentTimePage, 1), totalPages);
+    const start = (currentTimePage - 1) * TIME_TASKS_PER_PAGE;
+    return displayedTimeTasks.slice(start, start + TIME_TASKS_PER_PAGE);
+}
+
+function renderTaskTimePagination(totalPages) {
+    const pagination = document.getElementById('task-time-pagination');
+    if (!pagination) return;
+    if (typeof renderPagination !== 'function') {
+        pagination.innerHTML = '';
+        return;
+    }
+    renderPagination(
+        'task-time-pagination',
+        currentTimePage,
+        totalPages,
+        page => {
+            currentTimePage = page;
+            renderTaskTimeTable(displayedTimeTasks);
+        },
+        document.getElementById('task-time-table'),
+    );
+}
+
 function renderTaskTimeTable(tasks) {
     hideTaskTimeContextMenu();
     const body = document.getElementById('task-time-table-body');
@@ -599,9 +627,16 @@ function renderTaskTimeTable(tasks) {
     if (!tasks.length) {
         body.innerHTML = `<tr><td colspan="${columnCount}" class="text-center text-muted py-4">Нет задач</td></tr>`;
         foot.innerHTML = '';
-        updateTimeTaskSelectionControl();
+        currentTimePage = 1;
+        renderTaskTimePagination(0);
+        updateTimeTaskSelectionControl([]);
         return;
     }
+
+    const totalPages = Math.ceil(tasks.length / TIME_TASKS_PER_PAGE);
+    currentTimePage = Math.min(Math.max(currentTimePage, 1), totalPages);
+    const start = (currentTimePage - 1) * TIME_TASKS_PER_PAGE;
+    const pageTasks = tasks.slice(start, start + TIME_TASKS_PER_PAGE);
 
     let plannedTotal = 0;
     let plannedCount = 0;
@@ -620,7 +655,7 @@ function renderTaskTimeTable(tasks) {
         deviationTotal += getTaskTimeDeviation(task) ?? 0;
     });
 
-    body.innerHTML = tasks.map(task => {
+    body.innerHTML = pageTasks.map(task => {
         const estimate = task.estimated_minutes == null ? null : task.estimated_minutes * 60;
         const actual = task.actual_seconds || 0;
         const deviation = getTaskTimeDeviation(task);
@@ -655,7 +690,8 @@ function renderTaskTimeTable(tasks) {
         <td>${formatEffortTime(actualTotal)}</td>
         <td class="${totalDeviationClass}">${formatTaskTimeDeviation(deviationTotal)}</td>
     </tr>`;
-    updateTimeTaskSelectionControl();
+    renderTaskTimePagination(totalPages);
+    updateTimeTaskSelectionControl(pageTasks);
 }
 
 function showTaskTimeContextMenu(event) {
