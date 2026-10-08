@@ -14,6 +14,8 @@ let taskTimeAuthRedirecting = false;
 let taskTimeLoadPromise = null;
 let taskTimeReloadQueued = false;
 let taskTimeDataLoaded = false;
+const taskTimeGetRetryDelays = [250, 1000];
+const taskTimeRequestTimeout = 15000;
 
 class TaskTimeAuthenticationError extends Error {
     constructor() {
@@ -107,8 +109,34 @@ async function ensureTaskTimeResponse(response) {
 }
 
 async function fetchTaskTimeResponse(url, options = {}) {
-    const response = await fetch(url, { credentials: 'same-origin', ...options });
-    return ensureTaskTimeResponse(response);
+    const method = String(options.method || 'GET').toUpperCase();
+    const maxAttempts = method === 'GET' ? taskTimeGetRetryDelays.length + 1 : 1;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), taskTimeRequestTimeout);
+        try {
+            const response = await fetch(url, {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                ...options,
+                signal: options.signal || controller.signal,
+            });
+            const authenticationResponse = await isTaskTimeAuthenticationResponse(response);
+            const retryableResponse = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
+            if (!authenticationResponse && retryableResponse && attempt < maxAttempts - 1) {
+                await new Promise(resolve => window.setTimeout(resolve, taskTimeGetRetryDelays[attempt]));
+                continue;
+            }
+            return ensureTaskTimeResponse(response);
+        } catch (error) {
+            const retryableError = error instanceof TypeError || error?.name === 'AbortError';
+            if (!retryableError || attempt >= maxAttempts - 1) throw error;
+            await new Promise(resolve => window.setTimeout(resolve, taskTimeGetRetryDelays[attempt]));
+        } finally {
+            window.clearTimeout(timeoutId);
+        }
+    }
+    throw new Error('Task time request failed');
 }
 
 async function fetchTaskTimeJson(url, options = {}) {
@@ -163,42 +191,65 @@ async function loadTaskTimeData(force = false) {
 
 async function loadTaskTimeDataNow() {
     const tableBody = document.getElementById('task-time-table-body');
+    const taskUrl = IS_GLOBAL ? '/api/tasks' : `/api/projects/${PROJECT_ID}/tasks`;
+    const filterUrl = IS_GLOBAL ? '/api/kanban/filters' : `/api/projects/${PROJECT_ID}/kanban/filters`;
+    let tasksResponse;
     try {
-        const taskUrl = IS_GLOBAL ? '/api/tasks' : `/api/projects/${PROJECT_ID}/tasks`;
-        const filterUrl = IS_GLOBAL ? '/api/kanban/filters' : `/api/projects/${PROJECT_ID}/kanban/filters`;
-        const [tasksResponse, projectsResponse, filterResponse] = await Promise.all([
-            fetchTaskTimeJson(taskUrl),
-            fetchTaskTimeJson('/api/projects'),
-            fetchTaskTimeJson(filterUrl),
-        ]);
-        timeTasks = tasksResponse;
-        const availableTaskIds = new Set(timeTasks.map(task => Number(task.id)));
-        selectedTimeTaskIds.forEach(taskId => {
-            if (!availableTaskIds.has(taskId)) selectedTimeTaskIds.delete(taskId);
-        });
-        const statusEntries = await Promise.all([...new Set(timeTasks.map(task => task.project_id))].map(async projectId => {
-            const statuses = await fetchTaskTimeJson(`/api/projects/${projectId}/task-statuses`);
-            return [projectId, statuses];
-        }));
-        timeStatuses = Object.fromEntries(statusEntries);
-        const projects = projectsResponse;
-        timeFilterOptions = filterResponse;
+        tasksResponse = await fetchTaskTimeJson(taskUrl);
+    } catch (error) {
+        if (error instanceof TaskTimeAuthenticationError) return;
+        console.error('Не удалось обновить список задач учета времени:', error);
+        if (!taskTimeDataLoaded) {
+            displayedTimeTasks = [];
+            const exportButton = document.getElementById('task-time-export-xlsx');
+            if (exportButton) exportButton.disabled = true;
+            const message = error instanceof Error ? error.message : String(error);
+            tableBody.innerHTML = `<tr><td colspan="${IS_GLOBAL ? 11 : 10}" class="text-center text-danger py-4">${escapeTimeHtml(message)}</td></tr>`;
+        }
+        return;
+    }
+
+    timeTasks = Array.isArray(tasksResponse) ? tasksResponse : [];
+    const availableTaskIds = new Set(timeTasks.map(task => Number(task.id)));
+    selectedTimeTaskIds.forEach(taskId => {
+        if (!availableTaskIds.has(taskId)) selectedTimeTaskIds.delete(taskId);
+    });
+    taskTimeDataLoaded = true;
+    allTasks = timeTasks;
+    projectsMap = timeProjects;
+    filterOptions = timeFilterOptions;
+    assigneesMap = Object.fromEntries((timeFilterOptions.assignees || []).map(assignee => [assignee.email, assignee.name]));
+    populateTimeFilters();
+    applyTimeFilters();
+
+    const projectIds = [...new Set(timeTasks.map(task => task.project_id))];
+    const metadataResults = await Promise.allSettled([
+        fetchTaskTimeJson(filterUrl),
+        ...projectIds.map(projectId => fetchTaskTimeJson(`/api/projects/${projectId}/task-statuses`)),
+    ]);
+    const [filterResult, ...statusResults] = metadataResults;
+    if (filterResult?.status === 'fulfilled' && filterResult.value && typeof filterResult.value === 'object') {
+        timeFilterOptions = filterResult.value;
+        const projects = Array.isArray(timeFilterOptions.projects) ? timeFilterOptions.projects : [];
         timeProjects = Object.fromEntries(projects.map(project => [project.id, project.name]));
         allTasks = timeTasks;
         projectsMap = timeProjects;
         filterOptions = timeFilterOptions;
         assigneesMap = Object.fromEntries((timeFilterOptions.assignees || []).map(assignee => [assignee.email, assignee.name]));
-        populateTimeFilters();
-        applyTimeFilters();
-        taskTimeDataLoaded = true;
-    } catch (error) {
-        if (error instanceof TaskTimeAuthenticationError) return;
-        displayedTimeTasks = [];
-        const exportButton = document.getElementById('task-time-export-xlsx');
-        if (exportButton) exportButton.disabled = true;
-        const message = error instanceof Error ? error.message : String(error);
-        tableBody.innerHTML = `<tr><td colspan="${IS_GLOBAL ? 11 : 10}" class="text-center text-danger py-4">${escapeTimeHtml(message)}</td></tr>`;
     }
+    const nextStatuses = { ...timeStatuses };
+    statusResults.forEach((result, index) => {
+        if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+            nextStatuses[projectIds[index]] = result.value;
+        }
+    });
+    timeStatuses = nextStatuses;
+    const metadataFailures = metadataResults.filter(result => result.status === 'rejected');
+    if (metadataFailures.length) {
+        console.error('Не удалось обновить дополнительные данные учета времени:', metadataFailures.map(result => result.reason));
+    }
+    populateTimeFilters();
+    applyTimeFilters();
 }
 
 function populateTimeFilters() {

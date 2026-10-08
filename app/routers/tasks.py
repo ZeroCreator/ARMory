@@ -499,7 +499,7 @@ async def get_kanban_board(
 @router.get("/kanban/filters", response_model=KanbanFiltersOut)
 async def project_kanban_filters(project_id: int, db: AsyncSession = Depends(get_db)):
     """Доступные значения фильтров для kanban проекта."""
-    await _get_project(project_id, db)
+    project = await _get_project(project_id, db)
 
     priorities_result = await db.execute(
         select(distinct(Task.priority))
@@ -527,7 +527,7 @@ async def project_kanban_filters(project_id: int, db: AsyncSession = Depends(get
     list_names = [ln[0] for ln in list_names_result.fetchall() if ln[0]]
 
     return KanbanFiltersOut(
-        projects=[],
+        projects=[{"id": project.id, "name": project.name}],
         priorities=sorted(priorities),
         assignees=assignees,
         tags=sorted(tag_set),
@@ -2169,8 +2169,10 @@ async def global_kanban(
 @global_router.get("/kanban/filters", response_model=KanbanFiltersOut)
 async def global_kanban_filters(db: AsyncSession = Depends(get_db)):
     """Доступные значения фильтров для общего kanban."""
-    projects_result = await db.execute(select(Project).order_by(Project.name.asc()))
-    projects = projects_result.scalars().all()
+    projects_result = await db.execute(
+        select(Project.id, Project.name).order_by(Project.name.asc())
+    )
+    projects = [{"id": project_id, "name": name} for project_id, name in projects_result.all()]
 
     priorities_result = await db.execute(select(distinct(Task.priority)).where(Task.priority.isnot(None)))
     priorities = [p[0] for p in priorities_result.fetchall() if p[0]]

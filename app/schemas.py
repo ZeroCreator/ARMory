@@ -129,6 +129,12 @@ class ProjectDetailOut(ProjectOut):
     pass
 
 
+class ProjectSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+
+
 class SidebarLinkOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -465,7 +471,7 @@ class GlobalKanbanColumnUpdate(BaseModel):
 
 
 class KanbanFiltersOut(BaseModel):
-    projects: List[ProjectOut]
+    projects: List[ProjectSummaryOut]
     priorities: List[str]
     assignees: List[AssigneeOut]
     tags: List[str]

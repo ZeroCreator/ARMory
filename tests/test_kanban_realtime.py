@@ -333,10 +333,80 @@ def test_time_page_coalesces_parallel_data_loads(browser):
             window.firstLoad = loadTaskTimeData();
             window.secondLoad = loadTaskTimeData();
         }''')
-        page.wait_for_function('window.fetchCalls === 3')
+        page.wait_for_function('window.fetchCalls === 1')
+        page.evaluate('window.finishFetches()')
+        page.wait_for_function('window.fetchCalls === 2')
         page.evaluate('window.finishFetches()')
         page.evaluate('Promise.all([window.firstLoad, window.secondLoad])')
+        assert page.evaluate('window.fetchCalls') == 2
+    finally:
+        page.close()
+
+
+def test_time_page_keeps_loaded_tasks_when_refresh_fetch_fails(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            const task = {
+                id: 1, project_id: 1, title: '<task-title>', status_id: 1,
+                status: {name: 'Тестирование'}, estimated_minutes: 30,
+                actual_seconds: 60, time_tracking_status: 'completed',
+            };
+            timeTasks = [task];
+            displayedTimeTasks = [task];
+            taskTimeDataLoaded = true;
+            renderTaskTimeTable([task]);
+            window.fetchCalls = 0;
+            window.fetch = async () => {
+                window.fetchCalls++;
+                throw new TypeError('Failed to fetch');
+            };
+        }''')
+        page.evaluate('loadTaskTimeData(true)')
         assert page.evaluate('window.fetchCalls') == 3
+        assert page.locator('#task-time-table-body tr[data-task-id="1"]').count() == 1
+        assert 'Failed to fetch' not in page.locator('#task-time-table-body').inner_text()
+    finally:
+        page.close()
+
+
+def test_time_page_keeps_tasks_when_metadata_request_fails(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            populateTimeFilters = () => {};
+            applyTimeFilters = () => renderTaskTimeTable(timeTasks);
+            window.fetch = async url => {
+                if (url === '/api/tasks') {
+                    return new Response(JSON.stringify([{
+                        id: 1, project_id: 1, title: '<task-title>', status_id: 1,
+                        status: {name: 'Тестирование'}, estimated_minutes: 30,
+                        actual_seconds: 60, time_tracking_status: 'completed',
+                    }]), {status: 200, headers: {'content-type': 'application/json'}});
+                }
+                return new Response(JSON.stringify({detail: 'Temporary failure'}), {
+                    status: 404,
+                    headers: {'content-type': 'application/json'},
+                });
+            };
+        }''')
+        page.evaluate('loadTaskTimeData()')
+        assert page.locator('#task-time-table-body tr[data-task-id="1"]').count() == 1
+        assert 'Failed to fetch' not in page.locator('#task-time-table-body').inner_text()
     finally:
         page.close()
 

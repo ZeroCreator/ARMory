@@ -407,3 +407,13 @@ async def test_kanban_filters_accept_multiple_values(time_api):
         "<task-title>",
         "<other-task-title>",
     }
+
+
+@pytest.mark.asyncio
+async def test_global_kanban_filters_return_project_summaries(time_api):
+    client, _, _ = time_api
+
+    response = await client.get("/api/kanban/filters")
+
+    assert response.status_code == 200
+    assert response.json()["projects"] == [{"id": 1, "name": "<project-name>"}]
