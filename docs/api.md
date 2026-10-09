@@ -1,5 +1,10 @@
 # API
 
+Базовый адрес API — `/api`. Полная интерактивная схема доступна по `/api/docs`,
+альтернативное представление OpenAPI — по `/api/redoc`. Если включена локальная
+аутентификация, браузерные запросы проходят через `/auth`, а MCP может использовать
+OAuth или настроенный API-ключ.
+
 ## Подключаемые приложения
 
 | Метод | Путь | Описание |
@@ -108,15 +113,26 @@ API доступен при `PERSONAL_NOTES_ENABLED=true`.
 | POST | `/api/projects/{id}/tasks` | Создать задачу |
 | POST | `/api/projects/{id}/tasks/bulk` | Массовое создание задач (импорт ToDo) |
 | GET | `/api/projects/{id}/tasks/{task_id}` | Получить задачу |
-| PATCH | `/api/projects/{id}/tasks/{task_id}` | Обновить задачу (в т.ч. `is_closed` — закрытие, `estimated_minutes` — оценка в минутах и `work_seconds`, `testing_seconds`, `actual_seconds` — ручные итоги времени в секундах) |
+| PATCH | `/api/projects/{id}/tasks/{task_id}` | Обновить поля задачи, включая `is_closed` и `estimated_minutes`; фактическое время изменяется отдельными endpoint времени |
 | DELETE | `/api/projects/{id}/tasks/{task_id}` | Удалить задачу |
 | POST | `/api/projects/{id}/tasks/{task_id}/attachments` | Добавить вложение к задаче |
+| POST | `/api/projects/{id}/tasks/{task_id}/attachments/upload` | Загрузить файл во вложение задачи |
+| POST | `/api/projects/{id}/tasks/{task_id}/attachments/{att_id}/open` | Открыть файл локально |
+| DELETE | `/api/projects/{id}/tasks/{task_id}/attachments/{att_id}` | Удалить вложение |
 | GET | `/api/projects/{id}/tasks/{task_id}/attachments/{att_id}/collabora` | URL редактирования вложения в Collabora Online |
 | GET | `/api/projects/{id}/kanban/export` | Экспорт доски проекта в JSON |
 | POST | `/api/projects/{id}/kanban/import` | Импорт доски проекта из JSON |
 | GET | `/api/tasks?project_id=` | Список задач всех проектов (фильтр по проекту) |
 | POST | `/api/tasks/{task_id}/time/start` | Запустить или возобновить активную сессию агента (`worker_id`, `phase`: `work` или `testing`) |
 | POST | `/api/tasks/{task_id}/time/pause` | Приостановить активную сессию агента (`worker_id`) |
+| POST | `/api/tasks/{task_id}/time/manual/start` | Запустить ручной таймер выбранной фазы |
+| POST | `/api/tasks/{task_id}/time/manual/pause` | Остановить ручной таймер |
+| PATCH | `/api/tasks/{task_id}/time/tracking-status` | Изменить состояние отслеживания времени |
+| PATCH | `/api/tasks/{task_id}/time/status` | Изменить статус учёта времени |
+| POST | `/api/tasks/time/export/xlsx` | Экспорт интервалов и итогов времени в `.xlsx` |
+| POST | `/api/tasks/attachments/upload` | Загрузить вложение для задачи общего kanban |
+| POST | `/api/tasks/attachments/bulk` | Массово добавить вложения |
+| PATCH | `/api/tasks/bulk` | Массово обновить задачи |
 | GET | `/api/kanban` | Общая доска по всем проектам |
 | GET | `/api/kanban/filters` | Опции фильтров общего kanban |
 | POST | `/api/kanban/tasks/bulk` | Массовое создание задач в общем kanban |
@@ -124,6 +140,27 @@ API доступен при `PERSONAL_NOTES_ENABLED=true`.
 | GET | `/api/kanban/export` | Экспорт общей доски в JSON |
 | POST | `/api/kanban/import` | Импорт общей доски из JSON |
 | GET | `/api/gantt/export/xlsx` | Экспорт диаграммы Ганта в `.xlsx` с учётом фильтров и флага `hide_no_deadline` |
+
+### Статусы и исполнители задач
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/projects/{id}/task-statuses` | Колонки kanban проекта |
+| POST | `/api/projects/{id}/task-statuses` | Создать колонку |
+| PATCH | `/api/projects/{id}/task-statuses/reorder` | Изменить порядок колонок |
+| PATCH | `/api/projects/{id}/task-statuses/{status_id}` | Переименовать или изменить колонку |
+| DELETE | `/api/projects/{id}/task-statuses/{status_id}` | Удалить колонку по правилам проекта |
+| GET | `/api/assignees` | Список доступных исполнителей |
+| POST | `/api/assignees` | Создать или обновить исполнителя |
+| GET | `/api/assignees/mcp-agent` | Найти исполнителя MCP-агента |
+
+### События и текущий пользователь
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/events` | SSE-поток обновлений интерфейса и фоновых операций |
+| GET | `/api/me` | Данные текущего пользователя |
+| GET | `/api/me/debug` | Диагностическая информация об auth-заголовках; использовать только при отладке |
 
 ## Alexandrite
 

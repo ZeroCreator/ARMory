@@ -19,7 +19,8 @@ SCRIPTS_PROJECT_PATHS=<project-a-directory>,<project-b-directory>
 SCHEDULER_TASKS='{"send-report": {"name": "Ежедневный отчёт", "script": "send_report.sh"}}'
 ```
 
-В интерфейсе и API задача адресуется ключом `<проект>:<ключ>` — имя проекта (каталога) приводится к нижнему регистру, например `armory:send-report`.
+В интерфейсе и API задача адресуется ключом `<project-key>:<task-key>` — имя проекта
+(каталога) приводится к нижнему регистру.
 
 ## Удалённые серверы (прод, Docker)
 
@@ -53,7 +54,7 @@ SCHEDULER_SSH_KEY_HOST=<host-ssh-key-path>
 
 ```json
 {
-  "project": "armory:send-report",
+  "project": "<project-key>:<task-key>",
   "schedule_type": "once",
   "datetime": "2026-07-20T09:00",
   "args": ["--mode", "full"]
@@ -66,7 +67,7 @@ SCHEDULER_SSH_KEY_HOST=<host-ssh-key-path>
 
 ```json
 {
-  "project": "armory:todo-telegram",
+  "project": "<project-key>:<task-key>",
   "schedule_type": "recurring",
   "cron": "0 9 * * 1",
   "args": []
@@ -87,7 +88,7 @@ SCHEDULER_SSH_KEY_HOST=<host-ssh-key-path>
 
 ```json
 {
-  "project": "armory:todo-telegram",
+  "project": "<project-key>:<task-key>",
   "cron": "0 9 * * 1",
   "args": []
 }
@@ -97,7 +98,9 @@ SCHEDULER_SSH_KEY_HOST=<host-ssh-key-path>
 
 ## Telegram-список задач
 
-В ToDo-списке кнопка «Сохранить для Telegram» сохраняет конфигурацию рассылки и открывает планировщик для задачи `armory:todo-telegram`. Таким образом отправку списка задач в Telegram можно запланировать однократно или регулярно.
+В ToDo-списке кнопка «Сохранить для Telegram» сохраняет конфигурацию рассылки и
+открывает планировщик для настроенной задачи отправки. Таким образом список задач
+можно запланировать однократно или регулярно.
 
 ## API
 

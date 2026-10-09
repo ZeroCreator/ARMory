@@ -1,82 +1,59 @@
 # Локальная модель для работы с ARMory
 
-ARMory не зависит от конкретного поставщика модели. Любую локальную модель, запущенную через OpenAI-совместимый сервер, можно использовать с MCP-клиентом (Claude Code, Cline, Continue, mcpm-aider и др.), который подключается к endpoint `/mcp/` ARMory.
-
-Ниже — пример запуска локальной модели Qwen через `llama.cpp` и варианты подключения MCP-клиентов.
+ARMory не зависит от конкретного поставщика модели. Любую локальную модель,
+запущенную через OpenAI-совместимый сервер, можно использовать с MCP-клиентом,
+который подключается к endpoint `/mcp/` ARMory.
 
 ## Требования
 
-- Python-окружение ARMory настроено (`.venv`).
-- Установлен `llama.cpp` с сервером.
-- Видеокарта и RAM достаточны для выбранной модели.
+- настроенное Python-окружение ARMory;
+- установленный сервер модели с OpenAI-совместимым API;
+- ресурсы, достаточные для выбранной модели;
+- MCP-клиент, который умеет работать с HTTP MCP endpoint.
 
-Пример конфигурации машины:
+Параметры видеокарты, памяти, размера модели и контекста зависят от выбранного
+сервера. Проверь требования модели до запуска.
 
-- RTX 5060 с 8 ГБ VRAM;
-- 32 GB RAM;
-- модель `Qwen2.5-Coder-14B Q4_K_M` (~9 ГБ файла);
-- контекст `-c 8192`.
+## Запуск через llama.cpp
 
-## 1. Запуск локальной модели
-
-Перейди в папку `llama.cpp` и запусти сервер:
+Перейди в каталог `llama.cpp` и подставь идентификатор модели и параметры среды:
 
 ```bash
 cd <llama-cpp-directory>
 
 ./build/bin/llama-server \
-  -hf Qwen/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M \
-  --host <service-host> \
-  --port <port> \
-  -ngl 25 \
-  -c 8192 \
+  -hf <model-identifier> \
+  --host <model-bind-address> \
+  --port <model-port> \
+  -ngl <gpu-layers> \
+  -c <context-tokens> \
   --flash-attn on
 ```
 
-### Проверить, что модель запущена
-
-```bash
-pgrep -af llama-server
-# или
-ps -ef | grep llama-server
-```
-
-### Проверить API
+Проверь доступность сервера:
 
 ```bash
 curl http://<model-host>:<model-port>/v1/models
 ```
 
-### Логи
+Для просмотра процесса и логов используй штатные средства выбранного сервера.
+После проверки запусти ARMory и убедись, что MCP-клиент видит оба endpoint.
 
-```bash
-tail -100 <model-log-path>
-```
+## Настройка MCP-клиента
 
-### Остановить сервер
+Локальная модель сама по себе не является MCP-клиентом. Клиент должен:
 
-```bash
-pkill -f llama-server
-```
+1. обращаться к модели по OpenAI-совместимому API;
+2. подключаться к `/mcp/` ARMory;
+3. передавать API-ключ или проходить OAuth, если это включено в ARMory.
 
-## 2. Настройка MCP-клиента
+Пример настроек модели:
 
-Локальная модель сама по себе не является MCP-клиентом. Нужен клиент, который:
+- Base URL: `http://<model-host>:<model-port>/v1`;
+- Model: `<model-name>`;
+- API key: `<local-api-key>`.
 
-1. Умеет общаться с локальной моделью по OpenAI-совместимому API.
-2. Поддерживает MCP и умеет подключаться к `/mcp/` ARMory.
-
-### Вариант A: Claude Code / Cline / Continue
-
-Эти инструменты позволяют указать собственный OpenAI-совместимый endpoint и список MCP-серверов.
-
-Настройки модели:
-
-- Base URL: `http://<model-host>:<model-port>/v1`
-- Model: `Qwen/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M`
-- API key: `local` (или любая строка, если сервер не проверяет ключ)
-
-Настройки MCP-сервера ARMory:
+Пример HTTP-конфигурации MCP:
 
 ```json
 {
@@ -84,73 +61,41 @@ pkill -f llama-server
     "armory": {
       "url": "http://<armory-host>:<armory-port>/mcp/",
       "headers": {
-        "X-MCP-API-Key": "<MCP_API_KEY>"
+        "X-MCP-API-Key": "<mcp-api-key>"
       }
     }
   }
 }
 ```
 
-Укажи порт ARMory, на котором запущен backend (обычно `5005` в Docker или `8000` при локальном `uvicorn`).
+Если используется OAuth, не добавляй API-ключ: клиент должен пройти discovery и
+авторизацию через опубликованные ARMory endpoint'ы.
 
-### Вариант B: Aider + локальная модель
+## Настройка локального API в ARMory
 
-Aider напрямую не поддерживает MCP, но может работать с локальной моделью в качестве coding-ассистента. ARMory при этом используется через веб-интерфейс для управления задачами, а Aider — для редактирования кода.
-
-```bash
-aider \
-  --model openai/Qwen/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M \
-  --openai-api-base http://<model-host>:<model-port>/v1 \
-  --openai-api-key local \
-  --chat-language Russian \
-  --map-tokens 4096
-```
-
-### Вариант C: mcpm-aider
-
-Существуют сторонние обёртки (`mcpm-aider`), которые добавляют Aider поддержку MCP. В таком случае Aider выступает MCP-клиентом, а ARMory — MCP-сервером. Конфигурация зависит от конкретной обёртки, но обычно сводится к указанию:
-
-- URL модели: `http://<model-host>:<model-port>/v1`
-- MCP-сервера ARMory: `http://<armory-host>:<armory-port>/mcp/`
-- API-ключа `MCP_API_KEY`
-
-## 3. Настройка .env в ARMory
-
-Добавь в `.env` параметры локальной модели (используются MCP-клиентами и документацией):
+При необходимости добавь в `.env` параметры, которые используются внешними
+инструментами:
 
 ```env
-# AI-ассистент, от имени которого MCP берёт/назначает задачи
 AI_ASSIGNEE_EMAIL=<ai-assignee-email>
-AI_ASSIGNEE_NAME=AI Assistant
-
-# Локальная LLM (OpenAI-совместимый API)
+AI_ASSIGNEE_NAME=<ai-assignee-name>
 LOCAL_LLM_BASE_URL=http://<model-host>:<model-port>/v1
-LOCAL_LLM_MODEL=Qwen/Qwen2.5-Coder-14B-Instruct-GGUF:Q4_K_M
-LOCAL_LLM_API_KEY=local
+LOCAL_LLM_MODEL=<model-name>
+LOCAL_LLM_API_KEY=<local-api-key>
 ```
 
-## 4. Проверка работы
+## Проверка работы
 
-1. Запусти `llama-server`.
-2. Запусти ARMory backend.
-3. Открой MCP-клиент, настроенный на локальную модель и MCP ARMory.
-4. Попробуй команду:
+1. Запусти сервер модели.
+2. Запусти ARMory.
+3. Подключи MCP-клиент к `/mcp/`.
+4. Выполни запрос с идентификатором задачи `<task-id>` и проверь, что клиент
+   использовал инструмент чтения задачи.
 
-```
-Покажи задачу #39
-```
+## Другие серверы
 
-Ассистент должен вызвать `mcp__armory__get_task` и вернуть данные задачи.
-
-## Другие серверы локальных моделей
-
-Вместо `llama.cpp` можно использовать любой OpenAI-совместимый сервер:
-
-- **Ollama** — `ollama run <model-name>`, endpoint `http://<ollama-host>:<ollama-port>/v1`.
-- **vLLM** — `vllm serve <model-name>`, endpoint `http://<vllm-host>:<vllm-port>/v1`.
-- **llamafile** — портативный бинарник.
-
-Главное — чтобы сервер отвечал на `/v1/models` и `/v1/chat/completions` в формате OpenAI.
+Подойдут Ollama, vLLM, llamafile и другие серверы, совместимые с OpenAI API.
+Минимально необходимы ответы на `/v1/models` и `/v1/chat/completions`.
 
 ## Ссылки
 

@@ -59,7 +59,7 @@ tar -xzvf backup_<timestamp>.tar.gz
 Добавьте в `.env`:
 
 ```env
-YANDEX_DISK_TOKEN=your_oauth_token
+YANDEX_DISK_TOKEN=<yandex-oauth-token>
 YANDEX_DISK_PATH=ARMory/data
 YANDEX_DISK_BACKUPS_PATH=ARMory/backups
 YANDEX_DISK_ALEXANDRITE_PATH=ARMory/alexandrite
@@ -78,12 +78,12 @@ crontab -e
 ## Бэкап при деплое на другой сервер
 
 ```bash
-# На исходной машине
-tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/armory.db data/uploads/ .env
+# На исходной машине. Секреты из .env перенеси отдельно через защищённый канал.
+tar -czvf backup_$(date +%Y%m%d_%H%M%S).tar.gz data/armory.db data/uploads/
 
 # На новом сервере
 mkdir -p <project-directory> && cd <project-directory>
 tar -xzvf backup_<timestamp>.tar.gz
-# Запуск
+# Запуск после настройки переменных окружения
 docker compose up -d --build
 ```

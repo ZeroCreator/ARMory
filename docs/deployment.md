@@ -20,7 +20,7 @@ STORAGE_TYPE=local
 ARMORY_PUBLIC_URL=https://<your-domain>
 
 # Yandex Disk (опционально)
-YANDEX_DISK_TOKEN=your_oauth_token
+YANDEX_DISK_TOKEN=<yandex-oauth-token>
 YANDEX_DISK_PATH=ARMory/data
 YANDEX_DISK_BACKUPS_PATH=ARMory/backups
 YANDEX_DISK_ALEXANDRITE_PATH=ARMory/alexandrite
@@ -43,7 +43,7 @@ SCHEDULER_SSH_KEY_HOST=<host-ssh-key-path>
 mkdir -p data/uploads
 
 # 4. Если переносишь данные с другой машины — распакуй бэкап:
-# tar -xzvf backup_20260520.tar.gz
+# tar -xzvf backup_<timestamp>.tar.gz
 # mv armory.db data/
 # mv uploads/* data/uploads/
 
@@ -102,9 +102,9 @@ docker compose -f compose.yml -f compose.gateway.yml up -d
 
 В `.env` заполни:
 ```env
-GATEWAY_PORT=5005
-OAUTH2_PROXY_CLIENT_ID=armory
-OAUTH2_PROXY_CLIENT_SECRET=<secret от админа Stalwart>
+GATEWAY_PORT=<gateway-port>
+OAUTH2_PROXY_CLIENT_ID=<oidc-client-id>
+OAUTH2_PROXY_CLIENT_SECRET=<oidc-client-secret>
 OAUTH2_PROXY_COOKIE_SECRET=<openssl rand -base64 32>
 ```
 
@@ -121,7 +121,7 @@ COLLABORA_INTERNAL_URL=http://<collabora-service>:<collabora-port>
 COLLABORA_PUBLIC_URL=https://<your-domain>/collabora
 COLLABORA_SERVICE_ROOT=/collabora
 COLLABORA_WOPI_SECRET=<openssl rand -hex 32>
-COLLABORA_ADMIN_USER=admin
+COLLABORA_ADMIN_USER=<collabora-admin-user>
 COLLABORA_ADMIN_PASSWORD=<сложный пароль>
 ```
 
