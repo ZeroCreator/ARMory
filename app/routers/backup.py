@@ -338,6 +338,9 @@ def _format_dt(iso_string: str) -> str:
 
 # ── хелперы архивов ──────────────────────────────────────────────────
 
+_ARCHIVE_COMPRESSION_LEVEL = 1
+_ARCHIVE_DISK_RESERVE_BYTES = 512 * 1024 * 1024
+
 def _local_auto_backup(db_path: Path, uploads_src: Path) -> Path:
     """Создаёт локальную резервную копию перед destructive операциями."""
     backup_dir = Path("data/backups")
@@ -351,27 +354,65 @@ def _local_auto_backup(db_path: Path, uploads_src: Path) -> Path:
     return auto_dir
 
 
+def _iter_regular_files(root: Path):
+    """Потоково перебирает обычные файлы, не переходя по символическим ссылкам."""
+    if not root.exists():
+        return
+
+    for directory, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        current_dir = Path(directory)
+        dirnames[:] = [
+            dirname
+            for dirname in dirnames
+            if not (current_dir / dirname).is_symlink()
+        ]
+        for filename in filenames:
+            file_path = current_dir / filename
+            if not file_path.is_symlink() and file_path.is_file():
+                yield file_path
+
+
+def _iter_backup_files(db_path: Path, uploads_src: Path):
+    """Потоково перебирает файлы основного архива и их имена внутри tar."""
+    if db_path.is_symlink() or not db_path.is_file():
+        raise RuntimeError(f"Файл базы данных не найден: {db_path}")
+    yield db_path, "armory.db"
+
+    for file_path in _iter_regular_files(uploads_src):
+        arcname = "uploads/" + file_path.relative_to(uploads_src).as_posix()
+        yield file_path, arcname
+
+
+def _ensure_archive_disk_space(dest_path: Path, total_size: int) -> None:
+    """Проверяет запас места перед созданием локального архива."""
+    free_size = shutil.disk_usage(dest_path.parent).free
+    required_size = total_size + _ARCHIVE_DISK_RESERVE_BYTES
+    if free_size < required_size:
+        raise RuntimeError(
+            "Недостаточно свободного места для создания архива: "
+            f"нужно не менее {required_size} байт, доступно {free_size}"
+        )
+
+
 def _create_tarball(db_path: Path, uploads_src: Path, dest_path: Path, job_id: str | None = None) -> None:
     """Создаёт tar.gz с БД и uploads, обновляя прогресс в задаче."""
-    files_to_add = [(db_path, "armory.db")]
-    if uploads_src.exists():
-        for fp in uploads_src.rglob("*"):
-            if fp.is_file():
-                arcname = "uploads/" + fp.relative_to(uploads_src).as_posix()
-                files_to_add.append((fp, arcname))
-
-    total_size = sum(fp.stat().st_size for fp, _ in files_to_add)
+    total_files = 0
+    total_size = 0
+    for file_path, _ in _iter_backup_files(db_path, uploads_src):
+        total_files += 1
+        total_size += file_path.stat().st_size
+    _ensure_archive_disk_space(dest_path, total_size)
     processed_size = 0
 
     if job_id and job_id in _backup_jobs:
-        _backup_jobs[job_id]["total"] = len(files_to_add)
+        _backup_jobs[job_id]["total"] = total_files
         _backup_jobs[job_id]["total_size"] = total_size
         _backup_jobs[job_id]["status"] = "packing"
 
-    with tarfile.open(dest_path, "w:gz") as tar:
-        for idx, (fp, arcname) in enumerate(files_to_add, start=1):
-            tar.add(fp, arcname=arcname)
-            processed_size += fp.stat().st_size
+    with tarfile.open(dest_path, "w:gz", compresslevel=_ARCHIVE_COMPRESSION_LEVEL) as tar:
+        for idx, (file_path, arcname) in enumerate(_iter_backup_files(db_path, uploads_src), start=1):
+            tar.add(file_path, arcname=arcname, recursive=False)
+            processed_size += file_path.stat().st_size
             if job_id and job_id in _backup_jobs:
                 _backup_jobs[job_id]["processed"] = idx
                 _backup_jobs[job_id]["processed_size"] = processed_size
@@ -530,12 +571,19 @@ def _download_alexandrite(yandex: YandexDiskStorage, remote_base: str, local_dst
 
 def _create_alexandrite_tarball(local_src: Path, dest_path: Path) -> None:
     """Создаёт tar.gz только с содержимым папки Alexandrite, без скрытых файлов."""
-    with tarfile.open(dest_path, "w:gz") as tar:
-        if local_src.exists():
-            for fp in local_src.rglob("*"):
-                if fp.is_file() and not _is_hidden_path(fp, local_src):
-                    arcname = "alexandrite/" + fp.relative_to(local_src).as_posix()
-                    tar.add(fp, arcname=arcname)
+    files = (
+        file_path
+        for file_path in _iter_regular_files(local_src)
+        if not _is_hidden_path(file_path, local_src)
+    )
+    total_size = sum(file_path.stat().st_size for file_path in files)
+    _ensure_archive_disk_space(dest_path, total_size)
+
+    with tarfile.open(dest_path, "w:gz", compresslevel=_ARCHIVE_COMPRESSION_LEVEL) as tar:
+        for file_path in _iter_regular_files(local_src):
+            if not _is_hidden_path(file_path, local_src):
+                arcname = "alexandrite/" + file_path.relative_to(local_src).as_posix()
+                tar.add(file_path, arcname=arcname, recursive=False)
 
 
 def _extract_alexandrite_tarball(tar_path: Path, local_dst: Path) -> None:

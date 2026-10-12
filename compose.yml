@@ -6,6 +6,9 @@ services:
     image: armory:latest
     container_name: armory
     restart: unless-stopped
+    mem_limit: "${ARMORY_APP_MEMORY_LIMIT:-1g}"
+    memswap_limit: "${ARMORY_APP_MEMORY_LIMIT:-1g}"
+    cpus: "${ARMORY_APP_CPU_LIMIT:-2.0}"
     expose:
       - "${PORT:-8088}"
     volumes:
