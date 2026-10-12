@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import delete, insert, select, text
+from sqlalchemy import delete, func, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -24,6 +24,7 @@ from app.models import (
     SidebarLink,
     Task,
     TaskStatus,
+    DocType,
 )
 from app.yandex_disk import YandexDiskStorage
 
@@ -41,18 +42,42 @@ REMOTE_ALEXANDRITE_BACKUPS = f"{REMOTE_BACKUPS}/alexandrite"
 # Хранилище фоновых задач экспорта/архивирования (job_id -> status)
 _backup_jobs: Dict[str, dict] = {}
 _alexandrite_export_jobs: Dict[str, dict] = {}
+_BACKUP_JOB_RETENTION = timedelta(hours=24)
+_MAX_BACKUP_JOBS = 128
+_TERMINAL_BACKUP_STATUSES = {"completed", "error"}
 
 
 def _cleanup_old_backup_jobs() -> None:
     """Удаляет задачи старше 24 часов, чтобы не текла память."""
-    cutoff = datetime.now() - timedelta(hours=24)
+    cutoff = datetime.now() - _BACKUP_JOB_RETENTION
     for store in (_backup_jobs, _alexandrite_export_jobs):
         expired = [
             job_id for job_id, job in store.items()
-            if datetime.fromisoformat(job.get("created_at", "2000-01-01T00:00:00")) < cutoff
+            if _job_created_at(job) < cutoff
         ]
         for job_id in expired:
-            del store[job_id]
+            store.pop(job_id, None)
+
+        removable = sorted(
+            (
+                (_job_created_at(job), job_id)
+                for job_id, job in store.items()
+                if job.get("status") in _TERMINAL_BACKUP_STATUSES
+            ),
+        )
+        for _, job_id in removable[: max(0, len(store) - _MAX_BACKUP_JOBS)]:
+            store.pop(job_id, None)
+
+
+def _job_created_at(job: dict) -> datetime:
+    value = job.get("created_at")
+    try:
+        created_at = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return datetime.min
+    if created_at.tzinfo:
+        return created_at.astimezone(timezone.utc).replace(tzinfo=None)
+    return created_at
 
 
 def _get_yandex() -> YandexDiskStorage | None:
@@ -63,52 +88,58 @@ def _get_yandex() -> YandexDiskStorage | None:
 
 
 async def _gather_stats(session: AsyncSession) -> dict:
-    projects = await session.execute(select(Project))
-    sections = await session.execute(select(Section))
-    documents = await session.execute(select(Document))
-    items = await session.execute(select(DocumentItem))
-    blocks = await session.execute(select(SidebarBlock))
-    links = await session.execute(select(SidebarLink))
-    events = await session.execute(select(CalendarEvent))
-    task_statuses = await session.execute(select(TaskStatus))
-    tasks = await session.execute(select(Task))
+    async def count_rows(model) -> int:
+        return int(await session.scalar(select(func.count()).select_from(model)) or 0)
 
-    proj_list = projects.scalars().all()
-    sec_list = sections.scalars().all()
-    doc_list = documents.scalars().all()
-    item_list = items.scalars().all()
-    block_list = blocks.scalars().all()
-    link_list = links.scalars().all()
-    event_list = events.scalars().all()
-    status_list = task_statuses.scalars().all()
-    task_list = tasks.scalars().all()
-
-    links_count = sum(1 for i in item_list if i.item_type.value == "link")
-    files_count = sum(1 for i in item_list if i.item_type.value == "file")
-    notes_count = sum(1 for i in item_list if i.item_type.value == "note")
-    sidebar_link_notes = sum(1 for l in link_list if l.note and l.note.strip())
+    item_type_counts_result = await session.execute(
+        select(DocumentItem.item_type, func.count())
+        .group_by(DocumentItem.item_type)
+    )
+    item_type_counts = {
+        item_type.value if isinstance(item_type, DocType) else item_type: count
+        for item_type, count in item_type_counts_result
+    }
+    sidebar_link_notes = int(
+        await session.scalar(
+            select(func.count())
+            .select_from(SidebarLink)
+            .where(
+                SidebarLink.note.is_not(None),
+                func.trim(SidebarLink.note) != "",
+            )
+        )
+        or 0
+    )
 
     total_size = 0
     uploads_path = Path(settings.local_storage_path).resolve()
-    for i in item_list:
-        if i.item_type.value == "file" and i.file_path:
-            fp = uploads_path / i.file_path
+    file_paths = await session.stream_scalars(
+        select(DocumentItem.file_path).where(
+            DocumentItem.item_type == DocType.file,
+            DocumentItem.file_path.is_not(None),
+        )
+    )
+    try:
+        async for file_path in file_paths:
+            fp = uploads_path / file_path
             if fp.exists():
                 total_size += fp.stat().st_size
+    finally:
+        await file_paths.close()
 
     return {
-        "projects": len(proj_list),
-        "sections": len(sec_list),
-        "documents": len(doc_list),
-        "links": links_count,
-        "files": files_count,
-        "notes": notes_count,
-        "sidebar_blocks": len(block_list),
-        "sidebar_links": len(link_list),
+        "projects": await count_rows(Project),
+        "sections": await count_rows(Section),
+        "documents": await count_rows(Document),
+        "links": item_type_counts.get("link", 0),
+        "files": item_type_counts.get("file", 0),
+        "notes": item_type_counts.get("note", 0),
+        "sidebar_blocks": await count_rows(SidebarBlock),
+        "sidebar_links": await count_rows(SidebarLink),
         "sidebar_link_notes": sidebar_link_notes,
-        "calendar_events": len(event_list),
-        "task_statuses": len(status_list),
-        "tasks": len(task_list),
+        "calendar_events": await count_rows(CalendarEvent),
+        "task_statuses": await count_rows(TaskStatus),
+        "tasks": await count_rows(Task),
         "total_files_size": total_size,
     }
 
@@ -357,14 +388,16 @@ def _extract_tarball(tar_path: Path, db_dest: Path, uploads_dest: Path) -> None:
             if member.name == "armory.db":
                 extracted = tar.extractfile(member)
                 if extracted:
-                    db_dest.write_bytes(extracted.read())
+                    with db_dest.open("wb") as output:
+                        shutil.copyfileobj(extracted, output, length=1024 * 1024)
             elif member.name.startswith("uploads/"):
                 extracted = tar.extractfile(member)
                 if extracted:
                     rel = member.name[len("uploads/"):]
                     out_path = uploads_dest / rel
                     out_path.parent.mkdir(parents=True, exist_ok=True)
-                    out_path.write_bytes(extracted.read())
+                    with out_path.open("wb") as output:
+                        shutil.copyfileobj(extracted, output, length=1024 * 1024)
 
 
 def _list_backups(yandex: YandexDiskStorage) -> list:
@@ -515,7 +548,8 @@ def _extract_alexandrite_tarball(tar_path: Path, local_dst: Path) -> None:
                     rel = member.name[len("alexandrite/"):]
                     out_path = local_dst / rel
                     out_path.parent.mkdir(parents=True, exist_ok=True)
-                    out_path.write_bytes(extracted.read())
+                    with out_path.open("wb") as output:
+                        shutil.copyfileobj(extracted, output, length=1024 * 1024)
 
 
 def _local_auto_backup_alexandrite(local_src: Path) -> Path:
@@ -550,6 +584,7 @@ def _list_alexandrite_backups(yandex: YandexDiskStorage) -> list:
 
 @router.get("/stats")
 async def backup_stats():
+    _cleanup_old_backup_jobs()
     yandex = _get_yandex()
     yandex_status = {"connected": False, "info": "Токен не настроен"}
     if yandex:
@@ -787,6 +822,7 @@ async def _run_create_archive_async(
 
 @router.get("/job/{job_id}")
 async def backup_job_status(job_id: str):
+    _cleanup_old_backup_jobs()
     job = _backup_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Задача не найдена")
@@ -945,6 +981,7 @@ async def alexandrite_export_async():
 
 @router.get("/alexandrite/export-status/{job_id}")
 async def alexandrite_export_status(job_id: str):
+    _cleanup_old_backup_jobs()
     job = _alexandrite_export_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Задача не найдена")

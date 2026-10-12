@@ -1,6 +1,8 @@
 import base64
 import json
 import mimetypes
+import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -183,8 +185,24 @@ async def wopi_put_file(
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    body = await request.body()
-    file_path.write_bytes(body)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=file_path.parent,
+            prefix=f".{file_path.name}.",
+            delete=False,
+        ) as temporary:
+            temporary_path = temporary.name
+            async for chunk in request.stream():
+                temporary.write(chunk)
+        os.replace(temporary_path, file_path)
+        temporary_path = None
+    finally:
+        if temporary_path:
+            try:
+                os.unlink(temporary_path)
+            except FileNotFoundError:
+                pass
     stat = file_path.stat()
     mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
     return JSONResponse({

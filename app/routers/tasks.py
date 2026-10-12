@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from typing import Optional
 
@@ -750,9 +751,7 @@ async def upload_global_attachment_file(
     unique_name = f"{uuid.uuid4().hex}{ext}"
     file_path = uploads_dir / unique_name
 
-    contents = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(contents)
+    await asyncio.to_thread(_save_uploaded_file, file.file, file_path)
 
     rel_path = f"tasks/{unique_name}"
     return TaskAttachmentOut(
@@ -1478,6 +1477,16 @@ def _task_uploads_dir() -> Path:
     return uploads
 
 
+def _save_uploaded_file(file_obj, destination: Path) -> int:
+    """Сохраняет загруженный файл порциями и возвращает его размер."""
+    size = 0
+    with destination.open("wb") as output:
+        while chunk := file_obj.read(1024 * 1024):
+            output.write(chunk)
+            size += len(chunk)
+    return size
+
+
 @router.post("/attachments/upload", response_model=TaskAttachmentOut, status_code=201)
 async def upload_bulk_attachment_file(
     project_id: int,
@@ -1493,9 +1502,7 @@ async def upload_bulk_attachment_file(
     unique_name = f"{uuid.uuid4().hex}{ext}"
     file_path = uploads_dir / unique_name
 
-    contents = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(contents)
+    await asyncio.to_thread(_save_uploaded_file, file.file, file_path)
 
     rel_path = f"tasks/{unique_name}"
     return TaskAttachmentOut(
@@ -1546,9 +1553,7 @@ async def upload_task_attachment_file(
     unique_name = f"{uuid.uuid4().hex}{ext}"
     file_path = uploads_dir / unique_name
 
-    contents = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(contents)
+    await asyncio.to_thread(_save_uploaded_file, file.file, file_path)
 
     rel_path = f"tasks/{unique_name}"
     attachment = TaskAttachment(
@@ -1791,9 +1796,7 @@ async def update_task_attachment(
         unique_name = f"{uuid.uuid4().hex}{ext}"
         file_path = uploads_dir / unique_name
 
-        contents = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(contents)
+        await asyncio.to_thread(_save_uploaded_file, file.file, file_path)
 
         if attachment.file_path:
             try:

@@ -289,11 +289,9 @@ async def create_item(
             raise HTTPException(status_code=400, detail="File is required for item_type=file")
         file_name = file.filename
         mime_type = file.content_type
-        file_content = await file.read()
-        file_size = len(file_content)
-        from io import BytesIO
         subfolder = f"{project.id}_{slugify(project.name)}/{doc.id}_{slugify(doc.title)}"
-        meta = await storage.save(BytesIO(file_content), file.filename, file.content_type, subfolder=subfolder)
+        meta = await storage.save(file.file, file.filename, file.content_type, subfolder=subfolder)
+        file_size = file.file.tell()
         file_path = meta["file_path"]
         if meta.get("url"):
             final_url = meta["url"]
@@ -427,15 +425,13 @@ async def update_item(
                 await storage.delete(item.file_path)
             file_name = file.filename
             mime_type = file.content_type
-            file_content = await file.read()
-            file_size = len(file_content)
-            from io import BytesIO
             proj_result = await db.execute(select(Project).where(Project.id == project_id))
             project = proj_result.scalar_one_or_none()
             doc_result = await db.execute(select(Document).where(Document.id == doc_id, Document.project_id == project_id))
             doc_obj = doc_result.scalar_one_or_none()
             subfolder = f"{project.id}_{slugify(project.name)}/{doc_obj.id}_{slugify(doc_obj.title)}" if project and doc_obj else f"{project_id}/{doc_id}"
-            meta = await storage.save(BytesIO(file_content), file.filename, file.content_type, subfolder=subfolder)
+            meta = await storage.save(file.file, file.filename, file.content_type, subfolder=subfolder)
+            file_size = file.file.tell()
             item.file_path = meta["file_path"]
             item.file_name = file_name
             item.file_size = file_size

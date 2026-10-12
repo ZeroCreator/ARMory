@@ -275,17 +275,22 @@ async def proxy_collabora(
     headers["X-Forwarded-Proto"] = public_url_parsed.scheme or "https"
     headers["X-Forwarded-For"] = request.client.host if request.client else "127.0.0.1"
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        try:
-            response = await client.request(
-                method=request.method,
-                url=target_url,
-                headers=headers,
-                content=await request.body(),
-                follow_redirects=False,
-            )
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Collabora proxy error: {e}") from e
+    client = httpx.AsyncClient(timeout=60.0)
+    try:
+        upstream_request = client.build_request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            content=request.stream() if request.method not in {"GET", "HEAD"} else None,
+        )
+        response = await client.send(
+            upstream_request,
+            follow_redirects=False,
+            stream=True,
+        )
+    except (httpx.HTTPError, OSError) as exc:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail=f"Collabora proxy error: {exc}") from exc
 
     response_headers = dict(response.headers)
     response_headers.pop("content-encoding", None)
@@ -296,9 +301,13 @@ async def proxy_collabora(
         async for chunk in response.aiter_bytes():
             yield chunk
 
+    async def close_upstream():
+        await response.aclose()
+        await client.aclose()
+
     return StreamingResponse(
         stream(),
         status_code=response.status_code,
         headers=response_headers,
-        background=BackgroundTask(response.aclose),
+        background=BackgroundTask(close_upstream),
     )

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shlex
+import time
 import uuid
 from urllib.parse import urlparse
 
@@ -15,9 +16,36 @@ from app.extensions import install_manifest
 
 _IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$")
 _JOBS: dict[str, dict] = {}
+_JOB_RETENTION_SECONDS = 24 * 60 * 60
+_MAX_JOBS = 128
+_MAX_JOB_LOGS = 512
+_TERMINAL_JOB_STATUSES = {"complete", "failed"}
+
+
+def _cleanup_jobs() -> None:
+    now = time.monotonic()
+    expired = [
+        job_id
+        for job_id, job in _JOBS.items()
+        if job.get("status") in _TERMINAL_JOB_STATUSES
+        and now - job.get("_created_at", now) >= _JOB_RETENTION_SECONDS
+    ]
+    for job_id in expired:
+        _JOBS.pop(job_id, None)
+
+    removable = sorted(
+        (
+            (job.get("_created_at", now), job_id)
+            for job_id, job in _JOBS.items()
+            if job.get("status") in _TERMINAL_JOB_STATUSES
+        ),
+    )
+    for _, job_id in removable[: max(0, len(_JOBS) - _MAX_JOBS)]:
+        _JOBS.pop(job_id, None)
 
 
 def get_job(job_id: str) -> dict | None:
+    _cleanup_jobs()
     return _JOBS.get(job_id)
 
 
@@ -54,15 +82,26 @@ def validate_deployment(data: dict) -> dict:
 
 
 def start_deployment(data: dict) -> str:
+    _cleanup_jobs()
     payload = validate_deployment(data)
     job_id = uuid.uuid4().hex
-    _JOBS[job_id] = {"status": "queued", "logs": [], "event": asyncio.Event()}
+    _JOBS[job_id] = {
+        "status": "queued",
+        "logs": [],
+        "_logs_start": 0,
+        "_created_at": time.monotonic(),
+        "event": asyncio.Event(),
+    }
     asyncio.create_task(_deploy(job_id, payload))
     return job_id
 
 
 def _log(job: dict, message: str) -> None:
     job["logs"].append(message)
+    overflow = len(job["logs"]) - _MAX_JOB_LOGS
+    if overflow > 0:
+        del job["logs"][:overflow]
+        job["_logs_start"] = job.get("_logs_start", 0) + overflow
     job["event"].set()
 
 

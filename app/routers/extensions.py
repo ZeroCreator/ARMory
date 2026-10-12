@@ -61,9 +61,14 @@ async def deployment_events(job_id: str):
     async def stream():
         position = 0
         while True:
-            while position < len(job["logs"]):
-                yield f"data: {json.dumps({'message': job['logs'][position]}, ensure_ascii=False)}\n\n"
+            logs_start = job.get("_logs_start", 0)
+            if position < logs_start:
+                position = logs_start
+            log_position = position - logs_start
+            while log_position < len(job["logs"]):
+                yield f"data: {json.dumps({'message': job['logs'][log_position]}, ensure_ascii=False)}\n\n"
                 position += 1
+                log_position += 1
             if job["status"] in {"complete", "failed"}:
                 yield f"event: done\ndata: {json.dumps({'status': job['status']})}\n\n"
                 return

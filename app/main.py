@@ -130,7 +130,15 @@ async def lifespan(app: FastAPI):
         reminder_task = asyncio.create_task(_reminder_loop())
 
     async with mcp_router.mcp_server.session_manager.run():
-        yield
+        mcp_session_cleanup_task = asyncio.create_task(mcp_router.cleanup_mcp_sessions_loop())
+        try:
+            yield
+        finally:
+            mcp_session_cleanup_task.cancel()
+            try:
+                await mcp_session_cleanup_task
+            except asyncio.CancelledError:
+                pass
 
     if reminder_task:
         reminder_task.cancel()
