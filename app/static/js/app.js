@@ -3499,12 +3499,20 @@ function renderProjectCalendarEventsList() {
 // БЭКАП / СИНХРОНИЗАЦИЯ
 // ═══════════════════════════════════════════════════
 
+function setBackupSyncDate(elementId, value) {
+    const element = document.getElementById(elementId);
+    if (element) element.textContent = value || '—';
+}
+
 async function loadBackupStats() {
     const localEl = document.getElementById('backup-local-stats');
     const yandexEl = document.getElementById('backup-yandex-stats');
     try {
         const data = await api(`${API_BASE}/backup/stats`);
         const ls = data.local;
+        const sync = data.sync || {};
+        setBackupSyncDate('backup-last-sync-value', sync.last_sync);
+        setBackupSyncDate('alexandrite-last-sync-value', sync.alexandrite_last_sync);
         localEl.innerHTML = `
             <div class="row g-3">
                 <div class="col-md-6">
@@ -3527,6 +3535,16 @@ async function loadBackupStats() {
         `;
 
         const ys = data.yandex;
+        const backupTargetInputs = [...document.querySelectorAll('input[name="backup-target"]')];
+        backupTargetInputs.forEach((input) => {
+            const cloudTarget = input.value === 'yandex' || input.value === 'both';
+            input.disabled = cloudTarget && !ys.connected;
+            input.closest('.backup-target')?.classList.toggle('is-disabled', input.disabled);
+        });
+        if (!ys.connected) {
+            const localTarget = backupTargetInputs.find((input) => input.value === 'local');
+            if (localTarget) localTarget.checked = true;
+        }
         if (ys.connected) {
             yandexEl.innerHTML = `
                 <div class="backup-stat-row"><span>Статус</span><span class="badge bg-success backup-status-badge">Подключен</span></div>
@@ -3620,7 +3638,7 @@ function formatBackupProgressText(data, label) {
 function pollBackupJobStatus(jobId, kind) {
     const isArchive = kind === 'archive';
     const setProgress = isArchive ? setBackupProgress : setBackupProgress;
-    const labelBase = isArchive ? 'Создание архива' : 'Синхронизация';
+    const labelBase = isArchive ? 'Создание бэкапа' : 'Синхронизация';
     const poll = async () => {
         try {
             const data = await api(`${API_BASE}/backup/job/${jobId}`);
@@ -3637,10 +3655,16 @@ function pollBackupJobStatus(jobId, kind) {
             } else if (data.status === 'completed') {
                 setBackupProgress(false);
                 if (isArchive) {
-                    setBackupStatus(`Архив ${data.archive} создан и загружен на Яндекс.Диск.`, false);
+                    const targetMessages = {
+                        local: 'Бэкап создан локально.',
+                        yandex: 'Бэкап создан на Яндекс.Диске.',
+                        both: 'Бэкап создан локально и на Яндекс.Диске.',
+                    };
+                    setBackupStatus(`${targetMessages[data.target] || 'Бэкап создан.'} Файл: ${data.archive}`, false);
                     loadBackupArchives();
                 } else {
                     const s = data.stats || {};
+                    setBackupSyncDate('backup-last-sync-value', data.last_sync || s.last_sync);
                     setBackupStatus(
                         `Сохранено на Яндекс.Диск. БД: ${s.db_uploaded ? 'да' : 'нет'}, файлов загружено: ${s.files_uploaded}, пропущено: ${s.files_skipped}.`,
                         false
@@ -3690,6 +3714,7 @@ async function syncImport() {
             `файлов скачано: ${s.files_downloaded}, пропущено: ${s.files_skipped}.`,
             false
         );
+        setBackupSyncDate('backup-last-sync-value', s.last_sync);
         loadBackupStats();
         loadBackupArchives();
     } catch (e) {
@@ -3700,35 +3725,62 @@ async function syncImport() {
 }
 
 async function loadBackupArchives() {
-    const tbody = document.querySelector('#backup-archives-table tbody');
-    if (!tbody) return;
+    const localTbody = document.querySelector('#backup-local-archives-table tbody');
+    const yandexTbody = document.querySelector('#backup-yandex-archives-table tbody');
+    if (!localTbody || !yandexTbody) return;
+
+    const renderArchiveRows = (archives, source) => {
+        if (archives.length === 0) {
+            return '<tr><td colspan="4" class="text-muted small">Нет доступных бэкапов</td></tr>';
+        }
+
+        return archives.map((archive) => {
+            const name = escapeHtml(archive.name);
+            const sourceValue = source === 'yandex' ? 'yandex' : 'local';
+            const downloadUrl = `${API_BASE}/backup/download?source=${sourceValue}&name=${encodeURIComponent(archive.name)}`;
+            return `
+                <tr>
+                    <td>${name}</td>
+                    <td>${formatSize(archive.size)}</td>
+                    <td>${escapeHtml(archive.modified || '-')}</td>
+                    <td class="text-end">
+                        <a class="scheduler-btn scheduler-btn-green btn-sm" href="${downloadUrl}" download>
+                            <i class="bi bi-download"></i><span class="btn-text ms-1">Скачать</span>
+                        </a>
+                        <button class="scheduler-btn scheduler-btn-purple btn-sm ms-1" onclick="restoreArchive('${name}', '${sourceValue}')">
+                            <i class="bi bi-cloud-download"></i><span class="btn-text ms-1">Восстановить</span>
+                        </button>
+                        <button class="scheduler-btn scheduler-btn-red btn-sm ms-1" onclick="deleteArchive('${name}', '${sourceValue}')">
+                            <i class="bi bi-trash"></i><span class="btn-text ms-1">Удалить</span>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    };
+
+    const renderArchives = (archives) => {
+        const localArchives = archives.filter((archive) => archive.source !== 'yandex');
+        const yandexArchives = archives.filter((archive) => archive.source === 'yandex');
+        const localCount = document.getElementById('backup-local-archive-count');
+        const yandexCount = document.getElementById('backup-yandex-archive-count');
+
+        localTbody.innerHTML = renderArchiveRows(localArchives, 'local');
+        yandexTbody.innerHTML = renderArchiveRows(yandexArchives, 'yandex');
+        if (localCount) localCount.textContent = localArchives.length;
+        if (yandexCount) yandexCount.textContent = yandexArchives.length;
+    };
+
     try {
         const data = await api(`${API_BASE}/backup/archives`);
         const archives = data.archives || [];
-        if (archives.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" class="text-muted small">Архивы не найдены</td></tr>`;
-            return;
-        }
-        tbody.innerHTML = archives.map(a => `
-            <tr>
-                <td>${escapeHtml(a.name)}</td>
-                <td>${formatSize(a.size)}</td>
-                <td>${escapeHtml(a.modified || '-')}</td>
-                <td class="text-end">
-                    <button class="scheduler-btn scheduler-btn-green btn-sm" onclick="restoreArchive('${escapeHtml(a.name)}')">
-                        <i class="bi bi-cloud-download"></i><span class="btn-text ms-1">Восстановить</span>
-                    </button>
-                    <button class="scheduler-btn scheduler-btn-red btn-sm ms-1" onclick="deleteArchive('${escapeHtml(a.name)}')">
-                        <i class="bi bi-trash"></i><span class="btn-text ms-1">Удалить</span>
-                    </button>
-                </td>
-            </tr>
-        `).join('');
+        renderArchives(archives);
     } catch (e) {
         const msg = e.message && e.message.includes('не настроен')
             ? 'Яндекс.Диск не настроен'
             : 'Ошибка загрузки архивов';
-        tbody.innerHTML = `<tr><td colspan="4" class="text-danger small">${escapeHtml(msg)}</td></tr>`;
+        localTbody.innerHTML = `<tr><td colspan="4" class="text-danger small">${escapeHtml(msg)}</td></tr>`;
+        yandexTbody.innerHTML = `<tr><td colspan="4" class="text-danger small">${escapeHtml(msg)}</td></tr>`;
     }
 }
 
@@ -3736,25 +3788,31 @@ async function createArchive() {
     const btn = document.getElementById('backup-create-btn');
     btn.disabled = true;
     document.getElementById('sync-export-btn').disabled = true;
-    setBackupStatus('Создание архива и загрузка на Яндекс.Диск...', false);
+    const target = document.querySelector('input[name="backup-target"]:checked')?.value || 'local';
+    setBackupStatus('Создание бэкапа...', false);
     try {
-        const res = await api(`${API_BASE}/backup/create`, { method: 'POST' });
+        const res = await api(`${API_BASE}/backup/create`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({backup_target: target}),
+        });
         pollBackupJobStatus(res.job_id, 'archive');
     } catch (e) {
-        setBackupStatus('Ошибка создания архива: ' + e.message, true);
+        setBackupStatus('Ошибка создания бэкапа: ' + e.message, true);
         btn.disabled = false;
         document.getElementById('sync-export-btn').disabled = false;
     }
 }
 
-async function restoreArchive(name) {
-    if (!(await showConfirm(`Восстановить данные из архива ${name}?\nТекущие локальные данные будут заменены!`))) return;
+async function restoreArchive(name, source = 'yandex') {
+    const sourceLabel = source === 'yandex' ? 'Яндекс.Диск' : 'локально';
+    if (!(await showConfirm(`Восстановить данные из архива ${name} (${sourceLabel})?\nТекущие локальные данные будут заменены!`))) return;
     setBackupStatus('Восстановление из архива...', false);
     try {
         const res = await api(`${API_BASE}/backup/restore`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name}),
+            body: JSON.stringify({name, source}),
         });
         setBackupStatus(
             `Восстановлено из архива. Проектов: ${res.stats.projects_restored}, групп: ${res.stats.documents_restored}, элементов: ${res.stats.document_items_restored}.`,
@@ -3767,13 +3825,14 @@ async function restoreArchive(name) {
     }
 }
 
-async function deleteArchive(name) {
-    if (!(await showConfirm(`Удалить архив ${name} с Яндекс.Диска?`))) return;
+async function deleteArchive(name, source = 'yandex') {
+    const sourceLabel = source === 'yandex' ? 'Яндекс.Диска' : 'локального хранилища';
+    if (!(await showConfirm(`Удалить архив ${name} из ${sourceLabel}?`))) return;
     try {
         await api(`${API_BASE}/backup/delete`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name}),
+            body: JSON.stringify({name, source}),
         });
         setBackupStatus(`Архив ${name} удалён.`, false);
         loadBackupArchives();
@@ -3792,6 +3851,7 @@ async function loadAlexandriteBackupStats() {
     try {
         const data = await api(`${API_BASE}/backup/alexandrite/stats`);
         const ls = data.local;
+        setBackupSyncDate('alexandrite-last-sync-value', data.sync?.last_sync);
         localEl.innerHTML = `
             <div class="backup-stat-row"><span>Папка</span><span class="backup-stat-value small text-truncate" style="max-width:60%" title="${escapeHtml(ls.path)}">${escapeHtml(ls.path)}</span></div>
             <div class="backup-stat-row"><span>Файлов</span><span class="badge bg-purple">${ls.files}</span></div>
@@ -3820,6 +3880,7 @@ function pollAlexandriteExportStatus(jobId) {
                 setTimeout(poll, 2000);
             } else if (data.status === 'completed') {
                 const failedText = data.failed ? `, не удалось: ${data.failed}` : '';
+                setBackupSyncDate('alexandrite-last-sync-value', data.last_sync);
                 setBackupStatus(`Готово. Загружено: ${data.uploaded}${failedText}.`, false);
                 setAlexandriteBackupProgress(false);
                 loadAlexandriteBackupStats();
@@ -3865,6 +3926,7 @@ async function syncAlexandriteImport() {
             `Папка Alexandrite загружена с Яндекс.Диска. Файлов скачано: ${s.files_downloaded}, пропущено: ${s.files_skipped}.`,
             false
         );
+        setBackupSyncDate('alexandrite-last-sync-value', s.last_sync);
         loadAlexandriteBackupStats();
         loadAlexandriteArchives();
     } catch (e) {
@@ -3877,10 +3939,20 @@ async function syncAlexandriteImport() {
 async function createAlexandriteArchive() {
     const btn = document.getElementById('alexandrite-archive-btn');
     btn.disabled = true;
-    setBackupStatus('Создание архива Alexandrite и загрузка на Яндекс.Диск...', false);
+    const target = document.querySelector('input[name="alexandrite-backup-target"]:checked')?.value || 'local';
+    setBackupStatus('Создание архива Alexandrite...', false);
     try {
-        const res = await api(`${API_BASE}/backup/alexandrite/archive`, { method: 'POST' });
-        setBackupStatus(`Архив ${res.archive} создан и загружен на Яндекс.Диск.`, false);
+        const res = await api(`${API_BASE}/backup/alexandrite/archive`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({backup_target: target}),
+        });
+        const targetMessages = {
+            local: 'Бэкап создан локально.',
+            yandex: 'Бэкап создан на Яндекс.Диске.',
+            both: 'Бэкап создан локально и на Яндекс.Диске.',
+        };
+        setBackupStatus(`${targetMessages[res.target || target] || 'Бэкап создан.'} Файл: ${res.archive}`, false);
         loadAlexandriteArchives();
     } catch (e) {
         setBackupStatus('Ошибка создания архива Alexandrite: ' + e.message, true);
@@ -3890,46 +3962,70 @@ async function createAlexandriteArchive() {
 }
 
 async function loadAlexandriteArchives() {
-    const tbody = document.querySelector('#alexandrite-archives-table tbody');
-    if (!tbody) return;
+    const localTbody = document.querySelector('#alexandrite-local-archives-table tbody');
+    const yandexTbody = document.querySelector('#alexandrite-yandex-archives-table tbody');
+    if (!localTbody || !yandexTbody) return;
+
+    const renderArchiveRows = (archives, source) => {
+        if (archives.length === 0) {
+            return '<tr><td colspan="4" class="text-muted small">Нет доступных бэкапов</td></tr>';
+        }
+
+        return archives.map((archive) => {
+            const name = escapeHtml(archive.name);
+            const sourceValue = source === 'yandex' ? 'yandex' : 'local';
+            const downloadUrl = `${API_BASE}/backup/alexandrite/download?source=${sourceValue}&name=${encodeURIComponent(archive.name)}`;
+            return `
+                <tr>
+                    <td>${name}</td>
+                    <td>${formatSize(archive.size)}</td>
+                    <td>${escapeHtml(archive.modified || '-')}</td>
+                    <td class="text-end">
+                        <a class="scheduler-btn scheduler-btn-green btn-sm" href="${downloadUrl}" download>
+                            <i class="bi bi-download"></i><span class="btn-text ms-1">Скачать</span>
+                        </a>
+                        <button class="scheduler-btn scheduler-btn-purple btn-sm ms-1" onclick="restoreAlexandriteArchive('${name}', '${sourceValue}')">
+                            <i class="bi bi-cloud-download"></i><span class="btn-text ms-1">Восстановить</span>
+                        </button>
+                        <button class="scheduler-btn scheduler-btn-red btn-sm ms-1" onclick="deleteAlexandriteArchive('${name}', '${sourceValue}')">
+                            <i class="bi bi-trash"></i><span class="btn-text ms-1">Удалить</span>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    };
+
     try {
         const data = await api(`${API_BASE}/backup/alexandrite/archives`);
         const archives = data.archives || [];
-        if (archives.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" class="text-muted small">Архивы Alexandrite не найдены</td></tr>`;
-            return;
-        }
-        tbody.innerHTML = archives.map(a => `
-            <tr>
-                <td>${escapeHtml(a.name)}</td>
-                <td>${formatSize(a.size)}</td>
-                <td>${escapeHtml(a.modified || '-')}</td>
-                <td class="text-end">
-                    <button class="scheduler-btn scheduler-btn-green btn-sm" onclick="restoreAlexandriteArchive('${escapeHtml(a.name)}')">
-                        <i class="bi bi-cloud-download"></i><span class="btn-text ms-1">Восстановить</span>
-                    </button>
-                    <button class="scheduler-btn scheduler-btn-red btn-sm ms-1" onclick="deleteAlexandriteArchive('${escapeHtml(a.name)}')">
-                        <i class="bi bi-trash"></i><span class="btn-text ms-1">Удалить</span>
-                    </button>
-                </td>
-            </tr>
-        `).join('');
+        const localArchives = archives.filter((archive) => archive.source !== 'yandex');
+        const yandexArchives = archives.filter((archive) => archive.source === 'yandex');
+        const localCount = document.getElementById('alexandrite-local-archive-count');
+        const yandexCount = document.getElementById('alexandrite-yandex-archive-count');
+
+        localTbody.innerHTML = renderArchiveRows(localArchives, 'local');
+        yandexTbody.innerHTML = renderArchiveRows(yandexArchives, 'yandex');
+        if (localCount) localCount.textContent = localArchives.length;
+        if (yandexCount) yandexCount.textContent = yandexArchives.length;
     } catch (e) {
         const msg = e.message && e.message.includes('не настроен')
             ? 'Яндекс.Диск не настроен'
             : 'Ошибка загрузки архивов Alexandrite';
-        tbody.innerHTML = `<tr><td colspan="4" class="text-danger small">${escapeHtml(msg)}</td></tr>`;
+        localTbody.innerHTML = `<tr><td colspan="4" class="text-danger small">${escapeHtml(msg)}</td></tr>`;
+        yandexTbody.innerHTML = `<tr><td colspan="4" class="text-danger small">${escapeHtml(msg)}</td></tr>`;
     }
 }
 
-async function restoreAlexandriteArchive(name) {
-    if (!(await showConfirm(`Восстановить папку Alexandrite из архива ${name}?\nТекущие локальные файлы Alexandrite будут заменены!`))) return;
+async function restoreAlexandriteArchive(name, source = 'yandex') {
+    const sourceLabel = source === 'yandex' ? 'Яндекс.Диска' : 'локального хранилища';
+    if (!(await showConfirm(`Восстановить папку Alexandrite из архива ${name} (${sourceLabel})?\nТекущие локальные файлы Alexandrite будут заменены!`))) return;
     setBackupStatus('Восстановление папки Alexandrite из архива...', false);
     try {
         const res = await api(`${API_BASE}/backup/alexandrite/restore`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name}),
+            body: JSON.stringify({name, source}),
         });
         setBackupStatus(
             `Папка Alexandrite восстановлена из архива. Файлов: ${res.stats.files}, папок: ${res.stats.directories}.`,
@@ -3942,13 +4038,14 @@ async function restoreAlexandriteArchive(name) {
     }
 }
 
-async function deleteAlexandriteArchive(name) {
-    if (!(await showConfirm(`Удалить архив Alexandrite ${name} с Яндекс.Диска?`))) return;
+async function deleteAlexandriteArchive(name, source = 'yandex') {
+    const sourceLabel = source === 'yandex' ? 'Яндекс.Диска' : 'локального хранилища';
+    if (!(await showConfirm(`Удалить архив Alexandrite ${name} из ${sourceLabel}?`))) return;
     try {
         await api(`${API_BASE}/backup/alexandrite/delete`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name}),
+            body: JSON.stringify({name, source}),
         });
         setBackupStatus(`Архив Alexandrite ${name} удалён.`, false);
         loadAlexandriteArchives();

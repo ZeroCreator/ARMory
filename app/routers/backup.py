@@ -1,16 +1,21 @@
 import asyncio
+import json
 import os
+import re
 import shutil
 import sqlite3
 import tarfile
 import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from threading import Lock
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy import delete, func, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from app.config import get_settings
 from app.database import AsyncSessionLocal
@@ -38,6 +43,12 @@ REMOTE_UPLOADS = f"{_YANDEX_BASE}/uploads"
 REMOTE_BACKUPS = settings.yandex_disk_backups_path.strip("/")
 REMOTE_ALEXANDRITE = settings.yandex_disk_alexandrite_path.strip("/")
 REMOTE_ALEXANDRITE_BACKUPS = f"{REMOTE_BACKUPS}/alexandrite"
+LOCAL_BACKUPS = Path("data/backups")
+SYNC_STATE_PATH = Path("data/sync_state.json")
+_BACKUP_TARGETS = {"local", "yandex", "both"}
+_BACKUP_SOURCES = {"local", "yandex"}
+_SYNC_STATE_KEYS = {"armory_last_sync_at", "alexandrite_last_sync_at"}
+_sync_state_lock = Lock()
 
 # Хранилище фоновых задач экспорта/архивирования (job_id -> status)
 _backup_jobs: Dict[str, dict] = {}
@@ -85,6 +96,120 @@ def _get_yandex() -> YandexDiskStorage | None:
     if not token:
         return None
     return YandexDiskStorage(token, _YANDEX_BASE)
+
+
+def _validate_archive_name(name: str) -> str:
+    """Проверяет имя архива и исключает выход за пределы каталога бэкапов."""
+    if (
+        not isinstance(name, str)
+        or Path(name).name != name
+        or not re.fullmatch(r"armory_backup_\d{8}_\d{6}\.tar\.gz", name)
+    ):
+        raise HTTPException(status_code=400, detail="Некорректное имя архива")
+    return name
+
+
+def _validate_alexandrite_archive_name(name: str) -> str:
+    """Проверяет имя архива Alexandrite и исключает выход из каталога."""
+    if (
+        not isinstance(name, str)
+        or Path(name).name != name
+        or not re.fullmatch(r"alexandrite_backup_\d{8}_\d{6}\.tar\.gz", name)
+    ):
+        raise HTTPException(status_code=400, detail="Некорректное имя архива")
+    return name
+
+
+def _validate_backup_source(source: str) -> str:
+    """Проверяет источник архива."""
+    if not isinstance(source, str) or source not in _BACKUP_SOURCES:
+        raise HTTPException(status_code=400, detail="Некорректный источник архива")
+    return source
+
+
+def _local_archive_path(name: str) -> Path:
+    """Возвращает путь к локальному архиву."""
+    return LOCAL_BACKUPS / _validate_archive_name(name)
+
+
+def _local_alexandrite_archive_path(name: str) -> Path:
+    """Возвращает путь к локальному архиву Alexandrite."""
+    return LOCAL_BACKUPS / _validate_alexandrite_archive_name(name)
+
+
+def _archive_sort_key(item: dict) -> tuple[int, float, str]:
+    """Возвращает ключ сортировки архива от ранней даты к поздней."""
+    modified_at = item.get("modified_at")
+    if isinstance(modified_at, str) and modified_at:
+        try:
+            modified = datetime.fromisoformat(modified_at.replace("Z", "+00:00"))
+            if modified.tzinfo is None:
+                modified = modified.replace(tzinfo=timezone.utc)
+            return (0, modified.timestamp(), str(item.get("name", "")))
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return (1, 0, str(item.get("name", "")))
+
+
+def _cleanup_archive_download(temp_dir: Path) -> None:
+    """Удаляет временный каталог после отправки архива пользователю."""
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def _read_sync_state() -> dict[str, str]:
+    """Читает сохранённые даты завершённых синхронизаций."""
+    if not SYNC_STATE_PATH.is_file():
+        return {}
+    try:
+        value = json.loads(SYNC_STATE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(value, dict):
+        return {}
+    return {
+        key: item
+        for key, item in value.items()
+        if key in _SYNC_STATE_KEYS and isinstance(item, str)
+    }
+
+
+def _write_sync_state(state: dict[str, str]) -> None:
+    """Атомарно сохраняет даты завершённых синхронизаций."""
+    SYNC_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = SYNC_STATE_PATH.with_suffix(".tmp")
+    try:
+        temporary_path.write_text(
+            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary_path, SYNC_STATE_PATH)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
+def _record_sync(key: str) -> str:
+    """Записывает время успешного завершения синхронизации."""
+    if key not in _SYNC_STATE_KEYS:
+        raise ValueError("Неизвестный тип синхронизации")
+    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    with _sync_state_lock:
+        state = _read_sync_state()
+        state[key] = timestamp
+        _write_sync_state(state)
+    return timestamp
+
+
+def _sync_state_payload() -> dict[str, str | None]:
+    """Возвращает даты синхронизаций для API и интерфейса."""
+    with _sync_state_lock:
+        state = _read_sync_state()
+    return {
+        "last_sync_at": state.get("armory_last_sync_at"),
+        "last_sync": _format_dt(state.get("armory_last_sync_at", "")) or None,
+        "alexandrite_last_sync_at": state.get("alexandrite_last_sync_at"),
+        "alexandrite_last_sync": _format_dt(state.get("alexandrite_last_sync_at", "")) or None,
+    }
 
 
 async def _gather_stats(session: AsyncSession) -> dict:
@@ -423,36 +548,80 @@ def _create_tarball(db_path: Path, uploads_src: Path, dest_path: Path, job_id: s
 
 
 def _extract_tarball(tar_path: Path, db_dest: Path, uploads_dest: Path) -> None:
-    """Распаковывает tar.gz в указанные пути."""
+    """Распаковывает tar.gz в указанные пути без выхода из uploads."""
+    uploads_root = uploads_dest.resolve()
     with tarfile.open(tar_path, "r:gz") as tar:
         for member in tar.getmembers():
             if member.name == "armory.db":
+                if not member.isfile():
+                    continue
                 extracted = tar.extractfile(member)
                 if extracted:
                     with db_dest.open("wb") as output:
                         shutil.copyfileobj(extracted, output, length=1024 * 1024)
             elif member.name.startswith("uploads/"):
+                rel = Path(member.name[len("uploads/"):])
+                if (
+                    not member.isfile()
+                    or rel.is_absolute()
+                    or ".." in rel.parts
+                ):
+                    raise RuntimeError(f"Некорректный путь в архиве: {member.name}")
+                out_path = (uploads_root / rel).resolve()
+                if uploads_root not in out_path.parents:
+                    raise RuntimeError(f"Некорректный путь в архиве: {member.name}")
                 extracted = tar.extractfile(member)
                 if extracted:
-                    rel = member.name[len("uploads/"):]
-                    out_path = uploads_dest / rel
                     out_path.parent.mkdir(parents=True, exist_ok=True)
                     with out_path.open("wb") as output:
                         shutil.copyfileobj(extracted, output, length=1024 * 1024)
 
 
+def _list_local_backups() -> list:
+    """Возвращает список архивов из локального каталога бэкапов."""
+    if not LOCAL_BACKUPS.exists():
+        return []
+
+    backups = []
+    for archive_path in LOCAL_BACKUPS.glob("armory_backup_*.tar.gz"):
+        if not archive_path.is_file() or not re.fullmatch(
+            r"armory_backup_\d{8}_\d{6}\.tar\.gz",
+            archive_path.name,
+        ):
+            continue
+        modified_at = datetime.fromtimestamp(
+            archive_path.stat().st_mtime,
+            tz=timezone.utc,
+        ).isoformat()
+        backups.append({
+            "name": archive_path.name,
+            "size": archive_path.stat().st_size,
+            "modified": _format_dt(modified_at),
+            "modified_at": modified_at,
+            "source": "local",
+        })
+    return sorted(backups, key=_archive_sort_key)
+
+
 def _list_backups(yandex: YandexDiskStorage) -> list:
-    """Возвращает список tar.gz архивов на Я.Диске в папке бэкапов."""
+    """Возвращает список архивов на Яндекс.Диске в папке бэкапов."""
     items = yandex.list_files(REMOTE_BACKUPS)
     backups = []
     for item in items:
-        if item.get("type") == "file" and item.get("name", "").endswith(".tar.gz"):
+        name = item.get("name", "")
+        if item.get("type") == "file" and re.fullmatch(
+            r"armory_backup_\d{8}_\d{6}\.tar\.gz",
+            name,
+        ):
+            modified_at = item.get("modified") or ""
             backups.append({
-                "name": item["name"],
+                "name": name,
                 "size": item.get("size", 0),
-                "modified": _format_dt(item.get("modified", "")),
+                "modified": _format_dt(modified_at),
+                "modified_at": modified_at,
+                "source": "yandex",
             })
-    return sorted(backups, key=lambda x: x.get("modified", ""), reverse=True)
+    return sorted(backups, key=_archive_sort_key)
 
 
 # ── хелперы Alexandrite ──────────────────────────────────────────────
@@ -618,13 +787,45 @@ def _list_alexandrite_backups(yandex: YandexDiskStorage) -> list:
     backups = []
     for item in items:
         name = item.get("name", "")
-        if item.get("type") == "file" and name.endswith(".tar.gz") and name.startswith("alexandrite_backup_"):
+        if item.get("type") == "file" and re.fullmatch(
+            r"alexandrite_backup_\d{8}_\d{6}\.tar\.gz",
+            name,
+        ):
+            modified_at = item.get("modified") or ""
             backups.append({
                 "name": name,
                 "size": item.get("size", 0),
-                "modified": _format_dt(item.get("modified", "")),
+                "modified": _format_dt(modified_at),
+                "modified_at": modified_at,
+                "source": "yandex",
             })
-    return sorted(backups, key=lambda x: x.get("modified", ""), reverse=True)
+    return sorted(backups, key=_archive_sort_key)
+
+
+def _list_local_alexandrite_backups() -> list:
+    """Возвращает список локальных архивов Alexandrite."""
+    if not LOCAL_BACKUPS.exists():
+        return []
+
+    backups = []
+    for archive_path in LOCAL_BACKUPS.glob("alexandrite_backup_*.tar.gz"):
+        if not archive_path.is_file() or not re.fullmatch(
+            r"alexandrite_backup_\d{8}_\d{6}\.tar\.gz",
+            archive_path.name,
+        ):
+            continue
+        modified_at = datetime.fromtimestamp(
+            archive_path.stat().st_mtime,
+            tz=timezone.utc,
+        ).isoformat()
+        backups.append({
+            "name": archive_path.name,
+            "size": archive_path.stat().st_size,
+            "modified": _format_dt(modified_at),
+            "modified_at": modified_at,
+            "source": "local",
+        })
+    return sorted(backups, key=_archive_sort_key)
 
 
 # ── эндпоинты ────────────────────────────────────────────────────────
@@ -647,7 +848,7 @@ async def backup_stats():
     async with AsyncSessionLocal() as session:
         stats = await _gather_stats(session)
 
-    return {"local": stats, "yandex": yandex_status}
+    return {"local": stats, "yandex": yandex_status, "sync": _sync_state_payload()}
 
 
 @router.post("/sync-export")
@@ -700,14 +901,19 @@ async def _run_sync_export_async(
         async with AsyncSessionLocal() as session:
             stats = await _gather_stats(session)
 
+        last_sync_at = await asyncio.to_thread(_record_sync, "armory_last_sync_at")
         if job_id in _backup_jobs:
             _backup_jobs[job_id]["status"] = "completed"
+            _backup_jobs[job_id]["last_sync_at"] = last_sync_at
+            _backup_jobs[job_id]["last_sync"] = _format_dt(last_sync_at)
             _backup_jobs[job_id]["stats"] = {
                 **{k: v for k, v in stats.items()},
                 "db_uploaded": db_uploaded,
                 "files_uploaded": upload_stats["uploaded"],
                 "files_skipped": upload_stats["skipped"],
                 "auto_backup": str(auto_backup),
+                "last_sync_at": last_sync_at,
+                "last_sync": _format_dt(last_sync_at),
             }
             _backup_jobs[job_id]["current_file"] = ""
     except Exception as e:
@@ -750,6 +956,7 @@ async def sync_import():
         uploads_dst = Path(settings.local_storage_path).resolve()
         uploads_dst.mkdir(parents=True, exist_ok=True)
         file_stats = await asyncio.to_thread(_download_uploads, yandex, REMOTE_UPLOADS, uploads_dst)
+        last_sync_at = await asyncio.to_thread(_record_sync, "armory_last_sync_at")
 
         return {
             "success": True,
@@ -758,6 +965,8 @@ async def sync_import():
                 "files_downloaded": file_stats["downloaded"],
                 "files_skipped": file_stats["skipped"],
                 "auto_backup": str(auto_backup),
+                "last_sync_at": last_sync_at,
+                "last_sync": _format_dt(last_sync_at),
             },
         }
     finally:
@@ -769,16 +978,23 @@ async def sync_import():
 @router.get("/archives")
 async def list_archives():
     yandex = _get_yandex()
-    if not yandex:
-        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
-    backups = await asyncio.to_thread(_list_backups, yandex)
+    backups = await asyncio.to_thread(_list_local_backups)
+    if yandex:
+        backups.extend(await asyncio.to_thread(_list_backups, yandex))
+    backups.sort(key=_archive_sort_key)
     return {"archives": backups}
 
 
 @router.post("/create")
-async def create_archive():
+async def create_archive(payload: dict | None = None):
+    payload = payload or {}
     yandex = _get_yandex()
-    if not yandex:
+    target = payload.get("backup_target")
+    if target is None:
+        target = "both" if yandex else "local"
+    if not isinstance(target, str) or target not in _BACKUP_TARGETS:
+        raise HTTPException(status_code=400, detail="Некорректное место сохранения бэкапа")
+    if target in {"yandex", "both"} and not yandex:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
     _cleanup_old_backup_jobs()
@@ -799,11 +1015,18 @@ async def create_archive():
 
     job_id = str(uuid.uuid4())
     archive_name = f"armory_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.tar.gz"
-    local_archive = Path(os.environ.get("TMPDIR", "/tmp")) / archive_name
+    if target in {"local", "both"}:
+        LOCAL_BACKUPS.mkdir(parents=True, exist_ok=True)
+        archive_dir = LOCAL_BACKUPS
+    else:
+        archive_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_backup_{uuid.uuid4().hex}"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+    local_archive = archive_dir / archive_name
 
     _backup_jobs[job_id] = {
         "status": "starting",
         "archive_name": archive_name,
+        "target": target,
         "total": 0,
         "processed": 0,
         "total_size": 0,
@@ -811,23 +1034,37 @@ async def create_archive():
         "current_file": "",
         "created_at": datetime.now().isoformat(),
     }
-    asyncio.create_task(_run_create_archive_async(yandex, db_path, uploads_src, local_archive, archive_name, job_id))
+    asyncio.create_task(
+        _run_create_archive_async(
+            yandex,
+            db_path,
+            uploads_src,
+            local_archive,
+            archive_name,
+            job_id,
+            target,
+            archive_dir if target == "yandex" else None,
+        )
+    )
     return {"job_id": job_id}
 
 
 async def _run_create_archive_async(
-    yandex: YandexDiskStorage,
+    yandex: YandexDiskStorage | None,
     db_path: Path,
     uploads_src: Path,
     local_archive: Path,
     archive_name: str,
     job_id: str,
+    target: str,
+    temporary_dir: Path | None,
 ) -> None:
-    """Фоновая задача создания архива и загрузки на Яндекс.Диск с прогрессом."""
+    """Фоновая задача создания архива в выбранных хранилищах с прогрессом."""
     try:
+        local_archive.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(_create_tarball, db_path, uploads_src, local_archive, job_id)
 
-        if job_id in _backup_jobs:
+        if job_id in _backup_jobs and target in {"yandex", "both"}:
             _backup_jobs[job_id]["current_file"] = archive_name
             _backup_jobs[job_id]["status"] = "uploading"
             _backup_jobs[job_id]["total"] = 1
@@ -835,28 +1072,34 @@ async def _run_create_archive_async(
             _backup_jobs[job_id]["processed_size"] = 0
             _backup_jobs[job_id]["total_size"] = local_archive.stat().st_size
 
-        remote_path = f"{REMOTE_BACKUPS}/{archive_name}"
-        await asyncio.to_thread(yandex.ensure_folders, remote_path)
+        if target in {"yandex", "both"}:
+            if not yandex:
+                raise RuntimeError("Яндекс.Диск не настроен")
 
-        def _upload_progress(done, total):
-            if job_id in _backup_jobs:
-                _backup_jobs[job_id]["processed_size"] = done
-                _backup_jobs[job_id]["total_size"] = total
-                _backup_jobs[job_id]["current_file_size"] = total
+            remote_path = f"{REMOTE_BACKUPS}/{archive_name}"
+            await asyncio.to_thread(yandex.ensure_folders, remote_path)
 
-        uploaded = await asyncio.to_thread(
-            yandex.upload_file_with_progress,
-            str(local_archive),
-            remote_path,
-            True,
-            _upload_progress,
-        )
-        if not uploaded:
-            raise RuntimeError("Не удалось загрузить архив на Яндекс.Диск")
+            def _upload_progress(done, total):
+                if job_id in _backup_jobs:
+                    _backup_jobs[job_id]["processed_size"] = done
+                    _backup_jobs[job_id]["total_size"] = total
+                    _backup_jobs[job_id]["current_file_size"] = total
+
+            uploaded = await asyncio.to_thread(
+                yandex.upload_file_with_progress,
+                str(local_archive),
+                remote_path,
+                True,
+                _upload_progress,
+            )
+            if not uploaded:
+                raise RuntimeError("Не удалось загрузить архив на Яндекс.Диск")
 
         if job_id in _backup_jobs:
             _backup_jobs[job_id]["status"] = "completed"
             _backup_jobs[job_id]["archive"] = archive_name
+            _backup_jobs[job_id]["local_saved"] = target in {"local", "both"}
+            _backup_jobs[job_id]["yandex_saved"] = target in {"yandex", "both"}
             _backup_jobs[job_id]["current_file"] = ""
     except Exception as e:
         if job_id in _backup_jobs:
@@ -864,8 +1107,8 @@ async def _run_create_archive_async(
             _backup_jobs[job_id]["error"] = str(e)
             _backup_jobs[job_id]["current_file"] = ""
     finally:
-        if local_archive.exists():
-            local_archive.unlink()
+        if temporary_dir:
+            shutil.rmtree(temporary_dir, ignore_errors=True)
 
 
 @router.get("/job/{job_id}")
@@ -877,15 +1120,54 @@ async def backup_job_status(job_id: str):
     return job
 
 
-@router.post("/restore")
-async def restore_archive(payload: dict):
+@router.get("/download")
+async def download_archive(name: str, source: str = "local"):
+    """Отправляет выбранный архив пользователю для скачивания."""
+    name = _validate_archive_name(name)
+    source = _validate_backup_source(source)
+
+    if source == "local":
+        archive_path = _local_archive_path(name)
+        if not archive_path.is_file():
+            raise HTTPException(status_code=404, detail="Локальный архив не найден")
+        return FileResponse(
+            archive_path,
+            filename=name,
+            media_type="application/gzip",
+        )
+
     yandex = _get_yandex()
     if not yandex:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
-    name = payload.get("name")
-    if not name or not name.endswith(".tar.gz"):
-        raise HTTPException(status_code=400, detail="Некорректное имя архива")
+    temp_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_download_{uuid.uuid4().hex}"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    archive_path = temp_dir / name
+    downloaded = await asyncio.to_thread(
+        yandex.download_file,
+        f"{REMOTE_BACKUPS}/{name}",
+        str(archive_path),
+    )
+    if not downloaded:
+        _cleanup_archive_download(temp_dir)
+        raise HTTPException(status_code=404, detail="Архив на Яндекс.Диске не найден")
+
+    return FileResponse(
+        archive_path,
+        filename=name,
+        media_type="application/gzip",
+        background=BackgroundTask(_cleanup_archive_download, temp_dir),
+    )
+
+
+@router.post("/restore")
+async def restore_archive(payload: dict | None = None):
+    payload = payload or {}
+    name = _validate_archive_name(payload.get("name"))
+    source = _validate_backup_source(payload.get("source", "yandex"))
+    yandex = _get_yandex() if source == "yandex" else None
+    if source == "yandex" and not yandex:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
     db_path = Path(settings.database_url.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")).resolve()
     uploads_dst = Path(settings.local_storage_path).resolve()
@@ -893,15 +1175,25 @@ async def restore_archive(payload: dict):
     # Автоматический локальный бэкап перед destructive операцией
     auto_backup = await asyncio.to_thread(_local_auto_backup, db_path, uploads_dst)
 
-    temp_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_restore_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_dir = None
+    if source == "yandex":
+        temp_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_restore_{uuid.uuid4().hex}"
+        temp_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        remote_path = f"{REMOTE_BACKUPS}/{name}"
-        local_archive = temp_dir / name
-        downloaded = await asyncio.to_thread(yandex.download_file, remote_path, str(local_archive))
-        if not downloaded:
-            raise HTTPException(status_code=502, detail="Не удалось скачать архив с Яндекс.Диска")
+        if source == "local":
+            local_archive = _local_archive_path(name)
+            if not local_archive.is_file():
+                raise HTTPException(status_code=404, detail="Локальный архив не найден")
+        else:
+            local_archive = temp_dir / name
+            downloaded = await asyncio.to_thread(
+                yandex.download_file,
+                f"{REMOTE_BACKUPS}/{name}",
+                str(local_archive),
+            )
+            if not downloaded:
+                raise HTTPException(status_code=502, detail="Не удалось скачать архив с Яндекс.Диска")
 
         # Очищаем uploads перед распаковкой
         if uploads_dst.exists():
@@ -927,18 +1219,26 @@ async def restore_archive(payload: dict):
             },
         }
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        if temp_dir:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @router.post("/delete")
-async def delete_archive(payload: dict):
+async def delete_archive(payload: dict | None = None):
+    payload = payload or {}
+    name = _validate_archive_name(payload.get("name"))
+    source = _validate_backup_source(payload.get("source", "yandex"))
+
+    if source == "local":
+        archive_path = _local_archive_path(name)
+        if not archive_path.is_file():
+            raise HTTPException(status_code=404, detail="Локальный архив не найден")
+        archive_path.unlink()
+        return {"success": True}
+
     yandex = _get_yandex()
     if not yandex:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
-
-    name = payload.get("name")
-    if not name or not name.endswith(".tar.gz"):
-        raise HTTPException(status_code=400, detail="Некорректное имя архива")
 
     remote_path = f"{REMOTE_BACKUPS}/{name}"
     ok = await asyncio.to_thread(yandex.delete, remote_path)
@@ -964,7 +1264,15 @@ async def alexandrite_stats():
 
     local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
     stats = _gather_alexandrite_stats(local_path)
-    return {"local": stats, "yandex": yandex_status}
+    sync = _sync_state_payload()
+    return {
+        "local": stats,
+        "yandex": yandex_status,
+        "sync": {
+            "last_sync_at": sync["alexandrite_last_sync_at"],
+            "last_sync": sync["alexandrite_last_sync"],
+        },
+    }
 
 
 @router.post("/alexandrite/export")
@@ -977,6 +1285,7 @@ async def alexandrite_export():
 
     await asyncio.to_thread(yandex.create_folder, REMOTE_ALEXANDRITE)
     upload_stats = await asyncio.to_thread(_upload_alexandrite, yandex, local_path, REMOTE_ALEXANDRITE)
+    last_sync_at = await asyncio.to_thread(_record_sync, "alexandrite_last_sync_at")
 
     stats = _gather_alexandrite_stats(local_path)
     return {
@@ -985,6 +1294,8 @@ async def alexandrite_export():
             **stats,
             "files_uploaded": upload_stats["uploaded"],
             "files_failed": upload_stats["failed"],
+            "last_sync_at": last_sync_at,
+            "last_sync": _format_dt(last_sync_at),
         },
     }
 
@@ -994,8 +1305,11 @@ async def _run_alexandrite_export_async(yandex: YandexDiskStorage, local_path: P
     try:
         await asyncio.to_thread(yandex.create_folder, REMOTE_ALEXANDRITE)
         await asyncio.to_thread(_upload_alexandrite, yandex, local_path, REMOTE_ALEXANDRITE, job_id)
+        last_sync_at = await asyncio.to_thread(_record_sync, "alexandrite_last_sync_at")
         if job_id in _alexandrite_export_jobs:
             _alexandrite_export_jobs[job_id]["status"] = "completed"
+            _alexandrite_export_jobs[job_id]["last_sync_at"] = last_sync_at
+            _alexandrite_export_jobs[job_id]["last_sync"] = _format_dt(last_sync_at)
             _alexandrite_export_jobs[job_id]["current_file"] = ""
     except Exception as e:
         if job_id in _alexandrite_export_jobs:
@@ -1058,6 +1372,7 @@ async def alexandrite_import():
 
     download_stats = await asyncio.to_thread(_download_alexandrite, yandex, REMOTE_ALEXANDRITE, local_path)
     stats = _gather_alexandrite_stats(local_path)
+    last_sync_at = await asyncio.to_thread(_record_sync, "alexandrite_last_sync_at")
 
     return {
         "success": True,
@@ -1066,66 +1381,140 @@ async def alexandrite_import():
             "files_downloaded": download_stats["downloaded"],
             "files_skipped": download_stats["skipped"],
             "auto_backup": str(auto_backup),
+            "last_sync_at": last_sync_at,
+            "last_sync": _format_dt(last_sync_at),
         },
     }
 
 
 @router.post("/alexandrite/archive")
-async def create_alexandrite_archive():
+async def create_alexandrite_archive(payload: dict | None = None):
+    payload = payload or {}
     yandex = _get_yandex()
-    if not yandex:
+    target = payload.get("backup_target")
+    if target is None:
+        target = "both" if yandex else "local"
+    if not isinstance(target, str) or target not in _BACKUP_TARGETS:
+        raise HTTPException(status_code=400, detail="Некорректное место сохранения бэкапа")
+    if target in {"yandex", "both"} and not yandex:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
     local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
-
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     archive_name = f"alexandrite_backup_{ts}.tar.gz"
-    local_archive = Path(os.environ.get("TMPDIR", "/tmp")) / archive_name
+    temporary_dir = None
+    if target in {"local", "both"}:
+        LOCAL_BACKUPS.mkdir(parents=True, exist_ok=True)
+        local_archive = _local_alexandrite_archive_path(archive_name)
+    else:
+        temporary_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_alexandrite_backup_{uuid.uuid4().hex}"
+        temporary_dir.mkdir(parents=True, exist_ok=True)
+        local_archive = temporary_dir / archive_name
 
     try:
         await asyncio.to_thread(_create_alexandrite_tarball, local_path, local_archive)
-        remote_path = f"{REMOTE_ALEXANDRITE_BACKUPS}/{archive_name}"
-        await asyncio.to_thread(yandex.ensure_folders, remote_path)
-        uploaded = await asyncio.to_thread(yandex.upload_file, str(local_archive), remote_path)
-        if not uploaded:
-            raise HTTPException(status_code=502, detail="Не удалось загрузить архив Alexandrite на Яндекс.Диск")
-        return {"success": True, "archive": archive_name}
+        if target in {"yandex", "both"}:
+            remote_path = f"{REMOTE_ALEXANDRITE_BACKUPS}/{archive_name}"
+            await asyncio.to_thread(yandex.ensure_folders, remote_path)
+            uploaded = await asyncio.to_thread(yandex.upload_file, str(local_archive), remote_path)
+            if not uploaded:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Не удалось загрузить архив Alexandrite на Яндекс.Диск",
+                )
+        return {
+            "success": True,
+            "archive": archive_name,
+            "target": target,
+            "local_saved": target in {"local", "both"},
+            "yandex_saved": target in {"yandex", "both"},
+        }
     finally:
-        if local_archive.exists():
-            local_archive.unlink()
+        if temporary_dir:
+            shutil.rmtree(temporary_dir, ignore_errors=True)
 
 
 @router.get("/alexandrite/archives")
 async def list_alexandrite_archives():
     yandex = _get_yandex()
-    if not yandex:
-        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
-    backups = await asyncio.to_thread(_list_alexandrite_backups, yandex)
+    backups = await asyncio.to_thread(_list_local_alexandrite_backups)
+    if yandex:
+        backups.extend(await asyncio.to_thread(_list_alexandrite_backups, yandex))
+    backups.sort(key=_archive_sort_key)
     return {"archives": backups}
 
 
-@router.post("/alexandrite/restore")
-async def restore_alexandrite_archive(payload: dict):
+@router.get("/alexandrite/download")
+async def download_alexandrite_archive(name: str, source: str = "local"):
+    """Отправляет выбранный архив Alexandrite пользователю для скачивания."""
+    name = _validate_alexandrite_archive_name(name)
+    source = _validate_backup_source(source)
+
+    if source == "local":
+        archive_path = _local_alexandrite_archive_path(name)
+        if not archive_path.is_file():
+            raise HTTPException(status_code=404, detail="Локальный архив Alexandrite не найден")
+        return FileResponse(
+            archive_path,
+            filename=name,
+            media_type="application/gzip",
+        )
+
     yandex = _get_yandex()
     if not yandex:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
-    name = payload.get("name")
-    if not name or not name.endswith(".tar.gz"):
-        raise HTTPException(status_code=400, detail="Некорректное имя архива")
+    temp_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_alexandrite_download_{uuid.uuid4().hex}"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    archive_path = temp_dir / name
+    downloaded = await asyncio.to_thread(
+        yandex.download_file,
+        f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}",
+        str(archive_path),
+    )
+    if not downloaded:
+        _cleanup_archive_download(temp_dir)
+        raise HTTPException(status_code=404, detail="Архив Alexandrite на Яндекс.Диске не найден")
+
+    return FileResponse(
+        archive_path,
+        filename=name,
+        media_type="application/gzip",
+        background=BackgroundTask(_cleanup_archive_download, temp_dir),
+    )
+
+
+@router.post("/alexandrite/restore")
+async def restore_alexandrite_archive(payload: dict | None = None):
+    payload = payload or {}
+    name = _validate_alexandrite_archive_name(payload.get("name"))
+    source = _validate_backup_source(payload.get("source", "yandex"))
+    yandex = _get_yandex() if source == "yandex" else None
+    if source == "yandex" and not yandex:
+        raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
     local_path = Path(settings.alexandrite_vault_path).expanduser().resolve()
+    temp_dir = None
+    if source == "local":
+        local_archive = _local_alexandrite_archive_path(name)
+        if not local_archive.is_file():
+            raise HTTPException(status_code=404, detail="Локальный архив Alexandrite не найден")
+    else:
+        temp_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_alexandrite_restore_{uuid.uuid4().hex}"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        local_archive = temp_dir / name
+
     auto_backup = await asyncio.to_thread(_local_auto_backup_alexandrite, local_path)
 
-    temp_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_alexandrite_restore_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
     try:
-        remote_path = f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}"
-        local_archive = temp_dir / name
-        downloaded = await asyncio.to_thread(yandex.download_file, remote_path, str(local_archive))
-        if not downloaded:
-            raise HTTPException(status_code=502, detail="Не удалось скачать архив Alexandrite с Яндекс.Диска")
+        if source == "yandex":
+            downloaded = await asyncio.to_thread(
+                yandex.download_file,
+                f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}",
+                str(local_archive),
+            )
+            if not downloaded:
+                raise HTTPException(status_code=502, detail="Не удалось скачать архив Alexandrite с Яндекс.Диска")
 
         # Очищаем локальную папку перед распаковкой
         if local_path.exists():
@@ -1148,18 +1537,26 @@ async def restore_alexandrite_archive(payload: dict):
             },
         }
     finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        if temp_dir:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @router.post("/alexandrite/delete")
-async def delete_alexandrite_archive(payload: dict):
+async def delete_alexandrite_archive(payload: dict | None = None):
+    payload = payload or {}
+    name = _validate_alexandrite_archive_name(payload.get("name"))
+    source = _validate_backup_source(payload.get("source", "yandex"))
+
+    if source == "local":
+        archive_path = _local_alexandrite_archive_path(name)
+        if not archive_path.is_file():
+            raise HTTPException(status_code=404, detail="Локальный архив Alexandrite не найден")
+        archive_path.unlink()
+        return {"success": True}
+
     yandex = _get_yandex()
     if not yandex:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
-
-    name = payload.get("name")
-    if not name or not name.endswith(".tar.gz"):
-        raise HTTPException(status_code=400, detail="Некорректное имя архива")
 
     remote_path = f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}"
     ok = await asyncio.to_thread(yandex.delete, remote_path)
