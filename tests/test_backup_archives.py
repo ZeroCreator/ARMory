@@ -6,7 +6,9 @@ import pytest
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
+from app import yandex_disk
 from app.routers import backup
+from app.yandex_disk import YandexDiskError, YandexDiskStorage
 
 
 class FakeYandexDisk:
@@ -148,3 +150,55 @@ def test_archive_extraction_rejects_path_traversal(tmp_path):
         )
 
     assert not (tmp_path / "outside.txt").exists()
+
+
+def test_yandex_client_strips_token_and_reports_unauthorized(monkeypatch):
+    class FakeResponse:
+        status_code = 401
+
+    def fake_request(method, url, headers, **kwargs):
+        assert method == "GET"
+        assert url.endswith("/v1/disk/")
+        assert headers["Authorization"] == "OAuth oauth-token"
+        return FakeResponse()
+
+    monkeypatch.setattr(yandex_disk.requests, "request", fake_request)
+    client = YandexDiskStorage("  oauth-token  ")
+
+    assert client.test_connection() == {
+        "ok": False,
+        "info": "Недействительный токен Яндекс.Диска (HTTP 401)",
+    }
+
+
+def test_yandex_client_propagates_unauthorized_during_upload(tmp_path, monkeypatch):
+    local_file = tmp_path / "data.txt"
+    local_file.write_text("data", encoding="utf-8")
+
+    class FakeResponse:
+        status_code = 401
+
+    monkeypatch.setattr(yandex_disk.requests, "request", lambda *args, **kwargs: FakeResponse())
+    client = YandexDiskStorage("oauth-token")
+
+    with pytest.raises(YandexDiskError, match="HTTP 401"):
+        client.upload_file(local_file, "ARMory/data/data.txt")
+
+
+@pytest.mark.asyncio
+async def test_sync_import_returns_yandex_auth_error(tmp_path, monkeypatch):
+    class FakeYandexDisk:
+        def download_file(self, remote_path, local_path):
+            raise YandexDiskError("Недействительный токен Яндекс.Диска (HTTP 401)")
+
+    monkeypatch.setattr(backup, "_get_yandex", lambda: FakeYandexDisk())
+    monkeypatch.setattr(backup, "_local_auto_backup", lambda *args: tmp_path / "auto")
+    monkeypatch.setattr(backup.settings, "database_url", f"sqlite+aiosqlite:///{tmp_path / 'armory.db'}")
+    monkeypatch.setattr(backup.settings, "local_storage_path", str(tmp_path / "uploads"))
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+
+    with pytest.raises(HTTPException) as error:
+        await backup.sync_import()
+
+    assert error.value.status_code == 502
+    assert error.value.detail == "Недействительный токен Яндекс.Диска (HTTP 401)"

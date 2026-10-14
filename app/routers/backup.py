@@ -31,7 +31,7 @@ from app.models import (
     TaskStatus,
     DocType,
 )
-from app.yandex_disk import YandexDiskStorage
+from app.yandex_disk import YandexDiskError, YandexDiskStorage
 
 router = APIRouter(prefix="/api/backup", tags=["backup"])
 
@@ -92,10 +92,15 @@ def _job_created_at(job: dict) -> datetime:
 
 
 def _get_yandex() -> YandexDiskStorage | None:
-    token = settings.yandex_disk_token
+    token = (settings.yandex_disk_token or "").strip()
     if not token:
         return None
     return YandexDiskStorage(token, _YANDEX_BASE)
+
+
+def _yandex_http_error(error: YandexDiskError) -> HTTPException:
+    """Преобразует ошибку Яндекс.Диска в ответ API приложения."""
+    return HTTPException(status_code=502, detail=str(error))
 
 
 def _validate_archive_name(name: str) -> str:
@@ -969,6 +974,8 @@ async def sync_import():
                 "last_sync": _format_dt(last_sync_at),
             },
         }
+    except YandexDiskError as exc:
+        raise _yandex_http_error(exc) from exc
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -980,7 +987,10 @@ async def list_archives():
     yandex = _get_yandex()
     backups = await asyncio.to_thread(_list_local_backups)
     if yandex:
-        backups.extend(await asyncio.to_thread(_list_backups, yandex))
+        try:
+            backups.extend(await asyncio.to_thread(_list_backups, yandex))
+        except YandexDiskError as exc:
+            raise _yandex_http_error(exc) from exc
     backups.sort(key=_archive_sort_key)
     return {"archives": backups}
 
@@ -1143,11 +1153,15 @@ async def download_archive(name: str, source: str = "local"):
     temp_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_download_{uuid.uuid4().hex}"
     temp_dir.mkdir(parents=True, exist_ok=True)
     archive_path = temp_dir / name
-    downloaded = await asyncio.to_thread(
-        yandex.download_file,
-        f"{REMOTE_BACKUPS}/{name}",
-        str(archive_path),
-    )
+    try:
+        downloaded = await asyncio.to_thread(
+            yandex.download_file,
+            f"{REMOTE_BACKUPS}/{name}",
+            str(archive_path),
+        )
+    except YandexDiskError as exc:
+        _cleanup_archive_download(temp_dir)
+        raise _yandex_http_error(exc) from exc
     if not downloaded:
         _cleanup_archive_download(temp_dir)
         raise HTTPException(status_code=404, detail="Архив на Яндекс.Диске не найден")
@@ -1187,11 +1201,14 @@ async def restore_archive(payload: dict | None = None):
                 raise HTTPException(status_code=404, detail="Локальный архив не найден")
         else:
             local_archive = temp_dir / name
-            downloaded = await asyncio.to_thread(
-                yandex.download_file,
-                f"{REMOTE_BACKUPS}/{name}",
-                str(local_archive),
-            )
+            try:
+                downloaded = await asyncio.to_thread(
+                    yandex.download_file,
+                    f"{REMOTE_BACKUPS}/{name}",
+                    str(local_archive),
+                )
+            except YandexDiskError as exc:
+                raise _yandex_http_error(exc) from exc
             if not downloaded:
                 raise HTTPException(status_code=502, detail="Не удалось скачать архив с Яндекс.Диска")
 
@@ -1241,7 +1258,10 @@ async def delete_archive(payload: dict | None = None):
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
     remote_path = f"{REMOTE_BACKUPS}/{name}"
-    ok = await asyncio.to_thread(yandex.delete, remote_path)
+    try:
+        ok = await asyncio.to_thread(yandex.delete, remote_path)
+    except YandexDiskError as exc:
+        raise _yandex_http_error(exc) from exc
     if not ok:
         raise HTTPException(status_code=502, detail="Не удалось удалить архив с Яндекс.Диска")
     return {"success": True}
@@ -1370,7 +1390,10 @@ async def alexandrite_import():
     else:
         local_path.mkdir(parents=True, exist_ok=True)
 
-    download_stats = await asyncio.to_thread(_download_alexandrite, yandex, REMOTE_ALEXANDRITE, local_path)
+    try:
+        download_stats = await asyncio.to_thread(_download_alexandrite, yandex, REMOTE_ALEXANDRITE, local_path)
+    except YandexDiskError as exc:
+        raise _yandex_http_error(exc) from exc
     stats = _gather_alexandrite_stats(local_path)
     last_sync_at = await asyncio.to_thread(_record_sync, "alexandrite_last_sync_at")
 
@@ -1415,8 +1438,11 @@ async def create_alexandrite_archive(payload: dict | None = None):
         await asyncio.to_thread(_create_alexandrite_tarball, local_path, local_archive)
         if target in {"yandex", "both"}:
             remote_path = f"{REMOTE_ALEXANDRITE_BACKUPS}/{archive_name}"
-            await asyncio.to_thread(yandex.ensure_folders, remote_path)
-            uploaded = await asyncio.to_thread(yandex.upload_file, str(local_archive), remote_path)
+            try:
+                await asyncio.to_thread(yandex.ensure_folders, remote_path)
+                uploaded = await asyncio.to_thread(yandex.upload_file, str(local_archive), remote_path)
+            except YandexDiskError as exc:
+                raise _yandex_http_error(exc) from exc
             if not uploaded:
                 raise HTTPException(
                     status_code=502,
@@ -1439,7 +1465,10 @@ async def list_alexandrite_archives():
     yandex = _get_yandex()
     backups = await asyncio.to_thread(_list_local_alexandrite_backups)
     if yandex:
-        backups.extend(await asyncio.to_thread(_list_alexandrite_backups, yandex))
+        try:
+            backups.extend(await asyncio.to_thread(_list_alexandrite_backups, yandex))
+        except YandexDiskError as exc:
+            raise _yandex_http_error(exc) from exc
     backups.sort(key=_archive_sort_key)
     return {"archives": backups}
 
@@ -1467,11 +1496,15 @@ async def download_alexandrite_archive(name: str, source: str = "local"):
     temp_dir = Path(os.environ.get("TMPDIR", "/tmp")) / f"armory_alexandrite_download_{uuid.uuid4().hex}"
     temp_dir.mkdir(parents=True, exist_ok=True)
     archive_path = temp_dir / name
-    downloaded = await asyncio.to_thread(
-        yandex.download_file,
-        f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}",
-        str(archive_path),
-    )
+    try:
+        downloaded = await asyncio.to_thread(
+            yandex.download_file,
+            f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}",
+            str(archive_path),
+        )
+    except YandexDiskError as exc:
+        _cleanup_archive_download(temp_dir)
+        raise _yandex_http_error(exc) from exc
     if not downloaded:
         _cleanup_archive_download(temp_dir)
         raise HTTPException(status_code=404, detail="Архив Alexandrite на Яндекс.Диске не найден")
@@ -1508,11 +1541,14 @@ async def restore_alexandrite_archive(payload: dict | None = None):
 
     try:
         if source == "yandex":
-            downloaded = await asyncio.to_thread(
-                yandex.download_file,
-                f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}",
-                str(local_archive),
-            )
+            try:
+                downloaded = await asyncio.to_thread(
+                    yandex.download_file,
+                    f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}",
+                    str(local_archive),
+                )
+            except YandexDiskError as exc:
+                raise _yandex_http_error(exc) from exc
             if not downloaded:
                 raise HTTPException(status_code=502, detail="Не удалось скачать архив Alexandrite с Яндекс.Диска")
 
@@ -1559,7 +1595,10 @@ async def delete_alexandrite_archive(payload: dict | None = None):
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
 
     remote_path = f"{REMOTE_ALEXANDRITE_BACKUPS}/{name}"
-    ok = await asyncio.to_thread(yandex.delete, remote_path)
+    try:
+        ok = await asyncio.to_thread(yandex.delete, remote_path)
+    except YandexDiskError as exc:
+        raise _yandex_http_error(exc) from exc
     if not ok:
         raise HTTPException(status_code=502, detail="Не удалось удалить архив Alexandrite с Яндекс.Диска")
     return {"success": True}

@@ -14,7 +14,7 @@ from starlette.background import BackgroundTask
 from typing import List, Optional
 
 from app.config import get_settings, Settings
-from app.yandex_disk import YandexDiskStorage
+from app.yandex_disk import YandexDiskError, YandexDiskStorage
 
 router = APIRouter(prefix="/api/alexandrite", tags=["alexandrite"])
 
@@ -533,7 +533,7 @@ async def delete_directory(
 # ═══════════════════════════════════════════════════
 
 def _get_yandex_storage(settings: Settings) -> YandexDiskStorage:
-    token = settings.yandex_disk_token
+    token = (settings.yandex_disk_token or "").strip()
     if not token:
         raise HTTPException(status_code=503, detail="Яндекс.Диск не настроен")
     return YandexDiskStorage(token)
@@ -649,6 +649,8 @@ async def yandex_file(
             "name": Path(remote_path).name,
             "message": "Бинарный файл — предпросмотр не поддерживается",
         }
+    except YandexDiskError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     finally:
         try:
             os.unlink(tmp_path)
