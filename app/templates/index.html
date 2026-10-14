@@ -206,11 +206,6 @@
                             <i class="bi bi-chevron-right section-toggle-icon me-2"></i><i class="bi bi-plus-circle me-2"></i>Создать резервную копию
                         </h5>
                         <div class="collapse show" id="backup-create-content">
-                            <div class="backup-actions mb-3">
-                                <button id="backup-create-btn" class="scheduler-btn scheduler-btn-purple" onclick="createArchive()">
-                                    <i class="bi bi-plus-circle me-1"></i> Создать бэкап
-                                </button>
-                            </div>
                             <fieldset class="backup-targets">
                                 <legend>Куда сохранить бэкап?</legend>
                                 <label class="backup-target">
@@ -226,6 +221,20 @@
                                     <span>Локально и на Яндекс.Диск</span>
                                 </label>
                             </fieldset>
+                            <div class="backup-actions mt-3 mb-3">
+                                <button id="backup-create-btn" class="scheduler-btn scheduler-btn-purple" onclick="createArchive()">
+                                    <i class="bi bi-plus-circle me-1"></i> Создать бэкап
+                                </button>
+                            </div>
+                            <div class="backup-progress" id="backup-create-progress" style="display:none;">
+                                <div class="backup-progress-label">
+                                    <span id="backup-create-progress-text"></span>
+                                    <span id="backup-create-progress-percent">0%</span>
+                                </div>
+                                <div class="progress">
+                                    <div id="backup-create-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -297,50 +306,71 @@
                                 </div>
                             </div>
 
-                            <div class="backup-actions mt-3 mb-3">
-                                <button id="alexandrite-sync-export-btn" class="scheduler-btn scheduler-btn-green" onclick="syncAlexandriteExport()">
-                                    <i class="bi bi-cloud-upload me-1"></i> Сохранить на Яндекс.Диск
-                                </button>
-                                <button id="alexandrite-sync-import-btn" class="scheduler-btn scheduler-btn-brown" onclick="syncAlexandriteImport()">
-                                    <i class="bi bi-cloud-download me-1"></i> Загрузить с Яндекс.Диска
-                                </button>
-                            </div>
+                            <div class="backup-sync-section mt-3">
+                                <h5 class="backup-section-title collapsible-section-title" data-bs-toggle="collapse" data-bs-target="#alexandrite-sync-content" aria-expanded="true" aria-controls="alexandrite-sync-content" role="button" data-collapse-key="alexandrite-sync-v2" data-collapse-default="true">
+                                    <i class="bi bi-chevron-right section-toggle-icon me-2"></i><i class="bi bi-arrow-repeat me-2"></i>Синхронизация с Яндекс.Диском
+                                </h5>
+                                <div class="collapse show" id="alexandrite-sync-content">
+                                    <div class="backup-actions">
+                                        <button id="alexandrite-sync-export-btn" class="scheduler-btn scheduler-btn-green" onclick="syncAlexandriteExport()">
+                                            <i class="bi bi-cloud-upload me-1"></i> Сохранить на Яндекс.Диск
+                                        </button>
+                                        <button id="alexandrite-sync-import-btn" class="scheduler-btn scheduler-btn-brown" onclick="syncAlexandriteImport()">
+                                            <i class="bi bi-cloud-download me-1"></i> Загрузить с Яндекс.Диска
+                                        </button>
+                                    </div>
 
-                            <div class="backup-progress" id="alexandrite-backup-progress" style="display:none;">
-                                <div class="backup-progress-label">
-                                    <span id="alexandrite-backup-progress-text"></span>
-                                    <span id="alexandrite-backup-progress-percent">0%</span>
+                                    <div class="backup-progress" id="alexandrite-backup-progress" style="display:none;">
+                                        <div class="backup-progress-label">
+                                            <span id="alexandrite-backup-progress-text"></span>
+                                            <span id="alexandrite-backup-progress-percent">0%</span>
+                                        </div>
+                                        <div class="progress">
+                                            <div id="alexandrite-backup-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="backup-sync-meta" id="alexandrite-last-sync">
+                                        <span>Последняя синхронизация</span>
+                                        <time id="alexandrite-last-sync-value">—</time>
+                                    </div>
                                 </div>
-                                <div class="progress">
-                                    <div id="alexandrite-backup-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-                                </div>
-                            </div>
-                            <div class="backup-sync-meta" id="alexandrite-last-sync">
-                                <span>Последняя синхронизация</span>
-                                <time id="alexandrite-last-sync-value">—</time>
                             </div>
 
                             <div class="backup-sync-section mt-3">
-                                <div class="backup-actions mb-3">
-                                    <button id="alexandrite-archive-btn" class="scheduler-btn scheduler-btn-purple" onclick="createAlexandriteArchive()">
-                                        <i class="bi bi-plus-circle me-1"></i> Создать архив
-                                    </button>
+                                <h5 class="backup-section-title collapsible-section-title" data-bs-toggle="collapse" data-bs-target="#alexandrite-create-content" aria-expanded="true" aria-controls="alexandrite-create-content" role="button" data-collapse-key="alexandrite-create-v2" data-collapse-default="true">
+                                    <i class="bi bi-chevron-right section-toggle-icon me-2"></i><i class="bi bi-plus-circle me-2"></i>Создать резервную копию
+                                </h5>
+                                <div class="collapse show" id="alexandrite-create-content">
+                                    <fieldset class="backup-targets">
+                                        <legend>Куда сохранить бэкап?</legend>
+                                        <label class="backup-target">
+                                            <input type="radio" name="alexandrite-backup-target" value="local" checked>
+                                            <span>Только локально</span>
+                                        </label>
+                                        <label class="backup-target">
+                                            <input type="radio" name="alexandrite-backup-target" value="yandex">
+                                            <span>Только на Яндекс.Диск</span>
+                                        </label>
+                                        <label class="backup-target">
+                                            <input type="radio" name="alexandrite-backup-target" value="both">
+                                            <span>Локально и на Яндекс.Диск</span>
+                                        </label>
+                                    </fieldset>
+                                    <div class="backup-actions mt-3 mb-3">
+                                        <button id="alexandrite-archive-btn" class="scheduler-btn scheduler-btn-purple" onclick="createAlexandriteArchive()">
+                                            <i class="bi bi-plus-circle me-1"></i> Создать архив
+                                        </button>
+                                    </div>
+                                    <div class="backup-progress" id="alexandrite-create-progress" style="display:none;">
+                                        <div class="backup-progress-label">
+                                            <span id="alexandrite-create-progress-text"></span>
+                                            <span id="alexandrite-create-progress-percent">0%</span>
+                                        </div>
+                                        <div class="progress">
+                                            <div id="alexandrite-create-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <fieldset class="backup-targets">
-                                    <legend>Куда сохранить бэкап?</legend>
-                                    <label class="backup-target">
-                                        <input type="radio" name="alexandrite-backup-target" value="local" checked>
-                                        <span>Только локально</span>
-                                    </label>
-                                    <label class="backup-target">
-                                        <input type="radio" name="alexandrite-backup-target" value="yandex">
-                                        <span>Только на Яндекс.Диск</span>
-                                    </label>
-                                    <label class="backup-target">
-                                        <input type="radio" name="alexandrite-backup-target" value="both">
-                                        <span>Локально и на Яндекс.Диск</span>
-                                    </label>
-                                </fieldset>
                             </div>
 
                             <section class="backup-card backup-archive-source is-local mt-3" aria-labelledby="alexandrite-local-archives-title">

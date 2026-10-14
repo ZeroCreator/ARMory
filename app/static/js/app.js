@@ -3593,11 +3593,41 @@ function setBackupProgress(visible, percent = 0, text = '') {
     if (percentEl) percentEl.textContent = p + '%';
 }
 
+function setBackupArchiveProgress(visible, percent = 0, text = '') {
+    const container = document.getElementById('backup-create-progress');
+    const bar = document.getElementById('backup-create-progress-bar');
+    const label = document.getElementById('backup-create-progress-text');
+    const percentEl = document.getElementById('backup-create-progress-percent');
+    if (!container) return;
+    container.style.display = visible ? 'block' : 'none';
+    if (!visible) return;
+    const p = Math.max(0, Math.min(100, Math.round(percent)));
+    bar.style.width = p + '%';
+    bar.setAttribute('aria-valuenow', p);
+    if (label) label.textContent = text;
+    if (percentEl) percentEl.textContent = p + '%';
+}
+
 function setAlexandriteBackupProgress(visible, percent = 0, text = '') {
     const container = document.getElementById('alexandrite-backup-progress');
     const bar = document.getElementById('alexandrite-backup-progress-bar');
     const label = document.getElementById('alexandrite-backup-progress-text');
     const percentEl = document.getElementById('alexandrite-backup-progress-percent');
+    if (!container) return;
+    container.style.display = visible ? 'block' : 'none';
+    if (!visible) return;
+    const p = Math.max(0, Math.min(100, Math.round(percent)));
+    bar.style.width = p + '%';
+    bar.setAttribute('aria-valuenow', p);
+    if (label) label.textContent = text;
+    if (percentEl) percentEl.textContent = p + '%';
+}
+
+function setAlexandriteArchiveProgress(visible, percent = 0, text = '') {
+    const container = document.getElementById('alexandrite-create-progress');
+    const bar = document.getElementById('alexandrite-create-progress-bar');
+    const label = document.getElementById('alexandrite-create-progress-text');
+    const percentEl = document.getElementById('alexandrite-create-progress-percent');
     if (!container) return;
     container.style.display = visible ? 'block' : 'none';
     if (!visible) return;
@@ -3637,23 +3667,23 @@ function formatBackupProgressText(data, label) {
 
 function pollBackupJobStatus(jobId, kind) {
     const isArchive = kind === 'archive';
-    const setProgress = isArchive ? setBackupProgress : setBackupProgress;
+    const setProgress = isArchive ? setBackupArchiveProgress : setBackupProgress;
     const labelBase = isArchive ? 'Создание бэкапа' : 'Синхронизация';
     const poll = async () => {
         try {
             const data = await api(`${API_BASE}/backup/job/${jobId}`);
             if (data.status === 'starting' || data.status === 'packing') {
-                setBackupProgress(true, 0, data.status === 'packing' ? 'Упаковка файлов...' : 'Подготовка...');
+                setProgress(true, 0, data.status === 'packing' ? 'Упаковка файлов...' : 'Подготовка...');
                 setBackupStatus(`${labelBase}: подготовка...`, false);
                 setTimeout(poll, 1000);
             } else if (data.status === 'running' || data.status === 'uploading') {
                 const percent = computeBackupPercent(data);
                 const current = formatBackupProgressText(data, labelBase);
-                setBackupProgress(true, percent, current);
+                setProgress(true, percent, current);
                 setBackupStatus(`${labelBase}: ${percent}%`, false);
                 setTimeout(poll, 2000);
             } else if (data.status === 'completed') {
-                setBackupProgress(false);
+                setProgress(false);
                 if (isArchive) {
                     const targetMessages = {
                         local: 'Бэкап создан локально.',
@@ -3673,13 +3703,13 @@ function pollBackupJobStatus(jobId, kind) {
                 document.getElementById('sync-export-btn').disabled = false;
                 document.getElementById('backup-create-btn').disabled = false;
             } else if (data.status === 'error') {
-                setBackupProgress(false);
+                setProgress(false);
                 setBackupStatus(`${labelBase}: ошибка — ${data.error || ''}`, true);
                 document.getElementById('sync-export-btn').disabled = false;
                 document.getElementById('backup-create-btn').disabled = false;
             }
         } catch (e) {
-            setBackupProgress(false);
+            setProgress(false);
             setBackupStatus(`Ошибка ${labelBase.toLowerCase()}: ` + e.message, true);
             document.getElementById('sync-export-btn').disabled = false;
             document.getElementById('backup-create-btn').disabled = false;
@@ -3941,6 +3971,7 @@ async function createAlexandriteArchive() {
     btn.disabled = true;
     const target = document.querySelector('input[name="alexandrite-backup-target"]:checked')?.value || 'local';
     setBackupStatus('Создание архива Alexandrite...', false);
+    setAlexandriteArchiveProgress(true, 0, 'Создание архива Alexandrite...');
     try {
         const res = await api(`${API_BASE}/backup/alexandrite/archive`, {
             method: 'POST',
@@ -3953,9 +3984,11 @@ async function createAlexandriteArchive() {
             both: 'Бэкап создан локально и на Яндекс.Диске.',
         };
         setBackupStatus(`${targetMessages[res.target || target] || 'Бэкап создан.'} Файл: ${res.archive}`, false);
+        setAlexandriteArchiveProgress(false);
         loadAlexandriteArchives();
     } catch (e) {
         setBackupStatus('Ошибка создания архива Alexandrite: ' + e.message, true);
+        setAlexandriteArchiveProgress(false);
     } finally {
         btn.disabled = false;
     }
