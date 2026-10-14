@@ -333,17 +333,57 @@ def test_time_page_reloads_protected_url_for_api_unauthorized_response(browser):
         page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
         page.evaluate('''async () => {
             window.loginRedirects = [];
+            window.fetchCalls = 0;
+            navigateToTaskTimeLogin = url => window.loginRedirects.push(url);
+            window.fetch = async () => {
+                window.fetchCalls++;
+                return new Response(
+                    JSON.stringify({detail: 'Authentication required'}),
+                    {status: 401, headers: {'content-type': 'application/json'}},
+                );
+            };
+            await loadTaskTimeData();
+        }''')
+        assert page.evaluate("window.fetchCalls") == 3
+        assert page.evaluate("window.loginRedirects.length") == 1
+        assert page.evaluate("window.loginRedirects[0]") == page.evaluate(
+            "`${window.location.pathname}${window.location.search}${window.location.hash}`"
+        )
+    finally:
+        page.close()
+
+
+def test_time_page_keeps_loaded_tasks_when_authentication_temporarily_expires(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            const task = {
+                id: 1, project_id: 1, title: '<task-title>', status_id: 1,
+                status: {name: 'Тестирование'}, actual_seconds: 60,
+                time_tracking_status: 'running',
+            };
+            timeTasks = [task];
+            displayedTimeTasks = [task];
+            taskTimeDataLoaded = true;
+            renderTaskTimeTable([task]);
+            window.loginRedirects = [];
             navigateToTaskTimeLogin = url => window.loginRedirects.push(url);
             window.fetch = async () => new Response(
                 JSON.stringify({detail: 'Authentication required'}),
                 {status: 401, headers: {'content-type': 'application/json'}},
             );
-            await loadTaskTimeData();
         }''')
-        assert page.evaluate("window.loginRedirects.length") == 1
-        assert page.evaluate("window.loginRedirects[0]") == page.evaluate(
-            "`${window.location.pathname}${window.location.search}${window.location.hash}`"
-        )
+        page.evaluate('loadTaskTimeData(true)')
+        assert page.evaluate("window.loginRedirects.length") == 0
+        assert page.locator('#task-time-table-body tr[data-task-id="1"]').count() == 1
+        assert 'task-title' in page.locator('#task-time-table-body').inner_text()
     finally:
         page.close()
 

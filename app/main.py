@@ -4,7 +4,6 @@ ProJectDocsHub — веб-приложение для сбора и управл
 Author: Shkola Olga
 """
 import asyncio
-import datetime
 import logging
 import os
 from pathlib import Path
@@ -13,7 +12,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from contextlib import asynccontextmanager
-from sqlalchemy import text
 from starlette.types import ASGIApp, Receive, Scope, Send
 from urllib.parse import urlencode
 
@@ -97,13 +95,6 @@ class RequireAuthMiddleware:
         await response(scope, receive, send)
 
 
-async def _close_stale_task_time_sessions(conn) -> None:
-    await conn.execute(
-        text("UPDATE task_time_sessions SET ended_at = :ended_at WHERE ended_at IS NULL"),
-        {"ended_at": datetime.datetime.utcnow()},
-    )
-
-
 async def _reminder_loop():
     while True:
         try:
@@ -118,7 +109,6 @@ async def _reminder_loop():
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await _close_stale_task_time_sessions(conn)
 
         # Создаём data-директории, если их нет
         Path(settings.local_storage_path).expanduser().mkdir(parents=True, exist_ok=True)
