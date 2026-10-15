@@ -18,6 +18,7 @@ def settings(monkeypatch):
         armory_public_url="https://<your-domain>",
     )
     monkeypatch.setattr(mcp_logic, "get_settings", lambda: settings)
+    monkeypatch.setattr(mcp_logic, "get_access_token", lambda: None)
     return settings
 
 
@@ -63,6 +64,25 @@ def test_authenticated_identity_takes_precedence(settings, monkeypatch, auth_req
     )
 
     assert mcp_logic._default_task_assignee_name(make_context(scope)) == (
+        "<authenticated-assignee>", None,
+    )
+
+
+def test_authenticated_identity_uses_mcp_auth_context(settings, monkeypatch):
+    settings.auth_required = True
+    email = "<authenticated-email>"
+    monkeypatch.setattr(
+        mcp_logic,
+        "get_access_token",
+        lambda: SimpleNamespace(user_email=email.upper()),
+    )
+    monkeypatch.setattr(
+        mcp_logic,
+        "_api_request",
+        lambda *_: [{"email": email, "name": "<authenticated-assignee>"}],
+    )
+
+    assert mcp_logic._default_task_assignee_name(make_context(None)) == (
         "<authenticated-assignee>", None,
     )
 

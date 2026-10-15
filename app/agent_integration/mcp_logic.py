@@ -11,6 +11,7 @@ from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 import httpx
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import Context, FastMCP
 
 from app.auth import get_authenticated_email_from_scope, normalize_email
@@ -337,16 +338,18 @@ def _register_blocking_tool(server: FastMCP):
 
 def _default_task_assignee_name(ctx: Context) -> tuple[str | None, str | None]:
     settings = get_settings()
+    access_token = get_access_token()
+    email = normalize_email(getattr(access_token, "user_email", None))
     try:
         request = ctx.request_context.request
     except (AttributeError, ValueError):
         request = None
     scope = getattr(request, "scope", None)
-    email = ""
     if isinstance(scope, dict):
         authenticated_user = scope.get("user")
-        access_token = getattr(authenticated_user, "access_token", None)
-        email = normalize_email(getattr(access_token, "user_email", None))
+        scope_access_token = getattr(authenticated_user, "access_token", None)
+        if not email:
+            email = normalize_email(getattr(scope_access_token, "user_email", None))
         scope_state = scope.get("state")
         if not email and isinstance(scope_state, dict):
             email = normalize_email(scope_state.get("user_email"))
