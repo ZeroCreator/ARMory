@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from http.cookies import CookieError, SimpleCookie
 import hashlib
 import hmac
 import re
 import secrets
 import time
+from http.cookies import CookieError, SimpleCookie
 from typing import Any
 
 import jwt
@@ -15,7 +15,6 @@ from fastapi import Request
 from jwt import InvalidTokenError
 
 from app.config import Settings
-
 
 AUTH_COOKIE_NAME = "armory_session"
 AUTH_SESSION_ISSUER = "armory"
@@ -31,6 +30,20 @@ AUTH_PROXY_HEADERS = (
     "remote-user",
     "remote-email",
 )
+
+
+def build_session_cookie(email: str, settings: Settings) -> str:
+    """Собирает cookie активной сессии с новым сроком действия."""
+    cookie = SimpleCookie()
+    cookie[AUTH_COOKIE_NAME] = create_session_token(email, settings)
+    morsel = cookie[AUTH_COOKIE_NAME]
+    morsel["max-age"] = str(max(1, settings.auth_session_days * 24 * 60 * 60))
+    morsel["httponly"] = True
+    morsel["samesite"] = "lax"
+    morsel["path"] = "/"
+    if settings.auth_cookie_secure:
+        morsel["secure"] = True
+    return cookie.output(header="", sep="").strip()
 
 
 def normalize_email(value: str | None) -> str:

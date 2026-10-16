@@ -3,26 +3,26 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
-from email.message import EmailMessage
-from email.utils import formataddr
 import hashlib
 import logging
 import secrets
 import smtplib
 import ssl
 import time
+from datetime import datetime, timedelta
+from email.message import EmailMessage
+from email.utils import formataddr
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
     AUTH_COOKIE_NAME,
-    create_session_token,
+    build_session_cookie,
     hash_password,
     is_allowed_email,
     normalize_email,
@@ -31,7 +31,6 @@ from app.auth import (
 )
 from app.database import get_db
 from app.models import AuthLoginToken, AuthUser
-
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -145,16 +144,7 @@ def _authenticated_email(request: Request) -> str:
 
 
 def _set_session_cookie(response: RedirectResponse, email: str, settings) -> None:
-    session_token = create_session_token(email, settings)
-    response.set_cookie(
-        AUTH_COOKIE_NAME,
-        session_token,
-        max_age=max(1, settings.auth_session_days * 24 * 60 * 60),
-        httponly=True,
-        secure=settings.auth_cookie_secure,
-        samesite="lax",
-        path="/",
-    )
+    response.headers.append("set-cookie", build_session_cookie(email, settings))
 
 
 def _send_login_email(settings, recipient: str, link: str, ttl_minutes: int) -> None:

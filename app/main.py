@@ -6,21 +6,44 @@ Author: Shkola Olga
 import asyncio
 import logging
 import os
-from pathlib import Path
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from contextlib import asynccontextmanager
-from starlette.types import ASGIApp, Receive, Scope, Send
+from pathlib import Path
 from urllib.parse import urlencode
 
-from app.auth import get_email_from_scope
-from app.database import engine, Base, AsyncSessionLocal
-from app.routers import mcp_oauth
-from app.routers import projects, documents, sidebar, scheduler, calendar, backup, alexandrite, wopi, collabora, tasks, assignees, extensions, mcp as mcp_router, events, comments, affairs, auth as auth_router
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+from app.auth import (
+    build_session_cookie,
+    get_authenticated_email_from_scope,
+    get_email_from_scope,
+)
 from app.config import get_settings
+from app.database import AsyncSessionLocal, Base, engine
 from app.extensions import enabled_extensions
+from app.routers import (
+    affairs,
+    alexandrite,
+    assignees,
+    backup,
+    calendar,
+    collabora,
+    comments,
+    documents,
+    events,
+    extensions,
+    mcp_oauth,
+    projects,
+    scheduler,
+    sidebar,
+    tasks,
+    wopi,
+)
+from app.routers import auth as auth_router
+from app.routers import mcp as mcp_router
 from app.telegram import check_and_send_calendar_reminders
 
 settings = get_settings()
@@ -53,9 +76,34 @@ class RequireAuthMiddleware:
         self.app = app
         self.settings = settings
 
+    def _should_refresh_session(self, scope: Scope, path: str, email: str | None) -> bool:
+        return bool(
+            self.settings.auth_required
+            and scope["type"] == "http"
+            and self.settings.auth_mode.casefold() == "magic_link"
+            and email
+            and not _is_auth_bypass_path(path)
+            and not _is_auth_public_path(path)
+        )
+
+    async def _send_with_refreshed_session(
+        self,
+        message: dict,
+        send: Send,
+        email: str,
+    ) -> None:
+        if message["type"] == "http.response.start":
+            headers = list(message.get("headers", []))
+            headers.append((b"set-cookie", build_session_cookie(email, self.settings).encode("latin-1")))
+            message = {**message, "headers": headers}
+        await send(message)
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         path = scope.get("path", "")
         email = get_email_from_scope(scope, self.settings)
+        session_email = None
+        if self.settings.auth_mode.casefold() == "magic_link":
+            session_email = get_authenticated_email_from_scope(scope, self.settings)
         if email:
             scope.setdefault("state", {})["user_email"] = email
 
@@ -66,7 +114,13 @@ class RequireAuthMiddleware:
             or _is_auth_public_path(path)
             or email
         ):
-            await self.app(scope, receive, send)
+            if self._should_refresh_session(scope, path, session_email):
+                async def send_with_refreshed_session(message: dict):
+                    await self._send_with_refreshed_session(message, send, session_email)
+
+                await self.app(scope, receive, send_with_refreshed_session)
+            else:
+                await self.app(scope, receive, send)
             return
 
         if scope["type"] == "websocket":

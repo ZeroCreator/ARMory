@@ -91,7 +91,6 @@ function clearTaskTimeAuthRedirectMarker() {
 }
 
 function redirectToTaskTimeLogin(response) {
-    if (taskTimeDataLoaded) return;
     if (taskTimeAuthRedirecting || hasTaskTimeAuthRedirected()) return;
     taskTimeAuthRedirecting = true;
     try {

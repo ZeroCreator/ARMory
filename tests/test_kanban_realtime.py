@@ -1,9 +1,8 @@
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import pytest
 from playwright.sync_api import sync_playwright
-
 
 STATIC_ROOT = Path(__file__).resolve().parents[1] / "app" / "static" / "js"
 
@@ -388,7 +387,7 @@ def test_time_page_does_not_repeat_auth_redirect_after_page_reload(browser):
         page.close()
 
 
-def test_time_page_keeps_loaded_tasks_when_authentication_temporarily_expires(browser):
+def test_time_page_redirects_when_loaded_tasks_lose_authentication(browser):
     page = browser.new_page()
     try:
         page.set_content('''
@@ -416,7 +415,7 @@ def test_time_page_keeps_loaded_tasks_when_authentication_temporarily_expires(br
             );
         }''')
         page.evaluate('loadTaskTimeData(true)')
-        assert page.evaluate("window.loginRedirects.length") == 0
+        assert page.evaluate("window.loginRedirects.length") == 1
         assert page.locator('#task-time-table-body tr[data-task-id="1"]').count() == 1
         assert 'task-title' in page.locator('#task-time-table-body').inner_text()
     finally:
