@@ -81,7 +81,10 @@ class RequireAuthMiddleware:
             response = JSONResponse(
                 status_code=401,
                 content={"detail": "Authentication required"},
-                headers={"Cache-Control": "no-store"},
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Armory-Auth-Source": "application",
+                },
             )
         else:
             query_string = scope.get("query_string", b"").decode("latin-1")

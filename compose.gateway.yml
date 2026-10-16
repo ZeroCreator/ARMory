@@ -22,9 +22,10 @@ services:
       - OAUTH2_PROXY_VALIDATE_URL=https://mail.team-73.ru/auth/userinfo
       - OAUTH2_PROXY_REDIRECT_URL=https://armory.team-73.ru/oauth2/callback
       - OAUTH2_PROXY_EMAIL_DOMAINS=*
-      # Провайдер выдаёт короткоживущий access token, поэтому шлюз должен получать refresh token и обновлять сессию заранее.
+      # Запрашиваем offline_access, чтобы обновлять access token без повторного входа.
       - OAUTH2_PROXY_SCOPE=openid offline_access
-      - OAUTH2_PROXY_COOKIE_REFRESH=4m
+      - OAUTH2_PROXY_COOKIE_REFRESH=55m
+      - OAUTH2_PROXY_PASS_USER_HEADERS=true
       - OAUTH2_PROXY_SESSION_STORE_TYPE=redis
       - OAUTH2_PROXY_REDIS_CONNECTION_URL=redis://session-store:6379
       - OAUTH2_PROXY_API_ROUTES=^/api
@@ -49,7 +50,7 @@ services:
       - armory-net
 
   session-store:
-    image: docker/library/redis:7-alpine
+    image: docker.io/library/redis:7-alpine
     container_name: oauth2-proxy-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
