@@ -22,8 +22,11 @@ services:
       - OAUTH2_PROXY_VALIDATE_URL=https://mail.team-73.ru/auth/userinfo
       - OAUTH2_PROXY_REDIRECT_URL=https://armory.team-73.ru/oauth2/callback
       - OAUTH2_PROXY_EMAIL_DOMAINS=*
-      - OAUTH2_PROXY_SCOPE=openid
-      - OAUTH2_PROXY_COOKIE_REFRESH=1h
+      # Провайдер выдаёт короткоживущий access token, поэтому шлюз должен получать refresh token и обновлять сессию заранее.
+      - OAUTH2_PROXY_SCOPE=openid offline_access
+      - OAUTH2_PROXY_COOKIE_REFRESH=4m
+      - OAUTH2_PROXY_SESSION_STORE_TYPE=redis
+      - OAUTH2_PROXY_REDIS_CONNECTION_URL=redis://session-store:6379
       - OAUTH2_PROXY_API_ROUTES=^/api
       - OAUTH2_PROXY_COOKIE_SECURE=true
       - OAUTH2_PROXY_COOKIE_HTTPONLY=true
@@ -38,9 +41,30 @@ services:
     env_file:
       - .env
     depends_on:
-      - app
+      app:
+        condition: service_started
+      session-store:
+        condition: service_healthy
+    networks:
+      - armory-net
+
+  session-store:
+    image: docker/library/redis:7-alpine
+    container_name: oauth2-proxy-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - oauth2-proxy-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - armory-net
 
 networks:
   armory-net:
+
+volumes:
+  oauth2-proxy-redis-data:

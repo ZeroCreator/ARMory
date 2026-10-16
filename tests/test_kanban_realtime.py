@@ -344,7 +344,7 @@ def test_time_page_reloads_protected_url_for_api_unauthorized_response(browser):
             };
             await loadTaskTimeData();
         }''')
-        assert page.evaluate("window.fetchCalls") == 3
+        assert page.evaluate("window.fetchCalls") == 1
         assert page.evaluate("window.loginRedirects.length") == 1
         assert page.evaluate("window.loginRedirects[0]") == page.evaluate(
             "`${window.location.pathname}${window.location.search}${window.location.hash}`"
@@ -353,7 +353,7 @@ def test_time_page_reloads_protected_url_for_api_unauthorized_response(browser):
         page.close()
 
 
-def test_time_page_keeps_loaded_tasks_when_authentication_temporarily_expires(browser):
+def test_time_page_redirects_after_loaded_tasks_lose_authentication(browser):
     page = browser.new_page()
     try:
         page.set_content('''
@@ -381,7 +381,7 @@ def test_time_page_keeps_loaded_tasks_when_authentication_temporarily_expires(br
             );
         }''')
         page.evaluate('loadTaskTimeData(true)')
-        assert page.evaluate("window.loginRedirects.length") == 0
+        assert page.evaluate("window.loginRedirects.length") == 1
         assert page.locator('#task-time-table-body tr[data-task-id="1"]').count() == 1
         assert 'task-title' in page.locator('#task-time-table-body').inner_text()
     finally:

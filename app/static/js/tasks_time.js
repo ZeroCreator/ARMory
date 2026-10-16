@@ -74,7 +74,6 @@ function navigateToTaskTimeLogin(url) {
 }
 
 function redirectToTaskTimeLogin(response) {
-    if (taskTimeDataLoaded) return;
     if (taskTimeAuthRedirecting) return;
     taskTimeAuthRedirecting = true;
 
@@ -125,8 +124,11 @@ async function fetchTaskTimeResponse(url, options = {}) {
                 signal: options.signal || controller.signal,
             });
             const authenticationResponse = await isTaskTimeAuthenticationResponse(response);
-            const retryableResponse = authenticationResponse
-                || [408, 425, 429, 500, 502, 503, 504].includes(response.status);
+            if (authenticationResponse) {
+                redirectToTaskTimeLogin(response);
+                throw new TaskTimeAuthenticationError();
+            }
+            const retryableResponse = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
             if (retryableResponse && attempt < maxAttempts - 1) {
                 await new Promise(resolve => window.setTimeout(resolve, taskTimeGetRetryDelays[attempt]));
                 continue;
