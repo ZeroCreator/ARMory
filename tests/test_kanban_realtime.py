@@ -344,7 +344,7 @@ def test_time_page_reloads_protected_url_for_api_unauthorized_response(browser):
             };
             await loadTaskTimeData();
         }''')
-        assert page.evaluate("window.fetchCalls") == 1
+        assert page.evaluate("window.fetchCalls") == 3
         assert page.evaluate("window.loginRedirects.length") == 1
         assert page.evaluate("window.loginRedirects[0]") == page.evaluate(
             "`${window.location.pathname}${window.location.search}${window.location.hash}`"
@@ -353,7 +353,42 @@ def test_time_page_reloads_protected_url_for_api_unauthorized_response(browser):
         page.close()
 
 
-def test_time_page_redirects_after_loaded_tasks_lose_authentication(browser):
+def test_time_page_does_not_repeat_auth_redirect_after_page_reload(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body">
+                <tr><td>Загрузка...</td></tr>
+            </tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(content='''
+            const taskTimeSessionStorage = new Map();
+            Object.defineProperty(window, 'sessionStorage', {value: {
+                getItem: key => taskTimeSessionStorage.get(key) || null,
+                setItem: (key, value) => taskTimeSessionStorage.set(key, String(value)),
+                removeItem: key => taskTimeSessionStorage.delete(key),
+            }});
+        ''')
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''async () => {
+            window.loginRedirects = [];
+            navigateToTaskTimeLogin = url => window.loginRedirects.push(url);
+            window.sessionStorage.setItem('armory.task-time.auth-redirected', '1');
+            window.fetch = async () => new Response(
+                JSON.stringify({detail: 'Authentication required'}),
+                {status: 401, headers: {'content-type': 'application/json'}},
+            );
+            await loadTaskTimeData();
+        }''')
+        assert page.evaluate("window.loginRedirects.length") == 0
+    finally:
+        page.close()
+
+
+def test_time_page_keeps_loaded_tasks_when_authentication_temporarily_expires(browser):
     page = browser.new_page()
     try:
         page.set_content('''
@@ -381,7 +416,7 @@ def test_time_page_redirects_after_loaded_tasks_lose_authentication(browser):
             );
         }''')
         page.evaluate('loadTaskTimeData(true)')
-        assert page.evaluate("window.loginRedirects.length") == 1
+        assert page.evaluate("window.loginRedirects.length") == 0
         assert page.locator('#task-time-table-body tr[data-task-id="1"]').count() == 1
         assert 'task-title' in page.locator('#task-time-table-body').inner_text()
     finally:

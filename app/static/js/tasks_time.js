@@ -18,6 +18,7 @@ let currentTimePage = 1;
 const TIME_TASKS_PER_PAGE = 30;
 const taskTimeGetRetryDelays = [250, 1000];
 const taskTimeRequestTimeout = 15000;
+const taskTimeAuthRedirectStorageKey = 'armory.task-time.auth-redirected';
 
 class TaskTimeAuthenticationError extends Error {
     constructor() {
@@ -73,9 +74,31 @@ function navigateToTaskTimeLogin(url) {
     window.location.assign(url);
 }
 
+function hasTaskTimeAuthRedirected() {
+    try {
+        return window.sessionStorage?.getItem(taskTimeAuthRedirectStorageKey) === '1';
+    } catch (error) {
+        return false;
+    }
+}
+
+function clearTaskTimeAuthRedirectMarker() {
+    try {
+        window.sessionStorage?.removeItem(taskTimeAuthRedirectStorageKey);
+    } catch (error) {
+        // Хранилище браузера может быть недоступно в приватном режиме.
+    }
+}
+
 function redirectToTaskTimeLogin(response) {
-    if (taskTimeAuthRedirecting) return;
+    if (taskTimeDataLoaded) return;
+    if (taskTimeAuthRedirecting || hasTaskTimeAuthRedirected()) return;
     taskTimeAuthRedirecting = true;
+    try {
+        window.sessionStorage?.setItem(taskTimeAuthRedirectStorageKey, '1');
+    } catch (error) {
+        // Хранилище браузера может быть недоступно в приватном режиме.
+    }
 
     const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     navigateToTaskTimeLogin(target);
@@ -124,11 +147,8 @@ async function fetchTaskTimeResponse(url, options = {}) {
                 signal: options.signal || controller.signal,
             });
             const authenticationResponse = await isTaskTimeAuthenticationResponse(response);
-            if (authenticationResponse) {
-                redirectToTaskTimeLogin(response);
-                throw new TaskTimeAuthenticationError();
-            }
-            const retryableResponse = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
+            const retryableResponse = authenticationResponse
+                || [408, 425, 429, 500, 502, 503, 504].includes(response.status);
             if (retryableResponse && attempt < maxAttempts - 1) {
                 await new Promise(resolve => window.setTimeout(resolve, taskTimeGetRetryDelays[attempt]));
                 continue;
@@ -221,6 +241,7 @@ async function loadTaskTimeDataNow() {
         if (!availableTaskIds.has(taskId)) selectedTimeTaskIds.delete(taskId);
     });
     taskTimeDataLoaded = true;
+    clearTaskTimeAuthRedirectMarker();
     allTasks = timeTasks;
     projectsMap = timeProjects;
     filterOptions = timeFilterOptions;
