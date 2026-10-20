@@ -27,6 +27,43 @@ def make_context(scope):
     return SimpleNamespace(request_context=SimpleNamespace(request=request))
 
 
+def test_http_worker_id_survives_mcp_session_recreation(settings):
+    first = SimpleNamespace(
+        request_context=SimpleNamespace(
+            request=SimpleNamespace(headers={"mcp-session-id": "<session-id>"}),
+        ),
+        session=object(),
+    )
+    second = SimpleNamespace(
+        request_context=SimpleNamespace(
+            request=SimpleNamespace(headers={"mcp-session-id": "<session-id>"}),
+        ),
+        session=object(),
+    )
+
+    assert mcp_logic._worker_id(first) == mcp_logic._worker_id(second)
+
+
+def test_http_worker_id_without_session_uses_api_key(settings):
+    settings.mcp_api_key = "<mcp-api-key>"
+    first = SimpleNamespace(
+        request_context=SimpleNamespace(request=SimpleNamespace(headers={})),
+        session=object(),
+    )
+    second = SimpleNamespace(
+        request_context=SimpleNamespace(request=SimpleNamespace(headers={})),
+        session=object(),
+    )
+
+    assert mcp_logic._worker_id(first) == mcp_logic._worker_id(second)
+
+
+def test_http_mcp_transport_does_not_require_in_memory_session_ids():
+    from app.agent_integration.server import mcp_server
+
+    assert mcp_server.settings.stateless_http is True
+
+
 @pytest.mark.parametrize("auth_required", [False, True])
 @pytest.mark.parametrize("transport", ["http", "stdio"])
 @pytest.mark.parametrize("local_name", ["  <local-assignee>  ", None, " \t "])

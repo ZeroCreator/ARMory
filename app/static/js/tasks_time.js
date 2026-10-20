@@ -74,6 +74,17 @@ function navigateToTaskTimeLogin(url) {
     window.location.assign(url);
 }
 
+function taskTimeAuthLoginUrl(response) {
+    const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const responsePath = taskTimeResponsePath(response);
+    const applicationAuth = response?.headers?.get?.('x-armory-auth-source') === 'application'
+        || responsePath === '/auth/login'
+        || responsePath === '/auth/set-password';
+    const loginPath = applicationAuth ? '/auth/login' : '/oauth2/start';
+    const targetParameter = applicationAuth ? 'next' : 'rd';
+    return `${loginPath}?${targetParameter}=${encodeURIComponent(target)}`;
+}
+
 function hasTaskTimeAuthRedirected() {
     try {
         return window.sessionStorage?.getItem(taskTimeAuthRedirectStorageKey) === '1';
@@ -99,8 +110,7 @@ function redirectToTaskTimeLogin(response) {
         // Хранилище браузера может быть недоступно в приватном режиме.
     }
 
-    const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    navigateToTaskTimeLogin(target);
+    navigateToTaskTimeLogin(taskTimeAuthLoginUrl(response));
 }
 
 async function getTaskTimeResponseError(response) {

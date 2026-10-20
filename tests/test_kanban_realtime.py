@@ -282,9 +282,11 @@ def test_time_page_redirects_to_login_instead_of_rendering_auth_html(browser):
             await loadTaskTimeData();
         }''')
         assert page.evaluate("window.loginRedirects.length") == 1
-        assert page.evaluate("window.loginRedirects[0]") == page.evaluate(
-            "`${window.location.pathname}${window.location.search}${window.location.hash}`"
-        )
+        expected_redirect = page.evaluate("""() => {
+            const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+            return `/oauth2/start?rd=${encodeURIComponent(target)}`;
+        }""")
+        assert page.evaluate("window.loginRedirects[0]") == expected_redirect
         assert 'Sign In' not in page.locator('#task-time-table-body').inner_text()
         assert page.locator('#task-time-table-body').inner_text() == 'Загрузка...'
     finally:
@@ -345,9 +347,44 @@ def test_time_page_reloads_protected_url_for_api_unauthorized_response(browser):
         }''')
         assert page.evaluate("window.fetchCalls") == 3
         assert page.evaluate("window.loginRedirects.length") == 1
-        assert page.evaluate("window.loginRedirects[0]") == page.evaluate(
-            "`${window.location.pathname}${window.location.search}${window.location.hash}`"
-        )
+        expected_redirect = page.evaluate("""() => {
+            const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+            return `/oauth2/start?rd=${encodeURIComponent(target)}`;
+        }""")
+        assert page.evaluate("window.loginRedirects[0]") == expected_redirect
+    finally:
+        page.close()
+
+
+def test_time_page_uses_local_login_for_application_unauthorized_response(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body">
+                <tr><td>Загрузка...</td></tr>
+            </tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''async () => {
+            window.loginRedirects = [];
+            navigateToTaskTimeLogin = url => window.loginRedirects.push(url);
+            window.fetch = async () => new Response(
+                JSON.stringify({detail: 'Authentication required'}),
+                {status: 401, headers: {
+                    'content-type': 'application/json',
+                    'X-Armory-Auth-Source': 'application',
+                }},
+            );
+            await loadTaskTimeData();
+        }''')
+        expected_redirect = page.evaluate("""() => {
+            const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+            return `/auth/login?next=${encodeURIComponent(target)}`;
+        }""")
+        assert page.evaluate("window.loginRedirects[0]") == expected_redirect
     finally:
         page.close()
 

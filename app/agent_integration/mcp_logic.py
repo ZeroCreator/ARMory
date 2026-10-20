@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import mimetypes
 from functools import wraps
 from pathlib import Path
@@ -20,8 +21,37 @@ from app.config import get_settings
 _WORKER_INSTANCE_ID = uuid4().hex
 
 
+def _http_request_headers(ctx: Context):
+    """Возвращает заголовки HTTP-запроса MCP, если инструмент вызван по HTTP."""
+    try:
+        request = ctx.request_context.request
+    except (AttributeError, ValueError):
+        return None
+    headers = getattr(request, "headers", None)
+    return headers if headers is not None and hasattr(headers, "get") else None
+
+
 def _worker_id(ctx: Context) -> str:
-    """Возвращает постоянный идентификатор агента в рамках MCP-сессии."""
+    """Возвращает стабильный идентификатор агента для учета времени."""
+    headers = _http_request_headers(ctx)
+    if headers is not None:
+        session_id = headers.get("mcp-session-id")
+        access_token = get_access_token()
+        if session_id:
+            identity = f"session:{session_id}"
+        elif access_token:
+            identity = ":".join(
+                (
+                    "oauth",
+                    str(getattr(access_token, "client_id", "")),
+                    str(getattr(access_token, "user_email", "")),
+                )
+            )
+        else:
+            settings = get_settings()
+            identity = f"api-key:{settings.mcp_api_key or 'anonymous'}"
+        digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        return f"mcp-http-{digest}"
     return f"{_WORKER_INSTANCE_ID}-{id(ctx.session)}"
 
 
