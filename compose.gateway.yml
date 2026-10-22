@@ -26,7 +26,7 @@ services:
       - OAUTH2_PROXY_SCOPE=openid offline_access
       - OAUTH2_PROXY_COOKIE_REFRESH=30m
       # Срок cookie должен быть не меньше срока refresh-токена провайдера; для Stalwart по умолчанию это 30 дней.
-      - OAUTH2_PROXY_COOKIE_EXPIRE=${OAUTH2_PROXY_COOKIE_EXPIRE:-30d}
+      - OAUTH2_PROXY_COOKIE_EXPIRE=${OAUTH2_PROXY_COOKIE_EXPIRE:-720h}
       - OAUTH2_PROXY_PASS_USER_HEADERS=true
       - OAUTH2_PROXY_SESSION_STORE_TYPE=redis
       - OAUTH2_PROXY_REDIS_CONNECTION_URL=redis://session-store:6379
