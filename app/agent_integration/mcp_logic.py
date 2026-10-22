@@ -52,7 +52,7 @@ def _worker_id(ctx: Context) -> str:
             identity = f"api-key:{settings.mcp_api_key or 'anonymous'}"
         digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
         return f"mcp-http-{digest}"
-    return f"{_WORKER_INSTANCE_ID}-{id(ctx.session)}"
+    return _WORKER_INSTANCE_ID
 
 
 def _start_task_time(task_id: int, phase: Literal["work", "testing"], ctx: Context) -> Any:

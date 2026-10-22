@@ -66,29 +66,34 @@ class MCPAPIKeyMiddleware:
         scheme, _, bearer_token = authorization.partition(" ")
         bearer_token = bearer_token.strip() if scheme.casefold() == "bearer" else ""
 
-        if bearer_token:
-            access_token = await mcp_oauth_provider.load_access_token(bearer_token)
-            if access_token and access_token.user_email:
-                supplied_key = headers.get("x-mcp-api-key", "")
-                if settings.mcp_api_key and not hmac.compare_digest(supplied_key, settings.mcp_api_key):
-                    response = JSONResponse(
-                        status_code=401,
-                        content={"detail": "Invalid or missing MCP API key"},
-                    )
-                    await response(scope, receive, send)
-                    return
+        access_token = await mcp_oauth_provider.load_access_token(bearer_token) if bearer_token else None
+        supplied_key = headers.get("x-mcp-api-key", "")
+        api_key_valid = bool(
+            settings.mcp_api_key
+            and hmac.compare_digest(supplied_key, settings.mcp_api_key)
+        )
+        if access_token and access_token.user_email:
+            if settings.mcp_api_key and not api_key_valid:
+                response = JSONResponse(
+                    status_code=401,
+                    content={"detail": "Invalid or missing MCP API key"},
+                )
+                await response(scope, receive, send)
+                return
 
-                state = scope.setdefault("state", {})
-                if isinstance(state, dict):
-                    state["user_email"] = access_token.user_email
-        elif not authorization and settings.mcp_api_key:
-            supplied_key = headers.get("x-mcp-api-key", "")
-            if hmac.compare_digest(supplied_key, settings.mcp_api_key):
-                scope = dict(scope)
-                scope["headers"] = [
-                    *scope.get("headers", []),
-                    (b"authorization", f"Bearer {supplied_key}".encode("latin-1")),
-                ]
+            state = scope.setdefault("state", {})
+            if isinstance(state, dict):
+                state["user_email"] = access_token.user_email
+        elif api_key_valid:
+            scope = dict(scope)
+            scope["headers"] = [
+                (name, value)
+                for name, value in scope.get("headers", [])
+                if name.lower() != b"authorization"
+            ]
+            scope["headers"].append(
+                (b"authorization", f"Bearer {supplied_key}".encode("latin-1")),
+            )
 
         await self.app(scope, receive, send)
 

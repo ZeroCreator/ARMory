@@ -58,6 +58,13 @@ def test_http_worker_id_without_session_uses_api_key(settings):
     assert mcp_logic._worker_id(first) == mcp_logic._worker_id(second)
 
 
+def test_stdio_worker_id_survives_context_recreation(settings):
+    first = SimpleNamespace(request_context=SimpleNamespace(request=None), session=object())
+    second = SimpleNamespace(request_context=SimpleNamespace(request=None), session=object())
+
+    assert mcp_logic._worker_id(first) == mcp_logic._worker_id(second)
+
+
 def test_http_mcp_transport_does_not_require_in_memory_session_ids():
     from app.agent_integration.server import mcp_server
 
