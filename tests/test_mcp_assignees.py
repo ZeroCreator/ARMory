@@ -86,7 +86,7 @@ def test_default_assignee_depends_on_local_mode(settings, auth_required, transpo
     elif local_name and local_name.strip():
         assert result == ("<local-assignee>", None)
     else:
-        assert result == (None, "local_assignee_not_configured")
+        assert result == (None, None)
 
 
 @pytest.mark.parametrize("auth_required", [False, True])

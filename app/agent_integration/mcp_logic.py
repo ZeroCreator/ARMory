@@ -407,11 +407,7 @@ def _default_task_assignee_name(ctx: Context) -> tuple[str | None, str | None]:
         return name, None
 
     local_assignee_name = " ".join((settings.mcp_local_assignee_name or "").split())
-    return (
-        (local_assignee_name, None)
-        if local_assignee_name
-        else (None, "local_assignee_not_configured")
-    )
+    return local_assignee_name or None, None
 
 
 def register_tools(server: FastMCP) -> None:
