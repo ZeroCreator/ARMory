@@ -23,7 +23,7 @@ services:
       - OAUTH2_PROXY_REDIRECT_URL=https://armory.team-73.ru/oauth2/callback
       - OAUTH2_PROXY_EMAIL_DOMAINS=*
       # Запрашиваем offline_access, чтобы обновлять access token без повторного входа.
-      - OAUTH2_PROXY_SCOPE=openid offline_access
+      - OAUTH2_PROXY_SCOPE=openid email profile offline_access
       - OAUTH2_PROXY_COOKIE_REFRESH=30m
       # Срок cookie должен быть не меньше срока refresh-токена провайдера; для Stalwart по умолчанию это 30 дней.
       - OAUTH2_PROXY_COOKIE_EXPIRE=${OAUTH2_PROXY_COOKIE_EXPIRE:-720h}

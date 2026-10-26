@@ -37,14 +37,14 @@ services:
       - armory-net
 
   collabora:
-    image: collabora/code:latest
+    image: docker.io/collabora/code@sha256:4e983196eb9878f339cc506c38c21f1cc3473bca3d6de883c5de08f9c0cc3a6c
     container_name: armory-collabora
     restart: unless-stopped
     expose:
       - "9980"
     environment:
       - domain=${COLLABORA_DOMAIN:-armory\.team-73\.ru}|app
-      - extra_params=--o:ssl.enable=false --o:ssl.termination=true --o:wopi.host[@allow]=armory --o:net.service_root=/collabora --o:welcome.enable=false
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=true --o:wopi.host[@allow]=app --o:net.service_root=/collabora --o:welcome.enable=false
       - dictionaries=ru_RU en_US
       - username=${COLLABORA_ADMIN_USER:-admin}
       - password=${COLLABORA_ADMIN_PASSWORD:-changeme}
