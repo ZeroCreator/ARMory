@@ -315,25 +315,25 @@ class ArmoryMCPAuthProvider(
         now = _now()
         async with AsyncSessionLocal() as db:
             result = await db.execute(
-                update(MCPOAuthToken)
-                .where(
+                select(MCPOAuthToken).where(
                     MCPOAuthToken.token_hash == _hash_token(refresh_token.token),
                     MCPOAuthToken.token_type == "refresh",
                     MCPOAuthToken.client_id == client.client_id,
                     MCPOAuthToken.revoked_at.is_(None),
                     MCPOAuthToken.expires_at > now,
                 )
-                .values(revoked_at=now)
             )
-            if result.rowcount != 1:
+            stored_token = result.scalar_one_or_none()
+            if stored_token is None:
                 raise TokenError("invalid_grant", "The refresh token has already been used or expired")
             token_response = self._issue_tokens(
                 db,
                 client_id=client.client_id,
-                email=refresh_token.user_email,
+                email=stored_token.user_email,
                 scopes=scopes,
-                resource=refresh_token.resource,
-                family_id=refresh_token.family_id,
+                resource=stored_token.resource,
+                family_id=stored_token.family_id,
+                refresh_token_value=refresh_token.token,
             )
             await db.commit()
         return token_response
@@ -399,26 +399,30 @@ class ArmoryMCPAuthProvider(
         scopes: list[str],
         resource: str,
         family_id: str | None = None,
+        refresh_token_value: str | None = None,
     ) -> OAuthToken:
         now = _now()
         family_id = family_id or secrets.token_urlsafe(24)
         access_token = secrets.token_urlsafe(48)
-        refresh_token = secrets.token_urlsafe(48)
-        db.add_all(
-            [
+        is_new_refresh_token = refresh_token_value is None
+        refresh_token_value = refresh_token_value or secrets.token_urlsafe(48)
+        token_rows = [
+            MCPOAuthToken(
+                token_hash=_hash_token(access_token),
+                token_type="access",
+                family_id=family_id,
+                client_id=client_id,
+                user_email=email,
+                scopes=scopes,
+                resource=resource,
+                created_at=now,
+                expires_at=now + datetime.timedelta(seconds=_ACCESS_LIFETIME_SECONDS),
+            ),
+        ]
+        if is_new_refresh_token:
+            token_rows.append(
                 MCPOAuthToken(
-                    token_hash=_hash_token(access_token),
-                    token_type="access",
-                    family_id=family_id,
-                    client_id=client_id,
-                    user_email=email,
-                    scopes=scopes,
-                    resource=resource,
-                    created_at=now,
-                    expires_at=now + datetime.timedelta(seconds=_ACCESS_LIFETIME_SECONDS),
-                ),
-                MCPOAuthToken(
-                    token_hash=_hash_token(refresh_token),
+                    token_hash=_hash_token(refresh_token_value),
                     token_type="refresh",
                     family_id=family_id,
                     client_id=client_id,
@@ -427,14 +431,14 @@ class ArmoryMCPAuthProvider(
                     resource=resource,
                     created_at=now,
                     expires_at=now + datetime.timedelta(seconds=_REFRESH_LIFETIME_SECONDS),
-                ),
-            ]
-        )
+                )
+            )
+        db.add_all(token_rows)
         return OAuthToken(
             access_token=access_token,
             token_type="Bearer",
             expires_in=_ACCESS_LIFETIME_SECONDS,
-            refresh_token=refresh_token,
+            refresh_token=refresh_token_value,
             scope=" ".join(scopes),
         )
 

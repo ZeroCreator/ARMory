@@ -110,3 +110,38 @@ async def test_service_request_does_not_receive_user_session_cookie():
 
     assert response.status_code == 200
     assert "set-cookie" not in response.headers
+
+
+@pytest.mark.asyncio
+async def test_mcp_authorization_callback_receives_magic_link_session():
+    settings = make_settings()
+    now = int(time.time())
+    session_token = jwt.encode(
+        {
+            "iss": "armory",
+            "sub": "<authenticated-email>",
+            "iat": now,
+            "exp": now + 60,
+            "typ": "session",
+        },
+        settings.auth_secret,
+        algorithm="HS256",
+    )
+    captured_scope = {}
+
+    async def app(scope, receive, send):
+        captured_scope.update(scope)
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}"})
+
+    wrapped_app = RequireAuthMiddleware(app, settings)
+    transport = httpx.ASGITransport(app=wrapped_app)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="https://<service-host>",
+        cookies={AUTH_COOKIE_NAME: session_token},
+    ) as client:
+        response = await client.get("/mcp/oauth/complete?request_id=<request-id>")
+
+    assert response.status_code == 200
+    assert captured_scope["state"]["user_email"] == "<authenticated-email>"

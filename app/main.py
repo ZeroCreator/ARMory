@@ -52,6 +52,8 @@ logger = logging.getLogger(__name__)
 
 def _is_auth_bypass_path(path: str) -> bool:
     """Маршруты с отдельной схемой авторизации, не зависящей от пользовательской сессии."""
+    if path == "/mcp/oauth/complete":
+        return False
     return path == "/mcp" or path.startswith("/mcp/") or path == "/wopi" or path.startswith("/wopi/")
 
 

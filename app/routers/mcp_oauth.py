@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.agent_integration.oauth_provider import mcp_oauth_provider
-from app.auth import normalize_email
+from app.auth import get_email_from_scope, normalize_email
 
 
 router = APIRouter(tags=["mcp-oauth"])
@@ -56,6 +56,8 @@ async def authorization_server_metadata():
 @router.get("/mcp/oauth/complete")
 async def complete_authorization(request: Request, request_id: str):
     email = normalize_email(getattr(request.state, "user_email", None))
+    if not email:
+        email = normalize_email(get_email_from_scope(request.scope, request.app.state.settings))
     if not email:
         next_path = request.url.path
         if request.url.query:
