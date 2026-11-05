@@ -174,6 +174,16 @@ def _collabora_upstream_headers(settings: Settings) -> dict[str, str]:
     }
 
 
+def _collabora_upstream_path(scope: dict, settings: Settings) -> str:
+    """Сохранить экранирование WOPI URL в исходном пути запроса к Collabora."""
+    raw_path = scope.get("raw_path")
+    if raw_path is None:
+        raw_path = urllib.parse.quote(scope["path"], safe="/").encode("ascii")
+    path = raw_path.decode("ascii").split("?", 1)[0].removeprefix("/collabora/")
+    service_root = settings.collabora_service_root.strip("/")
+    return f"/{service_root}/{path}" if service_root else f"/{path}"
+
+
 @router.websocket("/collabora/cool/{path:path}")
 async def proxy_collabora_ws(
     websocket: WebSocket,
@@ -190,11 +200,10 @@ async def proxy_collabora_ws(
     )
 
     target_base = settings.collabora_internal_url.replace("http://", "ws://").replace("https://", "wss://")
-    service_root = settings.collabora_service_root.strip("/")
-    ws_path = f"{service_root}/cool/{path}" if service_root else f"cool/{path}"
-    target_url = f"{target_base}/{ws_path}"
-    if websocket.query_params:
-        target_url += "?" + str(websocket.query_params)
+    ws_path = _collabora_upstream_path(websocket.scope, settings)
+    target_url = f"{target_base.rstrip('/')}{ws_path}"
+    if websocket.scope.get("query_string"):
+        target_url += "?" + websocket.scope["query_string"].decode("ascii")
 
     client_subprotocol = websocket.headers.get("sec-websocket-protocol")
     connect_kwargs: dict = {
@@ -261,11 +270,10 @@ async def proxy_collabora(
     if not settings.collabora_enabled:
         raise HTTPException(status_code=503, detail="Collabora Online is not enabled")
 
-    service_root = settings.collabora_service_root.strip("/")
-    proxy_path = f"{service_root}/{path}" if service_root else path
-    target_url = f"{settings.collabora_internal_url}/{proxy_path}"
-    if request.query_params:
-        target_url += "?" + str(request.query_params)
+    proxy_path = _collabora_upstream_path(request.scope, settings)
+    target_url = f"{settings.collabora_internal_url.rstrip('/')}{proxy_path}"
+    if request.scope.get("query_string"):
+        target_url += "?" + request.scope["query_string"].decode("ascii")
 
     public_url_parsed = urllib.parse.urlparse(settings.armory_public_url)
     public_host = public_url_parsed.netloc
