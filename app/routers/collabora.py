@@ -164,6 +164,16 @@ def _make_collabora_public_url(urlsrc: str, settings: Settings) -> str:
     return urllib.parse.urlunparse(parsed)
 
 
+def _collabora_upstream_headers(settings: Settings) -> dict[str, str]:
+    """Сформировать внешние Host и Origin для WebSocket-запроса к Collabora."""
+    public = urllib.parse.urlparse(settings.armory_public_url)
+    public_origin = f"{public.scheme}://{public.netloc}"
+    return {
+        "Host": public.netloc,
+        "Origin": public_origin,
+    }
+
+
 @router.websocket("/collabora/cool/{path:path}")
 async def proxy_collabora_ws(
     websocket: WebSocket,
@@ -186,15 +196,9 @@ async def proxy_collabora_ws(
     if websocket.query_params:
         target_url += "?" + str(websocket.query_params)
 
-    internal_url_parsed = urllib.parse.urlparse(settings.collabora_internal_url)
-    internal_origin = f"{internal_url_parsed.scheme}://{internal_url_parsed.netloc}"
-
     client_subprotocol = websocket.headers.get("sec-websocket-protocol")
     connect_kwargs: dict = {
-        "additional_headers": {
-            "Host": internal_url_parsed.netloc,
-            "Origin": internal_origin,
-        },
+        "additional_headers": _collabora_upstream_headers(settings),
     }
     if client_subprotocol:
         connect_kwargs["subprotocols"] = [client_subprotocol]
