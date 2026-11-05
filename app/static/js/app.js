@@ -1886,7 +1886,7 @@ function detectCategoryFromAttachment(attachment) {
     if (attachment.attachment_type === 'link' || attachment.attachment_type === 'git') {
         return detectCategoryFromItem({ item_type: 'link', url: attachment.url });
     }
-    const fileName = (attachment.title || attachment.file_path || '').toLowerCase();
+    const fileName = (attachment.file_path || '').toLowerCase();
     return detectCategoryFromItem({ item_type: 'file', file_name: fileName });
 }
 

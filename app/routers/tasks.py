@@ -1626,7 +1626,7 @@ async def collabora_task_attachment(
     if attachment.attachment_type != "file" or not attachment.file_path:
         raise HTTPException(status_code=400, detail="Not a file attachment")
 
-    ext = Path(attachment.title or attachment.file_path).suffix.lower()
+    ext = Path(attachment.file_path).suffix.lower()
     if ext not in OFFICE_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Unsupported file type for Collabora")
 

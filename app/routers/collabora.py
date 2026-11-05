@@ -11,7 +11,7 @@ import websockets
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
-from starlette.websockets import WebSocket
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from app.config import Settings, get_settings
 from app.routers.wopi import (
@@ -165,11 +165,10 @@ def _make_collabora_public_url(urlsrc: str, settings: Settings) -> str:
 
 
 def _collabora_upstream_headers(settings: Settings) -> dict[str, str]:
-    """Сформировать внешние Host и Origin для WebSocket-запроса к Collabora."""
+    """Сформировать внешний Origin для WebSocket-запроса к Collabora."""
     public = urllib.parse.urlparse(settings.armory_public_url)
     public_origin = f"{public.scheme}://{public.netloc}"
     return {
-        "Host": public.netloc,
         "Origin": public_origin,
     }
 
@@ -199,7 +198,10 @@ async def proxy_collabora_ws(
         subprotocol=websocket.headers.get("sec-websocket-protocol")
     )
 
-    target_base = settings.collabora_internal_url.replace("http://", "ws://").replace("https://", "wss://")
+    internal = urllib.parse.urlparse(settings.collabora_internal_url)
+    public = urllib.parse.urlparse(settings.armory_public_url)
+    scheme = "wss" if internal.scheme == "https" else "ws"
+    target_base = f"{scheme}://{public.netloc}"
     ws_path = _collabora_upstream_path(websocket.scope, settings)
     target_url = f"{target_base.rstrip('/')}{ws_path}"
     if websocket.scope.get("query_string"):
@@ -208,6 +210,9 @@ async def proxy_collabora_ws(
     client_subprotocol = websocket.headers.get("sec-websocket-protocol")
     connect_kwargs: dict = {
         "additional_headers": _collabora_upstream_headers(settings),
+        "host": internal.hostname,
+        "port": internal.port or (443 if scheme == "wss" else 80),
+        "proxy": None,
     }
     if client_subprotocol:
         connect_kwargs["subprotocols"] = [client_subprotocol]
@@ -217,10 +222,7 @@ async def proxy_collabora_ws(
         async with websockets.connect(target_url, **connect_kwargs) as ws:
             async def client_to_server():
                 while True:
-                    try:
-                        msg = await websocket.receive()
-                    except Exception:
-                        break
+                    msg = await websocket.receive()
                     msg_type = msg.get("type")
                     if msg_type == "websocket.receive":
                         data = msg.get("text", msg.get("bytes"))
@@ -232,28 +234,35 @@ async def proxy_collabora_ws(
                         break
 
             async def server_to_client():
-                while True:
-                    try:
-                        data = await ws.recv()
-                    except Exception:
-                        break
+                async for data in ws:
                     if isinstance(data, str):
                         await websocket.send_text(data)
                     else:
                         await websocket.send_bytes(data)
 
-            await asyncio.gather(client_to_server(), server_to_client())
-    except Exception as exc:
+            relays = [
+                asyncio.create_task(client_to_server()),
+                asyncio.create_task(server_to_client()),
+            ]
+            try:
+                done, _ = await asyncio.wait(relays, return_when=asyncio.FIRST_COMPLETED)
+                for relay in done:
+                    relay.result()
+            finally:
+                for relay in relays:
+                    relay.cancel()
+                await asyncio.gather(*relays, return_exceptions=True)
+    except (OSError, websockets.WebSocketException, WebSocketDisconnect, RuntimeError):
         logger.exception("Collabora WebSocket proxy error")
     finally:
         if ws is not None:
             try:
                 await ws.close()
-            except Exception:
+            except (OSError, websockets.WebSocketException):
                 pass
         try:
             await websocket.close()
-        except Exception:
+        except (WebSocketDisconnect, RuntimeError):
             pass
 
 
