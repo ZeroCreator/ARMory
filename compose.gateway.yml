@@ -5,7 +5,7 @@ services:
       AUTH_MODE: "proxy"
 
   gateway:
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.8.2
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
     container_name: oauth2-proxy
     restart: unless-stopped
     ports:
@@ -25,6 +25,8 @@ services:
       # Запрашиваем offline_access, чтобы обновлять access token без повторного входа.
       - OAUTH2_PROXY_SCOPE=openid offline_access
       - OAUTH2_PROXY_COOKIE_REFRESH=30m
+      - OAUTH2_PROXY_COOKIE_CSRF_EXPIRE=1h
+      - OAUTH2_PROXY_COOKIE_CSRF_PER_REQUEST=true
       # Срок cookie должен быть не меньше срока refresh-токена провайдера; для Stalwart по умолчанию это 30 дней.
       - OAUTH2_PROXY_COOKIE_EXPIRE=${OAUTH2_PROXY_COOKIE_EXPIRE:-720h}
       - OAUTH2_PROXY_PASS_USER_HEADERS=true

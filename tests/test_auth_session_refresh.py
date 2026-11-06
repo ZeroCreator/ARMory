@@ -1,13 +1,28 @@
 import time
 from http.cookies import SimpleCookie
+from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 import jwt
 import pytest
+import yaml
+from packaging.version import Version
 
 from app.auth import AUTH_COOKIE_NAME
 from app.main import RequireAuthMiddleware
+
+
+def test_gateway_uses_oauth2_proxy_with_refreshed_session_validation_fix():
+    compose_path = Path(__file__).resolve().parents[1] / "compose.gateway.yml"
+    compose_config = yaml.safe_load(compose_path.read_text())
+    gateway = compose_config["services"]["gateway"]
+    image_version = gateway["image"].rsplit(":v", maxsplit=1)[1]
+    environment = dict(value.split("=", maxsplit=1) for value in gateway["environment"])
+
+    assert Version(image_version) >= Version("7.13.0")
+    assert environment["OAUTH2_PROXY_COOKIE_CSRF_EXPIRE"] == "1h"
+    assert environment["OAUTH2_PROXY_COOKIE_CSRF_PER_REQUEST"] == "true"
 
 
 def make_settings():

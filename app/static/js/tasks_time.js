@@ -13,7 +13,10 @@ let timeTaskSelectionInitialized = false;
 let taskTimeAuthRedirecting = false;
 let taskTimeLoadPromise = null;
 let taskTimeReloadQueued = false;
+let taskTimeMetadataReloadQueued = false;
 let taskTimeDataLoaded = false;
+let taskTimeMetadataLoaded = false;
+let taskTimeEventsConnected = false;
 let currentTimePage = 1;
 const TIME_TASKS_PER_PAGE = 30;
 const taskTimeGetRetryDelays = [250, 1000];
@@ -182,10 +185,12 @@ async function fetchTaskTimeJson(url, options = {}) {
 window.addEventListener('armory:kanban', event => {
     const data = event.detail;
     if (!IS_GLOBAL && data.project_id != null && data.project_id !== PROJECT_ID) return;
-    if (['task_changed', 'task_time_changed', 'board_changed'].includes(data.type)) loadTaskTimeData(true);
+    if (['task_changed', 'board_changed'].includes(data.type)) loadTaskTimeData(true, true);
+    if (data.type === 'task_time_changed') loadTaskTimeData(true, false);
 });
 window.addEventListener('armory:events-connected', () => {
-    if (taskTimeDataLoaded) loadTaskTimeData(true);
+    if (taskTimeEventsConnected && taskTimeDataLoaded) loadTaskTimeData(true, true);
+    taskTimeEventsConnected = true;
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -203,28 +208,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.setInterval(loadTaskTimeData, 60000);
 });
 
-async function loadTaskTimeData(force = false) {
+async function loadTaskTimeData(force = false, refreshMetadata = force) {
     if (taskTimeAuthRedirecting) return;
     if (taskTimeLoadPromise) {
         if (force) taskTimeReloadQueued = true;
+        if (refreshMetadata) taskTimeMetadataReloadQueued = true;
         return taskTimeLoadPromise;
     }
 
-    taskTimeLoadPromise = loadTaskTimeDataNow();
+    taskTimeLoadPromise = loadTaskTimeDataNow(refreshMetadata || !taskTimeMetadataLoaded);
     try {
         return await taskTimeLoadPromise;
     } finally {
         taskTimeLoadPromise = null;
         if (taskTimeReloadQueued && !taskTimeAuthRedirecting) {
+            const shouldRefreshMetadata = taskTimeMetadataReloadQueued;
             taskTimeReloadQueued = false;
-            window.setTimeout(() => loadTaskTimeData(), 0);
+            taskTimeMetadataReloadQueued = false;
+            window.setTimeout(() => loadTaskTimeData(true, shouldRefreshMetadata), 0);
         } else {
             taskTimeReloadQueued = false;
+            taskTimeMetadataReloadQueued = false;
         }
     }
 }
 
-async function loadTaskTimeDataNow() {
+async function loadTaskTimeDataNow(refreshMetadata) {
     const tableBody = document.getElementById('task-time-table-body');
     const taskUrl = IS_GLOBAL ? '/api/tasks' : `/api/projects/${PROJECT_ID}/tasks`;
     const filterUrl = IS_GLOBAL ? '/api/kanban/filters' : `/api/projects/${PROJECT_ID}/kanban/filters`;
@@ -258,6 +267,8 @@ async function loadTaskTimeDataNow() {
     populateTimeFilters();
     applyTimeFilters(false);
 
+    if (!refreshMetadata) return;
+
     const projectIds = [...new Set(timeTasks.map(task => task.project_id))];
     const metadataResults = await Promise.allSettled([
         fetchTaskTimeJson(filterUrl),
@@ -284,6 +295,7 @@ async function loadTaskTimeDataNow() {
     if (metadataFailures.length) {
         console.error('Не удалось обновить дополнительные данные учета времени:', metadataFailures.map(result => result.reason));
     }
+    taskTimeMetadataLoaded = metadataFailures.length === 0;
     populateTimeFilters();
     applyTimeFilters(false);
 }
@@ -620,7 +632,7 @@ async function sendTimeTaskControl(taskId, action, method, payload) {
         }
     } finally {
         pendingTimeControls.delete(taskId);
-        await loadTaskTimeData(true);
+        await loadTaskTimeData(true, false);
     }
 }
 
@@ -826,7 +838,7 @@ async function saveTaskTimeValues(event) {
             body: JSON.stringify(payload),
         });
         bootstrap.Modal.getInstance(document.getElementById('task-time-edit-modal'))?.hide();
-        await loadTaskTimeData(true);
+        await loadTaskTimeData(true, false);
     } catch (error) {
         if (error instanceof TaskTimeAuthenticationError) return;
         console.error('Не удалось сохранить время задачи:', error);

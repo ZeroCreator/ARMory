@@ -184,6 +184,8 @@ def test_time_status_column_updates_via_shared_events_and_keeps_totals_aligned(b
         assert page.locator('#task-time-table-foot td').first.get_attribute('colspan') == str(status_index + 1)
         assert page.locator('#task-time-table-foot td').nth(1).inner_text() == '30 мин'
         page.evaluate("window.dispatchEvent(new Event('armory:events-connected'))")
+        assert page.evaluate('window.timeReloads') == 3
+        page.evaluate("window.dispatchEvent(new Event('armory:events-connected'))")
         assert page.evaluate('window.timeReloads') == 4
         page.evaluate("window.dispatchEvent(new CustomEvent('armory:kanban', {detail: {type: 'task_time_changed', project_id: 2}}))")
         assert page.evaluate('window.timeReloads') == (5 if is_global else 4)
@@ -499,6 +501,67 @@ def test_time_page_coalesces_parallel_data_loads(browser):
         page.close()
 
 
+def test_time_page_refreshes_metadata_only_after_task_changes_or_sse_reconnect(browser):
+    page = browser.new_page()
+    try:
+        page.set_content('''
+            <button id="task-time-export-xlsx"></button>
+            <div id="task-time-context-menu"></div>
+            <table><tbody id="task-time-table-body"></tbody><tfoot id="task-time-table-foot"></tfoot></table>
+        ''')
+        page.add_script_tag(content="const IS_GLOBAL = true; const PROJECT_ID = null;")
+        page.add_script_tag(path=str(STATIC_ROOT / "tasks_time.js"))
+        page.evaluate('''() => {
+            populateTimeFilters = () => {};
+            applyTimeFilters = () => {};
+            window.timeRequests = [];
+            window.fetch = async url => {
+                window.timeRequests.push(url);
+                let body = [];
+                if (url === '/api/tasks') {
+                    body = [{id: 1, project_id: 1, title: 'task', status: {name: 'Work'}}];
+                } else if (url === '/api/kanban/filters') {
+                    body = {projects: [{id: 1, name: 'project'}], assignees: []};
+                }
+                return new Response(JSON.stringify(body), {
+                    status: 200,
+                    headers: {'content-type': 'application/json'},
+                });
+            };
+        }''')
+
+        page.evaluate('loadTaskTimeData()')
+        page.wait_for_function("window.timeRequests.length === 3")
+        assert page.evaluate('window.timeRequests') == [
+            '/api/tasks', '/api/kanban/filters', '/api/projects/1/task-statuses',
+        ]
+
+        page.evaluate("window.dispatchEvent(new Event('armory:events-connected'))")
+        assert page.evaluate('window.timeRequests.length') == 3
+
+        page.evaluate('loadTaskTimeData()')
+        page.wait_for_function("window.timeRequests.length === 4")
+        assert page.evaluate('window.timeRequests.slice(3)') == ['/api/tasks']
+
+        page.evaluate("window.dispatchEvent(new CustomEvent('armory:kanban', {detail: {type: 'task_time_changed', project_id: 1}}))")
+        page.wait_for_function("window.timeRequests.length === 5")
+        assert page.evaluate('window.timeRequests.slice(4)') == ['/api/tasks']
+
+        page.evaluate("window.dispatchEvent(new CustomEvent('armory:kanban', {detail: {type: 'task_changed', project_id: 1}}))")
+        page.wait_for_function("window.timeRequests.length === 8")
+        assert page.evaluate('window.timeRequests.slice(5)') == [
+            '/api/tasks', '/api/kanban/filters', '/api/projects/1/task-statuses',
+        ]
+
+        page.evaluate("window.dispatchEvent(new Event('armory:events-connected'))")
+        page.wait_for_function("window.timeRequests.length === 11")
+        assert page.evaluate('window.timeRequests.slice(8)') == [
+            '/api/tasks', '/api/kanban/filters', '/api/projects/1/task-statuses',
+        ]
+    finally:
+        page.close()
+
+
 def test_time_page_keeps_loaded_tasks_when_refresh_fetch_fails(browser):
     page = browser.new_page()
     try:
@@ -546,7 +609,9 @@ def test_time_page_keeps_tasks_when_metadata_request_fails(browser):
         page.evaluate('''() => {
             populateTimeFilters = () => {};
             applyTimeFilters = () => renderTaskTimeTable(timeTasks);
+            window.timeFetchCalls = 0;
             window.fetch = async url => {
+                window.timeFetchCalls++;
                 if (url === '/api/tasks') {
                     return new Response(JSON.stringify([{
                         id: 1, project_id: 1, title: '<task-title>', status_id: 1,
@@ -561,8 +626,12 @@ def test_time_page_keeps_tasks_when_metadata_request_fails(browser):
             };
         }''')
         page.evaluate('loadTaskTimeData()')
+        assert page.evaluate('window.timeFetchCalls') == 3
         assert page.locator('#task-time-table-body tr[data-task-id="1"]').count() == 1
         assert 'Failed to fetch' not in page.locator('#task-time-table-body').inner_text()
+
+        page.evaluate('loadTaskTimeData()')
+        assert page.evaluate('window.timeFetchCalls') == 6
     finally:
         page.close()
 
